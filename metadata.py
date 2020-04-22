@@ -3,9 +3,11 @@ import json
 import os
 import sys
 import time
+from math import inf
 from traceback import print_exc
 import xml.etree.ElementTree as ET
 
+from numpy.random import randint
 import requests
 
 # TODO have random h & v
@@ -69,6 +71,10 @@ def get_fill(root):
     return float(root.find(XML_QUERY)[9][0].text)
 
 
+def get_year(root):
+    return int(root.find(XML_QUERY)[1][0].text.split('/')[0])
+
+
 def return_out_dict(metadata, search_resp, idx):
     return {
             'metadata': list(metadata)[idx], 
@@ -76,8 +82,29 @@ def return_out_dict(metadata, search_resp, idx):
             }
 
 
+def get_random_ard():
+    return (str(randint(low=0, high=32)), str(randint(low=0,high=21)))
+
+
+def year_bounded_min_fill(fills, years):
+    def rewrite_lower_bound(tup):
+        fill = tup[0]
+        year = tup[1]
+        if year <= 2008:
+            return inf
+        else:
+            return fill
+    transformed_fills = list(map(rewrite_lower_bound, zip(fills, years)))
+    return transformed_fills.index(min(transformed_fills))
+
+
+
 if __name__ == '__main__':
     api_key = None
+    h,v = get_random_ard()
+    print('H: {}, V: {}'.format(h,v))
+    SEARCH_PARAMS['childFilters'][0]['value'] = h
+    SEARCH_PARAMS['childFilters'][1]['value'] = v
     try:
         if os.path.exists('results.json'):
             with open('results.json', 'r') as fp:
@@ -109,8 +136,9 @@ if __name__ == '__main__':
             print('{} s to get all metadata'.format(time.time()-tick))
 
             roots = map(lambda x: ET.fromstring(x), xmls)
-            fills = list(map(get_fill, roots))
-            min_idx = fills.index(min(fills))
+            fills = list(map(get_fill, map(lambda x: ET.fromstring(x), xmls)))
+            years = list(map(get_year, map(lambda x: ET.fromstring(x), xmls)))
+            min_idx = year_bounded_min_fill(fills, years)
             to_mosaic = []
             if min_idx > 0 :
                 to_mosaic.append(return_out_dict(metadata, response, min_idx-1))

@@ -59,7 +59,7 @@ def load_model(config_handler, from_checkpoint=False):
   If specified, load's model weights from a checkpoint file.
   Else, creates a new, fresh instance of the model.
   """
-  model = create_model(config_handler.config)
+  model = create_model(config_handler)
 
   if from_checkpoint:
     assert os.path.isfile(config_handler.save_path),\

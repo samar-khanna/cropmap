@@ -17,11 +17,12 @@ MODELS = {
 }
 
 
-def create_model(config):
+def create_model(config_handler):
   """
   Creates a new segmentation model given the config dictionary.
   Initialises a ResNet backbone (optionally pretrained) for the segmentation model.
   """
+  config = config_handler.config
   backbone_name = config["backbone"].lower()
   assert backbone_name.find("resnet") > -1, "Only resnet backbones supported"
 
@@ -45,8 +46,9 @@ def create_model(config):
     "Please specify a valid segmenation classifier available in MODELS"
 
   # Create Segmentation model
+  num_classes = len(config_handler.classes)
   seg_model = MODELS[config["classifier"].lower()]
-  seg_model = seg_model(backbone, **config["classifier_kwargs"])
+  seg_model = seg_model(backbone, num_classes=num_classes, **config["classifier_kwargs"])
 
   return seg_model
   

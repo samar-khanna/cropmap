@@ -27,6 +27,22 @@ class ConfigHandler():
     for key, value in config.items():
       setattr(self, key, value)
 
+    # Filter out interested classes, if specified. Otherwise use all classes.
+    # Sort the classes in order of their indices
+    interest_classes = self.config.get("interest_classes")
+    interest_classes = interest_classes if interest_classes else classes.keys()
+    interest_classes = sorted(interest_classes, key=self.classes.get)
+
+    # orig_to_new_ind maps from original class index --> new class index
+    # New classes is the mapping of class --> new_ind
+    orig_to_new_ind = {}
+    new_classes = {}
+    for i, class_name in enumerate(interest_classes):
+      orig_to_new_ind[self.classes[class_name]] = i
+      new_classes[class_name] = i
+    self.classes = new_classes
+    self.index_map = orig_to_new_ind
+    
     # Indices according to train/val/test split will be stored here.    
     self.indices_path = os.path.join(data_path, "indices.json")
 
@@ -55,12 +71,12 @@ class ConfigHandler():
   
 
 class CropDataset(Dataset):
-  def __init__(self, data_path, num_classes=255, tile_size=(224, 224), overlap=0,
+  def __init__(self, config_handler, tile_size=(224, 224), overlap=0,
                train_val_test=[0.8, 0.1, 0.1], inf_mode=False, transform=None):
     """
     Initialises an instance of a `CropDataset`.
     Requires:
-      `num_classes`: The number of segmentation classes in the dataset.
+      `config_handler`: Object that handles the model config file.
       `tile_size`: (h,w) denoting size of each tile to sample from area.
       `overlap`: number of pixels adjacent tiles share.
       `train_val_test`: Percentage split (must add to 1) of data sizes
@@ -69,18 +85,20 @@ class CropDataset(Dataset):
       `transform`: Function to augment data.
     """
     self.transform = transform
-    self.num_classes = num_classes
     self.tile_size = tile_size
     self.overlap = overlap
     self.train_val_test = train_val_test
     self.inf_mode = inf_mode
 
+    self.num_classes = len(config_handler.classes)
+    self.map_index = lambda i: config_handler.index_map.get(i, -1)
+
     # Mosaic tile
-    mosaic_path = os.path.join(data_path, 'mosaic.tif')
+    mosaic_path = os.path.join(config_handler.data_path, 'mosaic.tif')
     self.mosaic = rasterio.open(mosaic_path)
 
     # Ground truth labels
-    mask_path = os.path.join(data_path, 'mask.tif')
+    mask_path = os.path.join(config_handler.data_path, 'mask.tif')
     self.mask_exists = os.path.isfile(mask_path)
     if self.mask_exists:
       self.mask = rasterio.open(mask_path)
@@ -133,7 +151,10 @@ class CropDataset(Dataset):
       y = np.ones((self.num_classes, th, tw))
     else:
       assert self.mask_exists, "Ground truth mask must exist for training."
+
+      # Map values in mask to values within num_classes.
       mask = self.mask.read(window=window)
+      mask = np.vectorize(self.map_index)(mask)
       y = CropDataset.one_hot_mask(mask, self.num_classes)
 
     # Sample is (x, y) pair of image and mask.
@@ -194,21 +215,24 @@ def get_data_loaders(config_handler,
                      transform_fn=None,
                      inf_mode=False,
                      train_val_test=[0.8, 0.1, 0.1], 
-                     batch_size=32):
+                     batch_size=32,
+                     num_workers=4):
     """
     Creates the train, val and test loaders to input data to the model.
     Specify if you want the loaders for an inference task.
     """
-    dataset = CropDataset(config_handler.data_path, inf_mode=inf_mode)
+    dataset = CropDataset(config_handler, inf_mode=inf_mode)
 
     indices = dataset.gen_indices(indices_path=config_handler.indices_path)
 
     # Define samplers for each of the train, val and test data
     train_sampler = SubsetRandomSampler(indices['train'])
-    train_loader = DataLoader(dataset, batch_size=batch_size, sampler=train_sampler)
+    train_loader = DataLoader(dataset, batch_size=batch_size, 
+                              sampler=train_sampler, num_workers=num_workers)
 
     val_sampler = SubsetRandomSampler(indices['val'])
-    val_loader = DataLoader(dataset, batch_size=batch_size, sampler=val_sampler)
+    val_loader = DataLoader(dataset, batch_size=batch_size, 
+                            sampler=val_sampler, num_workers=num_workers)
 
     test_sampler = SubsetRandomSampler(indices['test'])
     test_loader = DataLoader(dataset, batch_size=batch_size, sampler=test_sampler)

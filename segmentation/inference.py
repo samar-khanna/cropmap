@@ -113,7 +113,7 @@ if __name__ == "__main__":
                      'mean_recall': np.mean(recall)}
       
       # Break down IoU, precision and recall by class
-      for i, class_name in ch.classes.items():
+      for class_name, i in ch.classes.items():
         sub_metric_dict = {'iou':iou, 'prec':prec, 'recall':recall}
         for metric_type, metrics in sub_metric_dict.items():
           class_metric_name = f'class_{class_name}/{metric_type}'

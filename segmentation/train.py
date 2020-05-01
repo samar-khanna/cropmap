@@ -185,7 +185,7 @@ if __name__ == "__main__":
                      'mean_recall': np.mean(epoch_recall.item())}
       
       # Break down IoU, precision and recall by class
-      for i, class_name in ch.classes.items():
+      for class_name, i in ch.classes.items():
         sub_metric_dict = {'iou':epoch_ious, 'prec':epoch_prec, 'recall':epoch_recall}
         for metric_type, metrics in sub_metric_dict.items():
           metrics = metrics.item()

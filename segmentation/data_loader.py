@@ -94,17 +94,16 @@ class CropDataset(Dataset):
     self.map_index = lambda i: config_handler.index_map.get(i, -1)
 
     # Mosaic tile
-    mosaic_path = os.path.join(config_handler.data_path, 'mosaic.tif')
-    self.mosaic = rasterio.open(mosaic_path)
+    self.mosaic_path = os.path.join(config_handler.data_path, 'mosaic.tif')
+    with rasterio.open(self.mosaic_path) as mosaic:
+      self.mosaic_shape = mosaic.shape
 
     # Ground truth labels
-    mask_path = os.path.join(config_handler.data_path, 'mask.tif')
+    self.mask_path = os.path.join(config_handler.data_path, 'mask.tif')
     self.mask_exists = os.path.isfile(mask_path)
-    if self.mask_exists:
-      self.mask = rasterio.open(mask_path)
 
   def __len__(self):
-    h, w = self.mosaic.shape
+    h, w = self.mosaic_shape
     th, tw = self.tile_size
     o = self.overlap
     total_rows = h//(th - o)
@@ -140,11 +139,12 @@ class CropDataset(Dataset):
     """
     r, c = index
     th, tw = self.tile_size
-    h, w = self.mosaic.shape
+    h, w = self.mosaic_shape
 
     # Sample the data using windows
     window = Window(c, r, tw, th)
-    x = self.mosaic.read(window=window)
+    with rasterio.open(self.mosaic_path) as mosaic:
+      x = mosaic.read(window=window)
 
     # If in inference mode and mask doesn't exist, then create dummy label.
     if self.inf_mode and not self.mask_exists:
@@ -152,8 +152,10 @@ class CropDataset(Dataset):
     else:
       assert self.mask_exists, "Ground truth mask must exist for training."
 
+      with rasterio.open(self.mask_path) as _mask:
+        mask = _mask.read(window=window)
+
       # Map values in mask to values within num_classes.
-      mask = self.mask.read(window=window)
       mask = np.vectorize(self.map_index)(mask)
       y = CropDataset.one_hot_mask(mask, self.num_classes)
 
@@ -181,7 +183,7 @@ class CropDataset(Dataset):
         with open(indices_path, 'r') as f:
           return json.load(f)
 
-    h, w = self.mosaic.shape
+    h, w = self.mosaic_shape
     th, tw = self.tile_size
     step_h = th - self.overlap
     step_w = tw - self.overlap

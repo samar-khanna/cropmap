@@ -100,7 +100,7 @@ class CropDataset(Dataset):
 
     # Ground truth labels
     self.mask_path = os.path.join(config_handler.data_path, 'mask.tif')
-    self.mask_exists = os.path.isfile(mask_path)
+    self.mask_exists = os.path.isfile(self.mask_path)
 
   def __len__(self):
     h, w = self.mosaic_shape

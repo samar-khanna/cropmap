@@ -1,9 +1,7 @@
 {
   "name": "fcn_resnet_50_scratch",
   "classifier": "FCN",
-  "classifier_kwargs": {
-    "num_classes":255
-  },
+  "classifier_kwargs": {},
   "backbone": "resnet50",
   "backbone_kwargs": {
     "pretrained": false

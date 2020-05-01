@@ -1,9 +1,7 @@
 {
   "name": "unet_resnet_50_scratch",
   "classifier": "UNet",
-  "classifier_kwargs": {
-    "num_classes":255
-  },
+  "classifier_kwargs": {},
   "backbone": "resnet50",
   "backbone_kwargs": {
     "pretrained": false

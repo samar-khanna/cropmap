@@ -51,9 +51,13 @@ def calculate_iou_prec_recall(preds, label_masks, pred_threshold=0.0):
   Returns:
     ious, precs, recall per class: shape (#c)
   """
+  # Change view so that shape is (batch, h, w, #c)
+  preds = preds.transpose(0, 2, 3, 1)
+  label_masks = label_masks.transpose(0, 2, 3, 1)
+
   # Reduce dimensions across all but classes dimension.
-  preds = preds.reshape(-1, preds.shape[1])
-  label_masks = label_masks.reshape(-1, label_masks.shape[1])
+  preds = preds.reshape(-1, preds.shape[-1])
+  label_masks = label_masks.reshape(-1, label_masks.shape[-1])
 
   preds = preds > pred_threshold
   intersection = np.logical_and(preds, label_masks)

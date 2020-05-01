@@ -1,0 +1,13 @@
+name: samar-env
+channels:
+  - defaults
+dependencies:
+  - ipython
+  - pytorch
+  - rasterio
+  - torchvision=0.5
+  - python=3.6
+  - tensorboard
+  - matplotlib
+prefix: /home/sak296/anaconda3/envs/samar-env
+

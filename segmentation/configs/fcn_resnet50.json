@@ -1,0 +1,27 @@
+{
+  "name": "fcn_resnet_50_scratch",
+  "classifier": "FCN",
+  "classifier_kwargs": {
+    "num_classes":255
+  },
+  "backbone": "resnet50",
+  "backbone_kwargs": {
+    "pretrained": false
+  },
+  "input_shape": [10, 224, 224],
+  "interest_classes": [],
+  "augment": {},
+
+
+  "epochs": 200,
+  "batch_size": 32,
+  "loss": "BCEWithLogitsLoss",
+  "loss_kwargs": 
+    {},
+  "optimizer": "Adam",
+  "optimizer_kwargs": 
+    {
+      "lr":0.001
+    },
+  "out_dir": "/home/sak296/test_data"
+}

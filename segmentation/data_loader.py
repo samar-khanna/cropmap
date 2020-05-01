@@ -102,7 +102,7 @@ class CropDataset(Dataset):
     encoding for pixels that belong to class j.
     """
     # Expand y in to (w, h, c) array (for multiplication)
-    y = np.ones((mask.shape[1], mask.shape[0], num_classes))
+    y = np.ones((mask.shape[2], mask.shape[1], num_classes))
 
     # y is 3d array of repeated tile indices, ith slice is
     # 2d array of dim (h, w) full of values i

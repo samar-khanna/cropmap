@@ -15,7 +15,7 @@ def passed_arguments():
                       help="Path to directory containing inference results.")
   parser.add_argument("--classes",
                       type=str,
-                      default="classes.json",
+                      default=os.path.join("segmentation", "classes.json"),
                       help="Path to .json index->class name file.")
   args = parser.parse_args()
   return args

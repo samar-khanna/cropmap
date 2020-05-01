@@ -51,7 +51,7 @@ def passed_arguments():
                       help="One of the train/val/test sets to perform inference.")
   parser.add_argument("--classes",
                       type=str,
-                      default="classes.json",
+                      default=os.path.join("segmentation", "classes.json"),
                       help="Path to .json index->class name file.")
   args = parser.parse_args()
   return args

@@ -101,7 +101,7 @@ def passed_arguments():
                       help="Path to .json model config file.")
   parser.add_argument("--classes",
                       type=str,
-                      default="classes.json",
+                      default=os.path.join("segmentation", "classes.json"),
                       help="Path to .json index->class name file.")
   parser.add_argument("-ckpt", "--from_checkpoint",
                       action="store_true",

@@ -1,11 +1,11 @@
-import torch
-import torch.nn as nn
-import torch.optim as optim
 import os
 import json
 import logging
 import argparse
 import numpy as np
+import torch
+import torch.nn as nn
+import torch.optim as optim
 from segmentation import load_model, save_model
 from data_loader import get_data_loaders, ConfigHandler
 from metrics import calculate_iou_prec_recall, MeanMetric
@@ -118,11 +118,14 @@ if __name__ == "__main__":
   ch = ConfigHandler(args.data_path, args.config, args.classes)
 
   use_cuda = torch.cuda.is_available()
-  device = torch.device("cuda" if use_cuda else "cpu")
+  device = torch.device("cuda:0" if use_cuda else "cpu")
 
   ## TODO: Finetuning (freezing layers)
-  # Load model
+  # Load model, use DataParallel if more than 1 GPU available
   model = load_model(ch, from_checkpoint=args.from_checkpoint)
+  if torch.cuda.device_count() > 1:
+    print(f"Using {torch.cuda.device_count()} GPUs")
+    model = nn.DataParallel(model)
   model.to(device)
 
   # Load optimizer and loss

@@ -145,6 +145,7 @@ if __name__ == "__main__":
   ## Begin training
   best_val_iou = -np.inf
   for epoch in range(epochs):
+    print(f"Starting epoch {epoch+1}:")
     for phase in ["train", "val"]:
       if phase == "train":
         writer = train_writer
@@ -202,5 +203,8 @@ if __name__ == "__main__":
       # Save model checkpoint if val iou better than best recorded so far.
       if phase == "val":
         if metrics_dict['mean_iou'] > best_val_iou:
+          print(f"Saving weights...")
           save_model(model, ch)
+    
+    print(f"Finished epoch {epoch+1}.\n")
       

@@ -35,6 +35,33 @@ def get_loss_optimizer(config, model):
   return loss_fn, optimizer
 
 
+def create_metrics_dict(classes, loss=None, **metrics):
+  """
+  Creates a metrics dictionary, mapping `metric_name`--> `metric_val`. \n
+  Requires: \n
+    `classes`: Dictionary of `class_name` --> index in metric array \n
+    `loss`: Either `None`, or if specified, PyTorch loss number for the epoch \n
+    `kwargs`: Each metric should be a numpy array of shape (num_classes) \n
+  """
+  metrics_dict = {}
+
+  if loss:
+    metrics_dict["epoch_loss"] = loss
+
+  # First log mean metrics
+  for metric_name, metric_arr in metrics.items():
+    metric = metric_arr
+    metrics_dict[f"mean_{metric_name}"] = np.mean(metric)
+
+    # Break down metric by class
+    for class_name, i in classes.items():
+      class_metric_name = f'class_{class_name}/{metric_name}'
+      class_metric = metric[i]
+      metrics_dict[class_metric_name] = class_metric
+  
+  return metrics_dict
+
+
 def log_metrics(metrics_dict, writer, epoch, phase):
   """
   Logs metrics to tensorflow summary writers, and to a log file.
@@ -140,7 +167,7 @@ if __name__ == "__main__":
   metrics_path = ch.metrics_dir
   train_writer = SummaryWriter(log_dir=os.path.join(metrics_path, 'train'))
   val_writer = SummaryWriter(log_dir=os.path.join(metrics_path, 'val'))
-  logging.basicConfig(filename=os.path.join(metrics_path, "train_log.log"), level=logging.INFO)
+  logging.basicConfig(filename=os.path.join(metrics_path, "log.log"), level=logging.INFO)
 
   ## Begin training
   best_val_iou = -np.inf
@@ -183,19 +210,13 @@ if __name__ == "__main__":
         epoch_recall.update(recall)
       
       # Create metrics dict
-      metrics_dict = {'epoch_loss': epoch_loss.item(),
-                     'mean_iou': np.mean(epoch_ious.item()),
-                     'mean_prec': np.mean(epoch_prec.item()),
-                     'mean_recall': np.mean(epoch_recall.item())}
-      
-      # Break down IoU, precision and recall by class
-      for class_name, i in ch.classes.items():
-        sub_metric_dict = {'iou':epoch_ious, 'prec':epoch_prec, 'recall':epoch_recall}
-        for metric_type, metrics in sub_metric_dict.items():
-          metrics = metrics.item()
-          class_metric_name = f'class_{class_name}/{metric_type}'
-          class_metric = metrics[int(i)-1]  # i-1 to make indices 0 based
-          metrics_dict[class_metric_name] = class_metric
+      metrics_dict = create_metrics_dict(
+        ch.classes,
+        loss=epoch_loss.item(),
+        iou=epoch_ious.item(),
+        prec=epoch_prec.item(),
+        recall=epoch_recall.item()
+      )
 
       # Log metrics
       log_metrics(metrics_dict, writer, epoch, phase)

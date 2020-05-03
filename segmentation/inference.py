@@ -7,7 +7,7 @@ import logging
 import argparse
 import numpy as np
 from PIL import Image, ImageDraw
-from train import val_step
+from train import val_step, create_metrics_dict
 from segmentation import load_model, save_model
 from data_loader import get_data_loaders, ConfigHandler
 from metrics import calculate_iou_prec_recall, MeanMetric
@@ -108,17 +108,12 @@ if __name__ == "__main__":
       iou, prec, recall = calculate_iou_prec_recall(_pred, _label_mask, pred_threshold=0)
 
       # Create metrics dict
-      metrics_dict = {'mean_iou': np.mean(iou),
-                     'mean_prec': np.mean(prec),
-                     'mean_recall': np.mean(recall)}
-      
-      # Break down IoU, precision and recall by class
-      for class_name, i in ch.classes.items():
-        sub_metric_dict = {'iou':iou, 'prec':prec, 'recall':recall}
-        for metric_type, metrics in sub_metric_dict.items():
-          class_metric_name = f'class_{class_name}/{metric_type}'
-          class_metric = metrics[int(i)-1]  # i-1 to make indices 0 based
-          metrics_dict[class_metric_name] = class_metric
+      metrics_dict = create_metrics_dict(
+        ch.classes,
+        iou=epoch_ious.item(),
+        prec=epoch_prec.item(),
+        recall=epoch_recall.item()
+      )
 
       # Id for saving file.
       img_id = (batch_index * b_size) + ind

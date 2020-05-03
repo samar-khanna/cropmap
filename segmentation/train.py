@@ -41,7 +41,7 @@ def create_metrics_dict(classes, loss=None, **metrics):
   Requires: \n
     `classes`: Dictionary of `class_name` --> index in metric array \n
     `loss`: Either `None`, or if specified, PyTorch loss number for the epoch \n
-    `kwargs`: Each metric should be a numpy array of shape (num_classes) \n
+    `metrics`: Each metric should be a numpy array of shape (num_classes) \n
   """
   metrics_dict = {}
 

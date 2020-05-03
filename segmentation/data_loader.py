@@ -123,7 +123,7 @@ class CropDataset(Dataset):
 
     # y is 3d array of repeated tile indices, ith slice is
     # 2d array of dim (h, w) full of values i
-    y = y * np.arange(1, num_classes+1)
+    y = y * np.arange(num_classes)
     y = y.T
 
     # One hot encoding by checking for equality with dense mask

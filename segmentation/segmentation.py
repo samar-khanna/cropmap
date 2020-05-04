@@ -65,7 +65,10 @@ def load_model(config_handler, from_checkpoint=False):
     assert os.path.isfile(config_handler.save_path),\
       "Model's .pth checkpoint file does not exist"
 
-    state_dict = torch.load(config_handler.save_path)
+    use_cuda = torch.cuda.is_available()
+    device = torch.device("cuda:0" if use_cuda else "cpu")
+    
+    state_dict = torch.load(config_handler.save_path, map_location=device)
     model.load_state_dict(state_dict)
 
   return model

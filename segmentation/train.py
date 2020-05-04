@@ -225,7 +225,10 @@ if __name__ == "__main__":
       if phase == "val":
         if metrics_dict['mean_iou'] > best_val_iou:
           print(f"Saving weights...")
-          save_model(model, ch)
+          if torch.cuda.device_count() > 1:
+            save_model(model.module, ch)
+          else:
+            save_model(model, ch)
     
     print(f"Finished epoch {epoch+1}.\n")
       

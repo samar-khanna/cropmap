@@ -155,7 +155,7 @@ if __name__ == "__main__":
       im.save(os.path.join(ch.inf_dir, f"{img_id}_im.jpg"))
 
       # Draw pred mask on image
-      pred_im = draw_mask_on_im(img, pred)
+      pred_im = draw_mask_on_im(img, pred > 0)
       pred_im.save(os.path.join(ch.inf_dir, f"{img_id}_pred.jpg"))
 
       # Draw ground truth mask on image

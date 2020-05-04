@@ -26,12 +26,43 @@ def draw_mask_on_im(img, masks):
   im = Image.fromarray(img).convert('RGB')
   im_draw = ImageDraw.Draw(im)
 
-  # Draw the bitmap for each class
+  # Generates an (r, g, b) tuple for each class index
+  def get_color_choice(i):
+    sh = lambda m: (i << m) % 255 
+    color_choice = {
+      0: (255, sh(6), sh(3)), 1: (sh(6), 255, sh(3)), 2:(sh(6), sh(3), 255),
+      3: (255, sh(2), sh(4)), 4: (sh(2), sh(4), 255), 5: (sh(2), sh(4), 255),
+      6: (255, 255, sh(3)), 7:(255, sh(3), 255), 8:(sh(3), 255, 255)
+    }
+    return color_choice.get(i % 9)
+
+  # Draw the bitmap for each class (only if class mask not empty)
   for i, mask in enumerate(masks):
-    mask_im = Image.fromarray(mask.astype(np.uint8) * 64, mode='L')
-    im_draw.bitmap((0, 0), mask_im, fill=(i, i, i))
+    if mask.any():
+      mask_im = Image.fromarray(mask.astype(np.uint8) * 64, mode='L')
+      im_draw.bitmap((0, 0), mask_im, fill=get_color_choice(i))
   
   return im
+
+
+def bytescale(img, high=255):
+  """
+  Converts an image of arbitrary int dtype to an 8-bit (uint8) image.
+  Requires:
+    `img`: (h, w, #c) numpy array of any int dtype
+  Returns:
+    `im_arr`: (h, w, #c) numpy array of type uin8
+  """
+  # Find min and max across each channel
+  im = img.transpose(2, 0, 1)
+  im = img.reshape(img.shape[-1], -1)
+  im_min = np.min(im, axis=1)
+  im_max = np.max(im, axis=1)
+
+  scale = 255/(im_max - im_min)
+  im_arr = (img - im_min) * scale
+
+  return im_arr.astype(np.uint8)
 
 
 def passed_arguments():
@@ -118,10 +149,11 @@ if __name__ == "__main__":
       # Id for saving file.
       img_id = (batch_index * b_size) + ind
 
-      # Convert from b,g,r to r,g,b
-      img = img.astype(np.uint8)[1:4, ...]
-      img = np.roll(img, 2, axis=0)
+      # Convert from b,g,r (indices/bands 3, 2, 1) to r,g,b 
+      # Convert to (h, w, #c) shape and scale to uint8 values
+      img = img[1:4, ...][::-1]
       img = img.transpose(1, 2, 0)
+      img = bytescale(img, high=255)
 
       # Save original image
       im = Image.fromarray(img).convert('RGB')

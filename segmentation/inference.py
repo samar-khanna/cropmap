@@ -112,11 +112,6 @@ if __name__ == "__main__":
   
   loaders = {"train":train_loader, "val":val_loader, "test":test_loader}
   loader = loaders[args.set_type]
-
-  # Set up metrics
-  epoch_ious = MeanMetric()
-  epoch_prec = MeanMetric()
-  epoch_recall = MeanMetric()
   
   ## Begin inference
   for batch_index, (input_t, y) in enumerate(loader):
@@ -141,9 +136,9 @@ if __name__ == "__main__":
       # Create metrics dict
       metrics_dict = create_metrics_dict(
         ch.classes,
-        iou=epoch_ious.item(),
-        prec=epoch_prec.item(),
-        recall=epoch_recall.item()
+        iou=iou,
+        prec=prec,
+        recall=recall
       )
 
       # Id for saving file.

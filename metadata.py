@@ -12,30 +12,7 @@ import xml.etree.ElementTree as ET
 from numpy.random import randint
 import requests
 
-# TODO have random h & v
-SEARCH_PARAMS = {
-    'filterType': 'and',
-    'childFilters': [
-        {
-            'filterType': 'value',
-            'fieldId': 21787,
-            'value': '3',
-            'operand': '='
-        },
-        {
-            'filterType': 'value',
-            'fieldId': 21788,
-            'value': '11',
-            'operand': '='
-        },
-        {
-            'filterType': 'value',
-            'fieldId': 21789,
-            'value': 'CU',
-            'operand': '=',
-        },
-    ]
-}
+
 
 
 API_ROOT = 'https://earthexplorer.usgs.gov/inventory/json/v/1.4.1/'
@@ -112,22 +89,59 @@ def print_stats(results):
         print(r['acquisitionDate'], r['fill'])
 
 
+def do_query(api_key, h, v, max_results, starting_number=1):
+    search_params = {
+        'filterType': 'and',
+        'childFilters': [
+            {
+                'filterType': 'value',
+                'fieldId': 21787,
+                'value': 'X', # need to fill
+                'operand': '='
+            },
+            {
+                'filterType': 'value',
+                'fieldId': 21788,
+                'value': 'X', # need to fill
+                'operand': '='
+            },
+            {
+                'filterType': 'value',
+                'fieldId': 21789,
+                'value': 'CU',
+                'operand': '=',
+            },
+        ]
+    }
+    search_params['childFilters'][0]['value'] = h
+    search_params['childFilters'][1]['value'] = v
+    print('querying h={},v={}'.format(h,v))
+    print('starting number={}, max results={}'.format(starting_number,
+        max_results))
+    response = api_call('search',
+            api_key,
+            datasetName='ARD_TILE',
+            includeUnknownCloudCover=False,
+            maxCloudCover=10,
+            sortOrder='DESC',
+            maxResults=max_results,
+            startingNumber=starting_number,
+            months=[5,6,7,8,9],
+            additionalCriteria=search_params)
+    print('num results={}'.format(response['totalHits']))
+    print('next record={}'.format(response['nextRecord']))
+    print('------------------------------------------------------------------')
+    return response
+
+
+
 if __name__ == '__main__':
     api_key = None
     h,v = sys.argv[3], sys.argv[4]
     print('H: {}, V: {}'.format(h,v))
-    SEARCH_PARAMS['childFilters'][0]['value'] = h
-    SEARCH_PARAMS['childFilters'][1]['value'] = v
     try:
         api_key = login(sys.argv[1], sys.argv[2])
-        response = api_call('search',
-                api_key,
-                datasetName='ARD_TILE',
-                includeUnknownCloudCover=False,
-                maxCloudCover=10,
-                sortOrder='DESC',
-                maxResults=1000,
-                additionalCriteria=SEARCH_PARAMS)
+        response = do_query(api_key, h, v)
         print('Query returned {} results'.format(len(response['results'])))
         if len(response['results']) == 0:
             sys.exit(0)

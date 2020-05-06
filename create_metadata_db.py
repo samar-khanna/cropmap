@@ -1,5 +1,6 @@
 import sys
 
+from db import connect, add_records, close
 from metadata import *
 
 MAX_RESULTS_PER_QUERY = 50000
@@ -24,6 +25,7 @@ except:
     sys.exit(-1)
 
 # don't do concurrent requests since they dont allow them anyway
+db = connect('test.db')
 for idx in idxs:
     try:
         h,v = idx
@@ -38,9 +40,13 @@ for idx in idxs:
             response = do_query(api_key, h, v, MAX_RESULTS_PER_QUERY, starting_number=starting_number)
             next_record = response['nextRecord']
             results.extend(response['results'])
+        
+        add_records(db, results)
         break
-        # TODO stuff them into a DB
         
     except Exception as e:
         print(e)
         sys.exit(-1)
+
+close(db)
+

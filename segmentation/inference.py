@@ -19,19 +19,23 @@ def draw_mask_on_im(img, masks):
   Helper method that opens an image, draws the segmentation masks in `masks`
   as bitmaps, and then returns the masked image.
   Requires:
-    `img`: np array of shape (#c, h, w)
-    `masks`: Array shaped as: #C x h x w
+    `img`: np array of shape (h, w, #c)
+    `masks`: np array of shape: (#c, h, w)
   """
   # Open the image and set up an ImageDraw object
-  im = Image.fromarray(img).convert('RGB')
+  im = Image.fromarray(img, mode='RGB')
   im_draw = ImageDraw.Draw(im)
+
+  # Draw the masks in a separate image as well
+  raw_mask = Image.fromarray(np.zeros(img.shape[0:2])).convert('RGB')
+  mask_draw = ImageDraw.Draw(raw_mask)
 
   # Generates an (r, g, b) tuple for each class index
   def get_color_choice(i):
     sh = lambda m: (i << m) % 255 
     color_choice = {
       0: (255, sh(6), sh(3)), 1: (sh(6), 255, sh(3)), 2:(sh(6), sh(3), 255),
-      3: (255, sh(2), sh(4)), 4: (sh(2), sh(4), 255), 5: (sh(2), sh(4), 255),
+      3: (255, sh(2), sh(4)), 4: (sh(2), 255, sh(4)), 5: (sh(2), sh(4), 255),
       6: (255, 255, sh(3)), 7:(255, sh(3), 255), 8:(sh(3), 255, 255)
     }
     return color_choice.get(i % 9)
@@ -39,10 +43,16 @@ def draw_mask_on_im(img, masks):
   # Draw the bitmap for each class (only if class mask not empty)
   for i, mask in enumerate(masks):
     if mask.any():
-      mask_im = Image.fromarray(mask.astype(np.uint8) * 64, mode='L')
-      im_draw.bitmap((0, 0), mask_im, fill=get_color_choice(i))
+      # Create mask, scale its values by 64 so that opacity not too low/high
+      mask_arr = mask.astype(np.uint8) * 64
+      mask_im = Image.fromarray(mask_arr, mode='L')
+
+      # Get color choice, and draw on image and on raw_mask
+      color = get_color_choice(i)
+      im_draw.bitmap((0, 0), mask_im, fill=color)
+      mask_draw.bitmap((0, 0), mask_im, fill=color)
   
-  return im
+  return im, raw_mask
 
 
 def bytescale(img, high=255):
@@ -151,16 +161,18 @@ if __name__ == "__main__":
       img = bytescale(img, high=255)
 
       # Save original image
-      im = Image.fromarray(img).convert('RGB')
+      im = Image.fromarray(img, mode="RGB")
       im.save(os.path.join(ch.inf_dir, f"{img_id}_im.jpg"))
 
       # Draw pred mask on image
-      pred_im = draw_mask_on_im(img, pred > 0)
+      pred_im, pred_mask = draw_mask_on_im(img, pred > 0)
       pred_im.save(os.path.join(ch.inf_dir, f"{img_id}_pred.jpg"))
+      pred_mask.save(os.path.join(ch.inf_dir, f"{img_id}_raw_pred.jpg"))
 
       # Draw ground truth mask on image
-      gt_im = draw_mask_on_im(img, label_mask)
+      gt_im, gt_mask = draw_mask_on_im(img, label_mask)
       gt_im.save(os.path.join(ch.inf_dir, f"{img_id}_gt.jpg"))
+      gt_mask.save(os.path.join(ch.inf_dir, f"{img_id}_raw_gt.jpg"))
 
       # Save eval results.
       with open(os.path.join(ch.inf_dir, f"{img_id}_metrics.json"), 'w') as f:

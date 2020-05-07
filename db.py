@@ -1,4 +1,5 @@
 from collections import OrderedDict
+import logging
 import os
 import sqlite3
 
@@ -9,7 +10,6 @@ SQLITE_MEMDB_MAGIC_STR = ':memory:'
 
 COLS = OrderedDict({ # can iterate over keys in order to produce valid row
     'acquisitionDate': 'text', # sqlite natively supports ISO8601 strs as dates
-    'acquisitionDate': 'text',
     'browseUrl': 'text',
     'dataAccessUrl': 'text',
     'downloadUrl': 'text',
@@ -18,18 +18,20 @@ COLS = OrderedDict({ # can iterate over keys in order to produce valid row
     'cloudCover': 'real',
     'metadataUrl': 'text',
     'orderUrl': 'text',
-    'thumbnail': 'blob' # not in api search results, requires bookkeeping
+    'browseUrl': 'text', 
+    'h': 'integer',# not in api search results, requires bookkeeping
+    'v': 'integer'# not in api search results, requires bookkeeping
 })
 
 CREATE_TABLE = 'CREATE TABLE search_results ({})'.format(
         ', '.join(k+' '+v for k,v in COLS.items())
 )
 
-INSERT = 'INSERT INTO search_results VALUES (' + ('?,'*len(COLS)-1) + '?)'
+INSERT = 'INSERT INTO search_results VALUES (' + ('?,'*(len(COLS)-1)) + '?)'
 
 UPDATE = 'UPDATE search_results SET thumbnail = ? where entityId = ?'
 
-CONNECTION, CURSOR, THREADPOOL = range(3)
+CONNECTION, CURSOR, THREADPOOL, THREADS = range(4)
 
 
 def connect(db_file=SQLITE_MEMDB_MAGIC_STR):
@@ -41,34 +43,39 @@ def connect(db_file=SQLITE_MEMDB_MAGIC_STR):
         cur.execute(CREATE_TABLE)
         conn.commit()
 
-    return conn, cur, ThreadPoolExecutor()
+    return (conn, cur, ThreadPoolExecutor(), {})
 
 
-def _update_thumbnail(db, entity_id, thumbnail_url):
-    try:
-        response = requests.get(thumbnail_url)
-        db[CURSOR].execute(UPDATE, response.content, entity_id)
-        db[CONNECTION].commit()
-    except Exception as ex:
-        return ex
-    # otherwise return nothing
+def _cols_in_response():
+    for k in COLS.keys():
+        if k == 'h' or k == 'v':
+            continue
+        else:
+            yield k
 
 
-def add_records(db, query_results):
-    rows = map(lambda r: tuple([r[k] for k, _ in _custom_iteritems()] + [None]),
-                query_results)
+def add_records(db, h, v, query_results):
+    rows = list(range(len(query_results)))
+    for i, r in zip(rows, query_results):
+        # TODO make this nicer
+        rows[i] = tuple([r[k] for k in _cols_in_response()] + [h,v])
+        #eid = r['entityId']
+        #db[THREADS][eid] = db[THREADPOOL].submit(
+        #        _update_thumbnail(db, eid,r['browseUrl']))
+
+    logging.info('INSERTing %s records', len(rows))
     db[CURSOR].executemany(INSERT, rows)
     db[CONNECTION].commit()
 
 
 def close(db):
     db[CONNECTION].close()
-    # TODO add threadpoolexecutor cleanup code
+    print('shutting down threadpool')
+    '''
+    for entity_id, fut in db[THREADS].items():
+        res = fut.result()
+        if res:
+            print('{} - error:\n{}\n'.format(entity_id, res))
+    db[THREADPOOL].shutdown()
+    '''
 
-
-def _custom_iteritems():
-    for k,v in COLS.items():
-        if k == 'thumbnail':
-            continue
-        else:
-            yield k,v

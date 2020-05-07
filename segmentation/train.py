@@ -51,7 +51,7 @@ def create_metrics_dict(classes, loss=None, **metrics):
   # First log mean metrics
   for metric_name, metric_arr in metrics.items():
     metric = metric_arr
-    metrics_dict[f"mean_{metric_name}"] = np.mean(metric)
+    metrics_dict[f"mean/{metric_name}"] = np.mean(metric)
 
     # Break down metric by class
     for class_name, i in classes.items():

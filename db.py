@@ -68,6 +68,21 @@ def add_records(db, h, v, query_results):
     db[CONNECTION].commit()
 
 
+def get_acquisition_dates(db, h,v):
+    db[CURSOR].execute(
+        'SELECT acquisitionDate FROM search_results WHERE h=? AND v=?', (h,v))
+    return db[CURSOR].fetchall()
+
+
+def get_thumbnail_urls(db, h, v, year):
+    query = '''
+    SELECT browseUrl 
+    FROM search_results 
+    WHERE h=? AND v=? AND acquisitionDate >= ? and acquisitionDate <= ?
+    '''
+    db[CURSOR].execute(query, (h, v, year+'-01-01', year+('-12-31')))
+    return db[CURSOR].fetchall()
+
 def close(db):
     db[CONNECTION].close()
     print('shutting down threadpool')

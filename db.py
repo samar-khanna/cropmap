@@ -69,9 +69,14 @@ def add_records(db, h, v, query_results):
 
 
 def get_acquisition_dates(db, h,v):
+    def _split(date_str):
+        year, month, day = date_str.split('-')
+        return {'year': int(year), 'month': int(month), 'day': int(day)}
+
+
     db[CURSOR].execute(
         'SELECT acquisitionDate FROM search_results WHERE h=? AND v=?', (h,v))
-    return db[CURSOR].fetchall()
+    return map(lambda d: _split(d[0]), db[CURSOR].fetchall())
 
 
 def get_thumbnail_urls(db, h, v, year):
@@ -81,7 +86,7 @@ def get_thumbnail_urls(db, h, v, year):
     WHERE h=? AND v=? AND acquisitionDate >= ? and acquisitionDate <= ?
     '''
     db[CURSOR].execute(query, (h, v, year+'-01-01', year+('-12-31')))
-    return db[CURSOR].fetchall()
+    return map(lambda t: t[0], db[CURSOR].fetchall())
 
 def close(db):
     db[CONNECTION].close()

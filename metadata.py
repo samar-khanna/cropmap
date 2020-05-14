@@ -89,7 +89,7 @@ def print_stats(results):
         print(r['acquisitionDate'], r['fill'])
 
 
-def do_query(api_key, h, v, max_results, starting_number=1):
+def do_query(api_key, h, v, max_results, starting_number=1,max_cloud_cover=20):
     search_params = {
         'filterType': 'and',
         'childFilters': [
@@ -122,10 +122,11 @@ def do_query(api_key, h, v, max_results, starting_number=1):
             api_key,
             datasetName='ARD_TILE',
             includeUnknownCloudCover=False,
-            maxCloudCover=10,
+            maxCloudCover=max_cloud_cover,
             sortOrder='DESC',
             maxResults=max_results,
             startingNumber=starting_number,
+            temporalFilter={'startDate': '2013-01-01'},
             months=[5,6,7,8,9],
             additionalCriteria=search_params)
     print('num results={}'.format(response['totalHits']))

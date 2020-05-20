@@ -6,7 +6,9 @@ import rasterio
 from rasterio.windows import Window
 import numpy as np
 import torch
+import torchvision.transforms as torch_transforms
 from torch.utils.data import Dataset, DataLoader, SubsetRandomSampler
+import data_transforms 
 
 
 class ConfigHandler():
@@ -72,7 +74,7 @@ class ConfigHandler():
 
 class CropDataset(Dataset):
   def __init__(self, config_handler, tile_size=(224, 224), overlap=0,
-               train_val_test=[0.8, 0.1, 0.1], inf_mode=False, transform=None):
+               train_val_test=[0.8, 0.1, 0.1], inf_mode=False):
     """
     Initialises an instance of a `CropDataset`.
     Requires:
@@ -82,16 +84,29 @@ class CropDataset(Dataset):
       `train_val_test`: Percentage split (must add to 1) of data sizes
       `inf_mode`: Whether the dataset is being used for inference or not.
                   If not for inference, then make sure that labels exist.
-      `transform`: Function to augment data.
     """
-    self.transform = transform
     self.tile_size = tile_size
     self.overlap = overlap
     self.train_val_test = train_val_test
     self.inf_mode = inf_mode
 
+    # Set up label mask pixel mapping based on interested classes.
     self.num_classes = len(config_handler.classes)
     self.map_index = lambda i: config_handler.index_map.get(i, -1)
+
+    # Set up transforms if any
+    transforms = getattr(config_handler, "transforms", {})
+    composed = []
+    for transform_name, transform_kwargs in transforms.items():
+      # Get transform function from our own file, or else from torchvision
+      transform_class = getattr(data_transforms, transform_name, None)
+      if not transform_class:
+        transform_class = getattr(torch_transforms, transform_name)
+      
+      transform_fn = transform_class(**transform_kwargs)
+      composed.append(transform_fn)
+    
+    self.transform = torch_transforms.Compose(composed) if composed else None
 
     # Mosaic tile
     self.mosaic_path = os.path.join(config_handler.data_path, 'mosaic.tif')
@@ -134,8 +149,8 @@ class CropDataset(Dataset):
   def __getitem__(self, index):
     """
     This returns only ONE sample from the dataset, for a given index.
-    The returned sample should be a tuple (x, y) where x is the input
-    image and y is the ground truth mask
+    The returned sample should be a tuple (x, y) where x is the input image 
+    of shape (#bands, h, w) and y is the ground truth mask of shape (c, h, w)
     """
     r, c = index
     th, tw = self.tile_size
@@ -219,24 +234,24 @@ def get_data_loaders(config_handler,
                      train_val_test=[0.8, 0.1, 0.1], 
                      batch_size=32,
                      num_workers=4):
-    """
-    Creates the train, val and test loaders to input data to the model.
-    Specify if you want the loaders for an inference task.
-    """
-    dataset = CropDataset(config_handler, inf_mode=inf_mode)
+  """
+  Creates the train, val and test loaders to input data to the model.
+  Specify if you want the loaders for an inference task.
+  """
+  dataset = CropDataset(config_handler, inf_mode=inf_mode)
 
-    indices = dataset.gen_indices(indices_path=config_handler.indices_path)
+  indices = dataset.gen_indices(indices_path=config_handler.indices_path)
 
-    # Define samplers for each of the train, val and test data
-    train_sampler = SubsetRandomSampler(indices['train'])
-    train_loader = DataLoader(dataset, batch_size=batch_size, 
-                              sampler=train_sampler, num_workers=num_workers)
+  # Define samplers for each of the train, val and test data
+  train_sampler = SubsetRandomSampler(indices['train'])
+  train_loader = DataLoader(dataset, batch_size=batch_size, 
+                            sampler=train_sampler, num_workers=num_workers)
 
-    val_sampler = SubsetRandomSampler(indices['val'])
-    val_loader = DataLoader(dataset, batch_size=batch_size, 
-                            sampler=val_sampler, num_workers=num_workers)
+  val_sampler = SubsetRandomSampler(indices['val'])
+  val_loader = DataLoader(dataset, batch_size=batch_size, 
+                          sampler=val_sampler, num_workers=num_workers)
 
-    test_sampler = SubsetRandomSampler(indices['test'])
-    test_loader = DataLoader(dataset, batch_size=batch_size, sampler=test_sampler)
+  test_sampler = SubsetRandomSampler(indices['test'])
+  test_loader = DataLoader(dataset, batch_size=batch_size, sampler=test_sampler)
 
-    return train_loader, val_loader, test_loader
+  return train_loader, val_loader, test_loader

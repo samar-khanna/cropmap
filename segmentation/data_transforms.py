@@ -28,7 +28,7 @@ class MaskBandTransform:
 
     # Array of mask values per band
     mask_fill = self.mask_values
-    if not self.mask_values:
+    if len(self.mask_values) == 0:
       # Reduce to a mean value per band
       mask_fill = np.mean(np.mean(x, axis=-1), axis=-1)
     

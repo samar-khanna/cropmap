@@ -1,5 +1,5 @@
 {
-  "name": "unet_resnet_50_scratch",
+  "name": "unet_resnet_50_mask_bands",
   "classifier": "UNet",
   "classifier_kwargs": {},
   "backbone": "resnet50",
@@ -12,7 +12,9 @@
   "transforms": {
     "MaskBandTransform": {
       "bands_to_mask": [],
-      "mask_values": []
+      "mask_values": [250.3072924, 285.71158556, 498.4841136, 349.95612676,
+                      4582.59112256, 1816.29629036, 803.113325, 2967.5635272,
+                      2948.72659288, 2999.63840004]
     }
   },
 

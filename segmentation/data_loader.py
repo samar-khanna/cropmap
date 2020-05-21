@@ -52,10 +52,9 @@ class ConfigHandler():
     self.out_dir = os.path.join(config.get("out_dir", "."), self.name)
     self.save_dir = os.path.join(self.out_dir, "checkpoints")
     self.metrics_dir = os.path.join(self.out_dir, "metrics")
+    self.inf_dir = os.path.join(self.out_dir, "inference")
     if inf_subdir:
-        self.inf_dir = os.path.join(self.out_dir, "inference", inf_subdir)
-    else:
-        self.inf_dir = os.path.join(self.out_dir, "inference")
+        self.inf_dir = os.path.join(self.inf_dir, inf_subdir)
     ConfigHandler._create_dirs(self.out_dir, self.save_dir, 
                                self.metrics_dir, self.inf_dir)
 

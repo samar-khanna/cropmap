@@ -110,6 +110,8 @@
   "Sod-Grass Seed": 59,
   "Switchgrass": 60,
   "Forest": 63,
+  "Shrubland-0": 64,
+  "Barren-0": 65,
   "Clouds-No Data": 81,
   "Developed": 82,
   "Water": 83,

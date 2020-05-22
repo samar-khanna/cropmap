@@ -17,6 +17,10 @@ def passed_arguments():
                       type=str,
                       required=True,
                       help="Path to directory containing inference results.")
+  parser.add_argument("--text",
+                      action="store_true",
+                      default=False,
+                      help="Only print the text results from evaluation.")
   parser.add_argument("--classes",
                       type=str,
                       default=os.path.join("segmentation", "classes.json"),
@@ -166,8 +170,8 @@ def plot_images(im_paths):
   axes[0, 0].imshow(im)
   axes[0, 1].imshow(pred)
   axes[0, 2].imshow(gt)
-  axes[1, 0].imshow(gt_raw)
-  axes[1, 1].imshow(pred_raw)
+  axes[1, 0].imshow(pred_raw)
+  axes[1, 1].imshow(gt_raw)
 
   plt.show()
 
@@ -221,17 +225,14 @@ if __name__ == "__main__":
       print(f"{metric_name}: {round(metric_val, 3)}")
 
   ## Start plotting results.
+  if not args.text:
+    # Mean result histogram
+    plot_hist(mean_results, thresh=0.2)
+    
+    # Plot grids of the images.
+    paths = zip(im_paths, gt_paths, gt_raw_paths, pred_paths, pred_raw_paths, metric_paths)
+    paths = list(paths)
 
-  # Mean result histogram
-  plot_hist(mean_results, thresh=0.2)
-  
-  # Plot grids of the images.
-  paths = zip(im_paths, gt_paths, gt_raw_paths, pred_paths, pred_raw_paths, metric_paths)
-  paths = list(paths)
-
-  show_paths = random.sample(paths, 20)
-  for ps in show_paths:
-    plot_images(ps)
-
-
-  pass
+    show_paths = random.sample(paths, 20)
+    for ps in show_paths:
+      plot_images(ps)

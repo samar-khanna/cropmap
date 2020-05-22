@@ -229,12 +229,15 @@ if __name__ == "__main__":
         val_iou = metrics_dict['mean/iou']
         diff = val_iou - best_val_iou
         if diff > 0 or (epochs_since_last_save > 10 and abs(diff/best_val_iou) < 0.05):
+          best_val_iou = val_iou if diff > 0 else best_val_iou
           epochs_since_last_save = 0
+
           print(f"Saving weights...")
           if torch.cuda.device_count() > 1:
             save_model(model.module, ch)
           else:
             save_model(model, ch)
+            
         else:
           epochs_since_last_save += 1
     

@@ -169,8 +169,11 @@ if __name__ == "__main__":
   val_writer = SummaryWriter(log_dir=os.path.join(metrics_path, 'val'))
   logging.basicConfig(filename=os.path.join(metrics_path, "log.log"), level=logging.INFO)
 
-  ## Begin training
+  # Variables to keep track of when to checkpoint
   best_val_iou = -np.inf
+  epochs_since_last_save = 0
+
+  ## Begin training
   for epoch in range(epochs):
     print(f"Starting epoch {epoch+1}:")
     for phase in ["train", "val"]:
@@ -223,12 +226,17 @@ if __name__ == "__main__":
 
       # Save model checkpoint if val iou better than best recorded so far.
       if phase == "val":
-        if metrics_dict['mean/iou'] > best_val_iou:
+        val_iou = metrics_dict['mean/iou']
+        diff = val_iou - best_val_iou
+        if diff > 0 or (epochs_since_last_save > 10 and abs(diff/best_val_iou) < 0.05):
+          epochs_since_last_save = 0
           print(f"Saving weights...")
           if torch.cuda.device_count() > 1:
             save_model(model.module, ch)
           else:
             save_model(model, ch)
+        else:
+          epochs_since_last_save += 1
     
     print(f"Finished epoch {epoch+1}.\n")
       

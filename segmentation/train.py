@@ -223,7 +223,7 @@ if __name__ == "__main__":
 
       # Save model checkpoint if val iou better than best recorded so far.
       if phase == "val":
-        if metrics_dict['mean_iou'] > best_val_iou:
+        if metrics_dict['mean/iou'] > best_val_iou:
           print(f"Saving weights...")
           if torch.cuda.device_count() > 1:
             save_model(model.module, ch)

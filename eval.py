@@ -5,7 +5,7 @@ import random
 import argparse
 import numpy as np
 from PIL import Image
-from metrics import MeanMetric
+from segmentation.metrics import MeanMetric
 import matplotlib.pyplot as plt
 from collections import OrderedDict
 

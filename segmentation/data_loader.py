@@ -128,13 +128,14 @@ class CropDataset(Dataset):
       with open(data_map_path, 'r') as f:
         self.data_map = json.load(f)
       
-      for set_type, data_dir in self.data_map.items():
-        rel_path = os.path.relpath(data_dir)
-        mosaic_path = os.path.join(abs_path, rel_path, MOSAIC_NAME)
-        mask_path = os.path.join(abs_path, rel_path, MASK_NAME)
-        if not os.path.isfile(mask_path):
-          mask_path = None
-        self.data_paths[set_type].append((mosaic_path, mask_path))
+      for set_type, data_dirs in self.data_map.items():
+        for data_dir in data_dirs:
+          rel_path = os.path.relpath(data_dir)
+          mosaic_path = os.path.join(abs_path, rel_path, MOSAIC_NAME)
+          mask_path = os.path.join(abs_path, rel_path, MASK_NAME)
+          if not os.path.isfile(mask_path):
+            mask_path = None
+          self.data_paths[set_type].append((mosaic_path, mask_path))
     else:
       mosaic_path = os.path.join(abs_path, MOSAIC_NAME)
       mask_path = os.path.join(abs_path, MASK_NAME)
@@ -237,7 +238,8 @@ class CropDataset(Dataset):
     for set_type, data_paths_dict in _indices.items():
       for data_path_ind, offsets in data_paths_dict.items():
         for (r, c) in offsets:
-          indices[set_type] = (set_type, data_path_ind, (r, c))
+          new_ind = (set_type, int(data_path_ind), (r, c))
+          indices[set_type].append(new_ind)
     return indices
   
 
@@ -319,7 +321,7 @@ class CropDataset(Dataset):
     # Save if specified.
     if indices_path:
       with open(indices_path, 'w') as f:
-        json.dump(indices, f)
+        json.dump(indices, f, indent=2)
 
     return CropDataset.convert_inds(indices)
 

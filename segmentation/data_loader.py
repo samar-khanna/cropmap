@@ -11,6 +11,10 @@ from torch.utils.data import Dataset, DataLoader, SubsetRandomSampler
 import data_transforms 
 
 
+MOSAIC_NAME = "mosaic.tif"
+MASK_NAME = "ground_truth.tif"
+
+
 class ConfigHandler():
   def __init__(self, data_path, path_to_config, classes_path, inf_subdir=None):
     super().__init__()
@@ -110,22 +114,52 @@ class CropDataset(Dataset):
     
     self.transform = torch_transforms.Compose(composed) if composed else None
 
-    # Mosaic tile
-    self.mosaic_path = os.path.join(config_handler.data_path, 'mosaic.tif')
-    with rasterio.open(self.mosaic_path) as mosaic:
-      self.mosaic_shape = mosaic.shape
+    # Dict of files containing each (path_to_mosaic.tif, path_to_mask.tif)
+    self.data_paths = {"train":[], "val":[], "test":[]}
 
-    # Ground truth labels
-    self.mask_path = os.path.join(config_handler.data_path, 'mask.tif')
-    self.mask_exists = os.path.isfile(self.mask_path)
+    # Check if single or multiple mosaics used for training.
+    abs_path = os.path.abspath(config_handler.data_path)
+    data_map_path = os.path.join(config_handler.data_path, 'data_map.json')
+    if os.path.isfile(data_map_path):
+
+      # Data map specifying which masks to use. Note: this file can repeat
+      # names for train/val/test. To separate tiles from the same file, 
+      # the train/val/test split will be used.
+      with open(data_map_path, 'r') as f:
+        self.data_map = json.load(f)
+      
+      for set_type, data_dir in self.data_map.items():
+        rel_path = os.path.relpath(data_dir)
+        mosaic_path = os.path.join(abs_path, rel_path, MOSAIC_NAME)
+        mask_path = os.path.join(abs_path, rel_path, MASK_NAME)
+        if not os.path.isfile(mask_path):
+          mask_path = None
+        self.data_paths[set_type].append((mosaic_path, mask_path))
+    else:
+      mosaic_path = os.path.join(abs_path, MOSAIC_NAME)
+      mask_path = os.path.join(abs_path, MASK_NAME)
+      
+      for set_type in ["train", "val", "test"]:
+        self.data_paths[set_type].append((mosaic_path, mask_path))
+
+    # Store the shapes for all the mosaic files in the dataset.
+    self.mosaic_shapes = {}
+    for set_type, paths in self.data_paths.items():
+      for (mosaic_path, _) in paths:
+        if mosaic_path not in self.mosaic_shapes:
+          with rasterio.open(mosaic_path) as mosaic:
+            self.mosaic_shapes[mosaic_path] = mosaic.shape
 
   def __len__(self):
-    h, w = self.mosaic_shape
-    th, tw = self.tile_size
-    o = self.overlap
-    total_rows = h//(th - o)
-    total_cols = w//(tw - o)
-    return self.total_rows * self.total_cols
+    total_len = 0
+    for _, mosaic_shape in self.mosaic_shapes.items():
+      h, w = mosaic_shape
+      th, tw = self.tile_size
+      o = self.overlap
+      n_rows = h//(th - o)
+      n_cols = w//(tw - o)
+      total_len += n_rows * n_cols
+    return total_len
   
   @staticmethod
   def one_hot_mask(mask, num_classes):
@@ -151,25 +185,28 @@ class CropDataset(Dataset):
   def __getitem__(self, index):
     """
     This returns only ONE sample from the dataset, for a given index.
-    The returned sample should be a tuple (x, y) where x is the input image 
-    of shape (#bands, h, w) and y is the ground truth mask of shape (c, h, w)
+    The index is a tuple of the form `(set_type, data_paths_index, (row, col))`
+    The returned sample should be a tuple `(x, y)` where `x` is the input image 
+    of shape `(#bands, h, w)` and `y` is the ground truth mask of shape `(c, h, w)`
     """
-    r, c = index
+    set_type, i, (r, c) = index
     th, tw = self.tile_size
-    h, w = self.mosaic_shape
+
+    # Access the right mosaic and mask file paths
+    mosaic_path, mask_path = self.data_paths[set_type][i]
 
     # Sample the data using windows
     window = Window(c, r, tw, th)
-    with rasterio.open(self.mosaic_path) as mosaic:
+    with rasterio.open(mosaic_path) as mosaic:
       x = mosaic.read(window=window)
 
     # If in inference mode and mask doesn't exist, then create dummy label.
-    if self.inf_mode and not self.mask_exists:
+    if self.inf_mode and not mask_path:
       y = np.ones((self.num_classes, th, tw))
     else:
-      assert self.mask_exists, "Ground truth mask must exist for training."
+      assert mask_path, "Ground truth mask must exist for training."
 
-      with rasterio.open(self.mask_path) as _mask:
+      with rasterio.open(mask_path) as _mask:
         mask = _mask.read(window=window)
 
       # Map values in mask to values within num_classes.
@@ -187,47 +224,104 @@ class CropDataset(Dataset):
     to_tensor = lambda t: torch.tensor(t, dtype=torch.float32)
 
     return to_tensor(sample[0]), to_tensor(sample[1])
+
+  @staticmethod
+  def convert_inds(_indices):
+    """
+    Converts a given dictionary of data indices into the correct format
+    required by the Sampler. Concretely, converts a dictionary of the form
+    `{set_type: {data_paths_index: [(r1, c1), ...]}}` to a list of the form
+    `[(set_type, data_paths_index, (r1, c1)), ...]`
+    """
+    indices = {"train":[], "val":[], "test":[]}
+    for set_type, data_paths_dict in _indices.items():
+      for data_path_ind, offsets in data_paths_dict.items():
+        for (r, c) in offsets:
+          indices[set_type] = (set_type, data_path_ind, (r, c))
+    return indices
   
+
   def gen_indices(self, indices_path=None):
     """
     Generates indices `(r,c)` corresponding to start position of tiles,
-    where the tile is formed by `mosaic[:, r:r+th, c:c+th]`.
+    where the tile is formed by `mosaic[:, r:r+th, c:c+tw]`.
     If `indices_path` specified, loads indices from path. If `indices_path`
     is not yet a file on system, then generates and saves the indices.
     """
     if indices_path:
       if os.path.isfile(indices_path):
         with open(indices_path, 'r') as f:
-          return json.load(f)
+          _indices = json.load(f)
+        return CropDataset.convert_inds(_indices)
 
-    h, w = self.mosaic_shape
-    th, tw = self.tile_size
-    step_h = th - self.overlap
-    step_w = tw - self.overlap
-
-    # Get (r, c) start position of each tile in area
-    inds = []
-    for r in range(0, h-step_h, step_h):
-      for c in range(0, w-step_w, step_w):
-        inds.append((r, c))
+    # Note which sets each mosaic appears in. Mapping from
+    # mosaic_path -> {"train": (data_path_ind, split_pct), "val":...}
+    # If appears in 2/3 sets, extra given in order of preferernce [train, val, test]
+    mosaic_splits = {}
+    for i, (mosaic_path, _) in enumerate(self.data_paths["train"]):
+      mosaic_splits[mosaic_path] = {"train": {"ind": i, "pct":1.0}}
     
-    # Shuffle em up
-    random.shuffle(inds)
+    for i, (mosaic_path, _) in enumerate(self.data_paths["val"]):
+      splits = mosaic_splits.get(mosaic_path, {})
+      splits["val"] = {"ind": i}
+      if "train" in splits:
+        # Remove percentage of val indices from training data
+        splits["train"]["pct"] -= self.train_val_test[1]  # 1-val = tr + te
+        splits["val"]["pct"] = self.train_val_test[1]
+      else:
+        splits["val"]["pct"] = 1.0
+      mosaic_splits[mosaic_path] = splits
+    
+    for i, (mosaic_path, _) in enumerate(self.data_paths["test"]):
+      splits = mosaic_splits.get(mosaic_path, {})
+      splits["test"] = {"ind": i}
+      # Either train present, or train, val present, or just val
+      if "train" in splits:
+        splits["train"]["pct"] -= self.train_val_test[2]  # 1-te-val = tr
+        splits["test"]["pct"] = self.train_val_test[2]
+      # If just val and test are used, then split between val and test equally
+      elif "val" in splits:
+        splits["val"]["pct"] = splits["test"]["pct"] = 0.5
+      else:
+        splits["test"]["pct"] = 1.0
+      mosaic_splits[mosaic_path] = splits
 
-    # Add to train/val/test
+    # Create the (row, col) index offsets.
     indices = {}
-    train_split = int(self.train_val_test[0] * len(inds))
-    val_split = int(self.train_val_test[1] * len(inds))
-    indices["train"] = inds[:train_split]
-    indices["val"] = inds[train_split: train_split + val_split]
-    indices["test"] = inds[train_split + val_split:]
+    for mosaic_path, mosaic_shape in self.mosaic_shapes.items():
+      h, w = mosaic_shape
+      th, tw = self.tile_size
+      step_h = th - self.overlap
+      step_w = tw - self.overlap
+
+      # Get (r, c) start position of each tile in area
+      inds = []
+      for r in range(0, h-step_h, step_h):
+        for c in range(0, w-step_w, step_w):
+          inds.append((r, c))
+      
+      # Shuffle em up
+      random.shuffle(inds)
+
+      # Split them into each train/val/test, as specified
+      splits = mosaic_splits[mosaic_path]
+      prev_split = 0
+      for set_type, ind_split in splits.items():
+        ind, pct = ind_split["ind"], ind_split["pct"]
+        split = int(pct * len(inds)) + prev_split
+
+        set_indices = indices.get(set_type, {})
+        set_indices[ind] = inds[prev_split: split]
+        indices[set_type] = set_indices
+
+        prev_split = split
 
     # Save if specified.
     if indices_path:
       with open(indices_path, 'w') as f:
         json.dump(indices, f)
 
-    return indices
+    return CropDataset.convert_inds(indices)
 
 
 def get_data_loaders(config_handler, 

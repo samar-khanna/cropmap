@@ -7,7 +7,7 @@ from rasterio.windows import Window
 import numpy as np
 import torch
 import torchvision.transforms as torch_transforms
-from torch.utils.data import Dataset, DataLoader, SubsetRandomSampler
+from torch.utils.data import Dataset, DataLoader, Sampler, SubsetRandomSampler
 import data_transforms 
 
 
@@ -326,6 +326,22 @@ class CropDataset(Dataset):
     return CropDataset.convert_inds(indices)
 
 
+class SubsetSequentialSampler(Sampler):
+  """
+  Almost identical to `SubsetRandomSampler` except it samples sequentially 
+  from given indices (i.e. always in the same order).
+  """
+  def __init__(self, indices):
+    self.indices = indices
+  
+  def __iter__(self):
+    for ind in self.indices:
+      yield ind
+    
+  def __len__(self):
+    return len(self.indices)
+
+
 def get_data_loaders(config_handler, 
                      transform_fn=None,
                      inf_mode=False,
@@ -341,15 +357,16 @@ def get_data_loaders(config_handler,
   indices = dataset.gen_indices(indices_path=config_handler.indices_path)
 
   # Define samplers for each of the train, val and test data
+  # Sample train data randomly, and validation, test data sequentially
   train_sampler = SubsetRandomSampler(indices['train'])
   train_loader = DataLoader(dataset, batch_size=batch_size, 
                             sampler=train_sampler, num_workers=num_workers)
 
-  val_sampler = SubsetRandomSampler(indices['val'])
+  val_sampler = SubsetSequentialSampler(indices['val'])
   val_loader = DataLoader(dataset, batch_size=batch_size, 
                           sampler=val_sampler, num_workers=num_workers)
 
-  test_sampler = SubsetRandomSampler(indices['test'])
+  test_sampler = SubsetSequentialSampler(indices['test'])
   test_loader = DataLoader(dataset, batch_size=batch_size, sampler=test_sampler)
 
   return train_loader, val_loader, test_loader

@@ -5,9 +5,9 @@ import random
 import argparse
 import numpy as np
 from PIL import Image
-from segmentation.metrics import MeanMetric
 import matplotlib.pyplot as plt
 from collections import OrderedDict
+from segmentation.metrics import MeanMetric
 
 
 def passed_arguments():
@@ -32,6 +32,29 @@ def passed_arguments():
 def sort_key(file_name):
   d = re.search('[0-9]+', file_name)
   return int(file_name[d.start():d.end()]) if d else float('inf')
+
+
+def classes_dist(path_to_gt, classes):
+  """
+  Records the distribution of classes in a given ground truth mask.
+  Requires:
+    `path_to_gt`: path to a ground truth `.tif` file representing the mask.
+  Returns:
+    A dictionary of class_name --> count
+  """
+  import rasterio
+  with rasterio.open(path_to_gt) as m:
+    mask = m.read()
+  
+  unique, counts = np.unique(mask, return_counts=True)
+  index_dist = dict(zip(unique, counts))
+
+  invert_classes = {ind: name for name, ind in classes.items()}
+
+  dist = {invert_classes[ind]: int(count) \
+          for ind, count in index_dist.items()}
+
+  return dist
 
 
 def plot_pie(dist, title=None, thresh=0.02):
@@ -178,6 +201,9 @@ def plot_images(im_paths):
 
 if __name__ == "__main__":
   args = passed_arguments()
+
+  with open(args.classes, 'r') as f:
+    classes = json.load(f)
 
   inf_path = args.inference
 

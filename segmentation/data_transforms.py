@@ -14,8 +14,8 @@ class MaskBandTransform:
       If empty, will use the average value of the band in that tile.
     """
     super().__init__()
-    self.bands_to_mask = np.array(bands_to_mask)
-    self.mask_values = np.array(mask_values)
+    self.bands_to_mask = np.array(bands_to_mask, dtype=np.int)
+    self.mask_values = np.array(mask_values, dtype=np.float)
   
   def __call__(self, sample):
     """

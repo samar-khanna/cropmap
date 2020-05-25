@@ -16,7 +16,8 @@ MASK_NAME = "ground_truth.tif"
 
 
 class ConfigHandler():
-  def __init__(self, data_path, path_to_config, classes_path, inf_subdir=None):
+  def __init__(self, data_path, path_to_config, classes_path, 
+               out_dir=None, inf_subdir=None):
     super().__init__()
 
     self.data_path = data_path
@@ -53,7 +54,8 @@ class ConfigHandler():
     self.indices_path = os.path.join(data_path, "indices.json")
 
     # Create out directories.
-    self.out_dir = os.path.join(config.get("out_dir", "."), self.name)
+    self.out_dir = out_dir if out_dir else \
+                   os.path.join(config.get("out_dir", "."), self.name)
     self.save_dir = os.path.join(self.out_dir, "checkpoints")
     self.metrics_dir = os.path.join(self.out_dir, "metrics")
     self.inf_dir = os.path.join(self.out_dir, "inference")

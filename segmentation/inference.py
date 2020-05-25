@@ -98,6 +98,11 @@ def passed_arguments():
                       type=str,
                       default=os.path.join("segmentation", "classes.json"),
                       help="Path to .json index->class name file.")
+  parser.add_argument("--out_path",
+                      type=str,
+                      default=None,
+                      help="Path to output directory to store inference results. " +\
+                            "Defaults to `inf_dir` path in the config file." )
   parser.add_argument('-n', '--name', 
                       type=str,
                       default=None,
@@ -113,7 +118,8 @@ if __name__ == "__main__":
   assert set_type in {"train", "val", "test"}, "Only train/val/test sets permitted."
   
   # Create config handler
-  ch = ConfigHandler(args.data_path, args.config, args.classes, args.name)
+  ch = ConfigHandler(args.data_path, args.config, args.classes, 
+                     args.out_path, args.name)
 
   use_cuda = torch.cuda.is_available()
   device = torch.device("cuda" if use_cuda else "cpu")

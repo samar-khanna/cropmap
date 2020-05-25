@@ -86,6 +86,10 @@ def passed_arguments():
                       type=str,
                       required=True,
                       help="Path to .json model config file.")
+  parser.add_argument("--checkpoint",
+                      type=str,
+                      default=None,
+                      help="Path to model's checkpoint file. Leave blank to use path from config.")
   parser.add_argument("-s", "--set_type",
                       type=str,
                       default="val",
@@ -115,7 +119,7 @@ if __name__ == "__main__":
   device = torch.device("cuda" if use_cuda else "cpu")
 
   # Load model
-  model = load_model(ch, from_checkpoint=True)
+  model = load_model(ch, from_checkpoint=args.checkpoint)
   model.to(device)
   model.eval()
 

@@ -62,13 +62,21 @@ def load_model(config_handler, from_checkpoint=False):
   model = create_model(config_handler)
 
   if from_checkpoint:
-    assert os.path.isfile(config_handler.save_path),\
-      "Model's .pth checkpoint file does not exist"
+    if type(from_checkpoint) is str:
+      checkpoint_path = from_checkpoint
+      assert os.path.isfile(from_checkpoint), \
+        f"Model's .bin checkpoint file doesn't exist at: {checkpoint_path}"
+    elif type(from_checkpoint) is bool:
+      checkpoint_path = config_handler.save_path
+      assert os.path.isfile(config_handler.save_path), \
+        f"Model's .bin checkpoint file doesn't exist on config path: {checkpoint_path}"
+    else:
+      raise ValueError(f"Keyword arg `from_checkpoint` must be either a bool or str")
 
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda:0" if use_cuda else "cpu")
     
-    state_dict = torch.load(config_handler.save_path, map_location=device)
+    state_dict = torch.load(checkpoint_path, map_location=device)
     model.load_state_dict(state_dict)
 
   return model

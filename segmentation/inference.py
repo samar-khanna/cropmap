@@ -118,6 +118,8 @@ if __name__ == "__main__":
   assert set_type in {"train", "val", "test"}, "Only train/val/test sets permitted."
   
   # Create config handler
+  assert bool(args.out_path) == bool(args.checkpoint), \
+    "Must specify the checkpoint file if specifying an output directory."
   ch = ConfigHandler(args.data_path, args.config, args.classes, 
                      args.out_path, args.name)
 

@@ -90,6 +90,11 @@ def passed_arguments():
                       type=str,
                       default=None,
                       help="Path to model's checkpoint file. Leave blank to use path from config.")
+  parser.add_argument("--split",
+                      nargs="+",
+                      type=float,
+                      default=[0.8, 0.1, 0.1],
+                      help="Train/val/test split percentages.")
   parser.add_argument("-s", "--set_type",
                       type=str,
                       default="val",
@@ -131,9 +136,12 @@ if __name__ == "__main__":
 
   # Create dataset loaders for inference.
   b_size = ch.config.get("batch_size", 32)
-  train_loader, val_loader, test_loader = \
-    get_data_loaders(ch, inf_mode=True, batch_size=b_size)
-  
+  train_loader, val_loader, test_loader = get_data_loaders(
+    ch,
+    train_val_test=args.split,
+    inf_mode=True,
+    batch_size=b_size
+  )
   loaders = {"train":train_loader, "val":val_loader, "test":test_loader}
   loader = loaders[args.set_type]
   

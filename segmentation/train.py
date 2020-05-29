@@ -126,6 +126,11 @@ def passed_arguments():
                       type=str,
                       required=True,
                       help="Path to .json model config file.")
+  parser.add_argument("--split",
+                      nargs="+",
+                      type=float,
+                      default=[0.8, 0.1, 0.1],
+                      help="Train/val/test split percentages.")
   parser.add_argument("--classes",
                       type=str,
                       default=os.path.join("segmentation", "classes.json"),
@@ -161,7 +166,12 @@ if __name__ == "__main__":
   ## Set up Data Loaders.
   epochs = ch.epochs
   b_size = ch.config.get("batch_size", 32)
-  train_loader, val_loader, _ = get_data_loaders(ch, inf_mode=False, batch_size=b_size)
+  train_loader, val_loader, _ = get_data_loaders(
+    ch,
+    train_val_test=args.split,
+    inf_mode=False,
+    batch_size=b_size
+  )
 
   ## Set up tensorboards
   metrics_path = ch.metrics_dir

@@ -354,7 +354,14 @@ def get_data_loaders(config_handler,
   Creates the train, val and test loaders to input data to the model.
   Specify if you want the loaders for an inference task.
   """
-  dataset = CropDataset(config_handler, inf_mode=inf_mode)
+  assert len(train_val_test)==3, "Only specify percentage for train/val/test sets."
+  assert sum(train_val_test)==1, "Train + val + test percentages should add to 1."
+  
+  dataset = CropDataset(
+    config_handler,
+    train_val_test=train_val_test,
+    inf_mode=inf_mode
+  )
 
   indices = dataset.gen_indices(indices_path=config_handler.indices_path)
 

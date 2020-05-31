@@ -28,12 +28,12 @@ class MaskBandTransform:
 
     # Array of mask values per band
     mask_fill = self.mask_values
-    if not self.mask_values:
+    if len(self.mask_values) == 0:
       # Reduce to a mean value per band
       mask_fill = np.mean(np.mean(x, axis=-1), axis=-1)
     
     # Index the interested masks, length is now #bands_to_mask
-    mask_fill = mask_values[self.bands_to_mask]
+    mask_fill = mask_fill[self.bands_to_mask]
       
     # Create the mask for the interested bands
     # 1) Make an inverted array of shape (w, h, #bands)

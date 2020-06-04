@@ -72,7 +72,9 @@ def load_model(config_handler, from_checkpoint=False):
         f"Model's .bin checkpoint file doesn't exist on config path: {checkpoint_path}"
     else:
       raise ValueError(f"Keyword arg `from_checkpoint` must be either a bool or str")
-
+    
+    print(f"Loading model weights from checkpoint path {checkpoint_path}")
+    
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda:0" if use_cuda else "cpu")
     

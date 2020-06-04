@@ -1,13 +1,13 @@
-name: samar-env
+name: cropmap
 channels:
   - defaults
 dependencies:
+  - python=3.7
   - ipython
+  - matplotlib
+  - tensorboard
+  - torchvision
   - pytorch
   - rasterio
-  - torchvision=0.5
-  - python=3.6
-  - tensorboard
-  - matplotlib
-prefix: /home/sak296/anaconda3/envs/samar-env
+prefix: /home/sak296/anaconda3/envs/cropmap
 

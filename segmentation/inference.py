@@ -88,8 +88,9 @@ def passed_arguments():
                       help="Path to .json model config file.")
   parser.add_argument("--checkpoint",
                       type=str,
-                      default=None,
-                      help="Path to model's checkpoint file. Leave blank to use path from config.")
+                      default=True,
+                      help="Optional path to model's checkpoint file. " +\
+                          "If not specified, uses path from config.")
   parser.add_argument("--split",
                       nargs="+",
                       type=float,

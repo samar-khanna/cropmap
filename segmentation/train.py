@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.optim as optim
 from segmentation import load_model, save_model
 from data_loader import get_data_loaders, ConfigHandler
-from metrics import calculate_iou_prec_recall, MeanMetric
+from metrics import calculate_metrics, MeanMetric
 from torch.utils.tensorboard import SummaryWriter
 
 
@@ -214,13 +214,13 @@ if __name__ == "__main__":
         # Conver to numpy and calculate metrics
         preds_arr = preds.detach().cpu().numpy()
         y_arr = y.detach().cpu().numpy()
-        ious, prec, recall = calculate_iou_prec_recall(preds_arr, y_arr, pred_threshold=0)
+        _metrics = calculate_metrics(preds_arr, y_arr, pred_threshold=0)
 
         # Update metrics
         epoch_loss.update(loss.item())
-        epoch_ious.update(ious)
-        epoch_prec.update(prec)
-        epoch_recall.update(recall)
+        epoch_ious.update(_metrics["iou"])
+        epoch_prec.update(_metrics["prec"])
+        epoch_recall.update(_metrics["recall"])
       
       # Create metrics dict
       metrics_dict = create_metrics_dict(

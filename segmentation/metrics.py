@@ -41,7 +41,7 @@ class MeanMetric():
     return self.data
 
 
-def calculate_iou_prec_recall(preds, label_masks, pred_threshold=0.0):
+def calculate_metrics(preds, label_masks, pred_threshold=0.0):
   """
   Calculate IoU, Precision and Recall per class for entire batch of images.
   Requires:
@@ -49,7 +49,7 @@ def calculate_iou_prec_recall(preds, label_masks, pred_threshold=0.0):
     label_masks: ground truth masks, shape (batch, #c, h, w)
     pred_threshold: Confidence threshold over which pixel prediction counted.
   Returns:
-    ious, precs, recall per class: shape (#c)
+    ious, precs, recall, kappa per class: shape (#c)
   """
   # Change view so that shape is (batch, h, w, #c)
   preds = preds.transpose(0, 2, 3, 1)
@@ -71,4 +71,5 @@ def calculate_iou_prec_recall(preds, label_masks, pred_threshold=0.0):
   recall = np.sum(intersection, axis=0)/np.sum(label_masks, axis=0)
   recall[np.isnan(recall)] = 0.0
 
-  return iou_scores, precision, recall
+  metrics = {"iou": iou_scores, "prec": precision, "recall": recall}
+  return metrics

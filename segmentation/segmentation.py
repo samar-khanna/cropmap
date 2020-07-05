@@ -95,4 +95,4 @@ def save_model(model, config_handler):
 
   torch.save(model.state_dict(), save_path)
   with open(os.path.join(save_dir, "config.json"), 'w') as f:
-    json.dump(config_handler.config, f)
+    json.dump(config_handler.config, f, indent=2)

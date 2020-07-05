@@ -150,7 +150,7 @@ class CropDataset(Dataset):
     for set_type, paths in self.data_paths.items():
       for (mosaic_path, _) in paths:
         if mosaic_path not in self.mosaic_shapes:
-          with rasterio.open(mosaic_path) as mosaic:
+          with rasterio.open(mosaic_path, 'r') as mosaic:
             self.mosaic_shapes[mosaic_path] = mosaic.shape
 
   def __len__(self):
@@ -200,7 +200,7 @@ class CropDataset(Dataset):
 
     # Sample the data using windows
     window = Window(c, r, tw, th)
-    with rasterio.open(mosaic_path) as mosaic:
+    with rasterio.open(mosaic_path, 'r') as mosaic:
       x = mosaic.read(window=window)
 
     # If in inference mode and mask doesn't exist, then create dummy label.
@@ -209,7 +209,7 @@ class CropDataset(Dataset):
     else:
       assert mask_path, "Ground truth mask must exist for training."
 
-      with rasterio.open(mask_path) as _mask:
+      with rasterio.open(mask_path, 'r') as _mask:
         mask = _mask.read(window=window)
 
       # Map values in mask to values within num_classes.

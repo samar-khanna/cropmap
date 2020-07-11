@@ -43,10 +43,11 @@ class MaskBandTransform:
     # 1) Make an inverted array of shape (w, h, #bands to mask)
     # 2) Fill that array with the mask values (for each 2d slice)
     # 3) Reshape to (#bands, h, w)
-    mask = np.ones((w, h, len(self.bands_to_mask)))
-    mask = mask * mask_fill
-    mask = mask.T
+    if len(self.bands_to_mask) > 0:
+      mask = np.ones((w, h, len(self.bands_to_mask)))
+      mask = mask * mask_fill
+      mask = mask.T
 
-    x[self.bands_to_mask] = mask
+      x[self.bands_to_mask] = mask
 
     return x, y

@@ -88,11 +88,8 @@ def save_model(model, config_handler):
   """
   Saves a segmentation model either to the directory specified in `save_dir`,
   or to the path specified in the model config.
-  Also saves the model config as a json file in that directory.
   """
   save_dir = config_handler.save_dir
   save_path = config_handler.save_path
 
   torch.save(model.state_dict(), save_path)
-  with open(os.path.join(save_dir, "config.json"), 'w') as f:
-    json.dump(config_handler.config, f, indent=2)

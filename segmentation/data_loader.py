@@ -65,7 +65,14 @@ class ConfigHandler():
                                self.metrics_dir, self.inf_dir)
 
     self.save_path = os.path.join(self.save_dir, f"{self.name}.bin")
+  
 
+  def save_config(self):
+    """
+    Saves the config file as a .json file in `self.out_dir`.
+    """
+    with open(os.path.join(self.out_dir, "config.json"), "w") as f:
+      json.dump(self.config, f, indent=2)
     
   @staticmethod
   def _create_dirs(*dirs):

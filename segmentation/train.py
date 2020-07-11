@@ -146,8 +146,9 @@ def passed_arguments():
 if __name__ == "__main__":
   args = passed_arguments()
   
-  # Create config handler
+  # Create config handler and save it in output directory
   ch = ConfigHandler(args.data_path, args.config, args.classes)
+  ch.save_config()
 
   use_cuda = torch.cuda.is_available()
   device = torch.device("cuda:0" if use_cuda else "cpu")

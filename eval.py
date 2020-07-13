@@ -8,6 +8,7 @@ from PIL import Image
 import matplotlib.pyplot as plt
 from collections import OrderedDict
 from segmentation.metrics import MeanMetric
+from segmentation.utils.colors import plot_color_legend
 
 
 def passed_arguments():
@@ -21,6 +22,10 @@ def passed_arguments():
                       action="store_true",
                       default=False,
                       help="Only print the text results from evaluation.")
+  parser.add_argument("--colors",
+                      action="store_true",
+                      default=False,
+                      help="Plot the color legend for the classes.")
   parser.add_argument("--classes",
                       type=str,
                       default=os.path.join("segmentation", "classes.json"),
@@ -249,6 +254,16 @@ if __name__ == "__main__":
   for metric_name, metric_val in mean_results.items():
     if metric_val > 0:
       print(f"{metric_name}: {round(metric_val, 3)}")
+  
+  # Plot color map if config file given.
+  if args.colors:
+    print("Warning: Showing color map without config file.")
+    interest_classes = sorted(classes.keys(), key=classes.get)
+    remapped_classes = {}
+    for i, class_name in enumerate(interest_classes):
+      remapped_classes[class_name] = i
+      
+    plot_color_legend(remapped_classes)
 
   ## Start plotting results.
   if not args.text:

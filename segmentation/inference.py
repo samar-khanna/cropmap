@@ -8,6 +8,7 @@ import argparse
 import numpy as np
 from PIL import Image, ImageDraw
 from train import val_step, create_metrics_dict
+from utils.colors import get_color_choice
 from data_loader import get_data_loaders
 from metrics import calculate_metrics, MeanMetric
 from segmentation import load_model, save_model, ConfigHandler
@@ -29,16 +30,6 @@ def draw_mask_on_im(img, masks):
   # Draw the masks in a separate image as well
   raw_mask = Image.fromarray(np.zeros(img.shape[0:2])).convert('RGB')
   mask_draw = ImageDraw.Draw(raw_mask)
-
-  # Generates an (r, g, b) tuple for each class index
-  def get_color_choice(i):
-    sh = lambda m: (i << m) % 255 
-    color_choice = {
-      0: (255, sh(6), sh(3)), 1: (sh(6), 255, sh(3)), 2:(sh(6), sh(3), 255),
-      3: (255, sh(2), sh(4)), 4: (sh(2), 255, sh(4)), 5: (sh(2), sh(4), 255),
-      6: (255, 255, sh(3)), 7:(255, sh(3), 255), 8:(sh(3), 255, 255)
-    }
-    return color_choice.get(i % 9)
 
   # Draw the bitmap for each class (only if class mask not empty)
   for i, mask in enumerate(masks):

@@ -8,9 +8,9 @@ import argparse
 import numpy as np
 from PIL import Image, ImageDraw
 from train import val_step, create_metrics_dict
-from segmentation import load_model, save_model
-from data_loader import get_data_loaders, ConfigHandler
+from data_loader import get_data_loaders
 from metrics import calculate_metrics, MeanMetric
+from segmentation import load_model, save_model, ConfigHandler
 from torch.utils.tensorboard import SummaryWriter
 
 

@@ -6,8 +6,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from segmentation import load_model, save_model
-from data_loader import get_data_loaders, ConfigHandler
+from segmentation import load_model, save_model, ConfigHandler
+from data_loader import get_data_loaders
 from metrics import calculate_metrics, MeanMetric
 from torch.utils.tensorboard import SummaryWriter
 

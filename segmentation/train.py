@@ -243,7 +243,6 @@ if __name__ == "__main__":
           best_val_iou = val_iou if diff > 0 else best_val_iou
           epochs_since_last_save = 0
 
-          print(f"Saving weights...")
           if torch.cuda.device_count() > 1:
             save_model(model.module, ch)
           else:

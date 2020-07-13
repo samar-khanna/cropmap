@@ -71,8 +71,10 @@ class ConfigHandler():
     """
     Saves the config file as a .json file in `self.out_dir`.
     """
-    with open(os.path.join(self.out_dir, "config.json"), "w") as f:
+    config_path = os.path.join(self.out_dir, "config.json")
+    with open(config_path, "w") as f:
       json.dump(self.config, f, indent=2)
+    print(f"Saved model config file at: {config_path}")
     
   @staticmethod
   def _create_dirs(*dirs):

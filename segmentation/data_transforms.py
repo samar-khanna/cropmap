@@ -26,17 +26,19 @@ class MaskBandTransform:
     """
     x, y = sample
     num_bands, h, w = x.shape
+    num_mask_values = len(self.mask_values)
 
-    if len(self.mask_values) == num_bands:
+    if num_mask_values == num_bands:
       # Index the interested masks, length is now #bands_to_mask
       mask_fill = self.mask_values[self.bands_to_mask]
-    elif len(self.mask_values) == 0:
+    elif num_mask_values == 0:
       # Reduce to a mean value per band (local averaging)
       mask_fill = np.mean(np.mean(x, axis=-1), axis=-1)
       mask_fill = mask_fill[self.bands_to_mask]
     else:
-      assert len(self.mask_values) == len(self.bands_to_mask),\
-        f"Number of mask values is not 0 or {num_bands}, so must be same length as bands_to_mask."
+      assert num_mask_values == len(self.bands_to_mask),\
+        f"Number of mask values ({num_mask_values}) is not 0 or {num_bands}, " +\
+          "so must be same length as bands_to_mask."
       mask_fill = self.mask_values
       
     # Create the mask for the interested bands

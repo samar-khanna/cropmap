@@ -61,6 +61,7 @@ def load_model(config_handler, from_checkpoint=False):
   """
   model = create_model(config_handler)
 
+  print(config_handler.save_path)
   if from_checkpoint:
     assert os.path.isfile(config_handler.save_path),\
       "Model's .pth checkpoint file does not exist"

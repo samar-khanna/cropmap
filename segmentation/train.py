@@ -136,9 +136,9 @@ def passed_arguments():
                       default=os.path.join("segmentation", "classes.json"),
                       help="Path to .json index->class name file.")
   parser.add_argument("--checkpoint",
-                      action="store_true",
+                      type=str,
                       default=False,
-                      help="Whether to load model weights from checkpoint file.")
+                      help="Path to load model weights from checkpoint file.")
   parser.add_argument("--start_epoch",
                       type=int,
                       default=0,

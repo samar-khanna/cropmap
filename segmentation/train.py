@@ -135,7 +135,7 @@ def passed_arguments():
                       type=str,
                       default=os.path.join("segmentation", "classes.json"),
                       help="Path to .json index->class name file.")
-  parser.add_argument("-ckpt", "--from_checkpoint",
+  parser.add_argument("--checkpoint",
                       action="store_true",
                       default=False,
                       help="Whether to load model weights from checkpoint file.")

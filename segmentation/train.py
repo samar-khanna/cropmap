@@ -139,6 +139,10 @@ def passed_arguments():
                       action="store_true",
                       default=False,
                       help="Whether to load model weights from checkpoint file.")
+  parser.add_argument("--start_epoch",
+                      type=int,
+                      default=0,
+                      help="Start logging metrics from this epoch number.")
   args = parser.parse_args()
   return args
 
@@ -165,6 +169,7 @@ if __name__ == "__main__":
   loss_fn, optimizer = get_loss_optimizer(ch.config, model)
 
   ## Set up Data Loaders.
+  start_epoch = args.start_epoch
   epochs = ch.epochs
   b_size = ch.config.get("batch_size", 32)
   train_loader, val_loader, _ = get_data_loaders(
@@ -185,7 +190,7 @@ if __name__ == "__main__":
   epochs_since_last_save = 0
 
   ## Begin training
-  for epoch in range(epochs):
+  for epoch in range(start_epoch, start_epoch + epochs):
     print(f"Starting epoch {epoch+1}:")
     for phase in ["train", "val"]:
       if phase == "train":

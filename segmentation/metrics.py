@@ -4,7 +4,7 @@ import numpy as np
 class MeanMetric():
   """
   Handler to keep track of running average metrics.
-  Data stored as numpy arrays.
+  Data stored as numpy arrays, or numbers.
   """
   def __init__(self, data=None):
     super().__init__()

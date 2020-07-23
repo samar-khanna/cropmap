@@ -159,7 +159,7 @@ if __name__ == "__main__":
 
   ## TODO: Finetuning (freezing layers)
   # Load model, use DataParallel if more than 1 GPU available
-  model = load_model(ch, from_checkpoint=args.from_checkpoint)
+  model = load_model(ch, from_checkpoint=args.checkpoint)
   if torch.cuda.device_count() > 1:
     print(f"Using {torch.cuda.device_count()} GPUs")
     model = nn.DataParallel(model)

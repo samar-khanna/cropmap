@@ -5,9 +5,10 @@ import random
 import argparse
 import numpy as np
 from PIL import Image
-from metrics import MeanMetric
 import matplotlib.pyplot as plt
 from collections import OrderedDict
+from segmentation.metrics import MeanMetric
+from segmentation.utils.colors import plot_color_legend
 
 
 def passed_arguments():
@@ -17,6 +18,14 @@ def passed_arguments():
                       type=str,
                       required=True,
                       help="Path to directory containing inference results.")
+  parser.add_argument("--text",
+                      action="store_true",
+                      default=False,
+                      help="Only print the text results from evaluation.")
+  parser.add_argument("--colors",
+                      action="store_true",
+                      default=False,
+                      help="Plot the color legend for the classes.")
   parser.add_argument("--classes",
                       type=str,
                       default=os.path.join("segmentation", "classes.json"),
@@ -28,6 +37,29 @@ def passed_arguments():
 def sort_key(file_name):
   d = re.search('[0-9]+', file_name)
   return int(file_name[d.start():d.end()]) if d else float('inf')
+
+
+def classes_dist(path_to_gt, classes):
+  """
+  Records the distribution of classes in a given ground truth mask.
+  Requires:
+    `path_to_gt`: path to a ground truth `.tif` file representing the mask.
+  Returns:
+    A dictionary of class_name --> count
+  """
+  import rasterio
+  with rasterio.open(path_to_gt) as m:
+    mask = m.read()
+  
+  unique, counts = np.unique(mask, return_counts=True)
+  index_dist = dict(zip(unique, counts))
+
+  invert_classes = {ind: name for name, ind in classes.items()}
+
+  dist = {invert_classes[ind]: int(count) \
+          for ind, count in index_dist.items()}
+
+  return dist
 
 
 def plot_pie(dist, title=None, thresh=0.02):
@@ -166,14 +198,17 @@ def plot_images(im_paths):
   axes[0, 0].imshow(im)
   axes[0, 1].imshow(pred)
   axes[0, 2].imshow(gt)
-  axes[1, 0].imshow(gt_raw)
-  axes[1, 1].imshow(pred_raw)
+  axes[1, 0].imshow(pred_raw)
+  axes[1, 1].imshow(gt_raw)
 
   plt.show()
 
 
 if __name__ == "__main__":
   args = passed_arguments()
+
+  with open(args.classes, 'r') as f:
+    classes = json.load(f)
 
   inf_path = args.inference
 
@@ -219,19 +254,26 @@ if __name__ == "__main__":
   for metric_name, metric_val in mean_results.items():
     if metric_val > 0:
       print(f"{metric_name}: {round(metric_val, 3)}")
+  
+  # Plot color map if config file given.
+  if args.colors:
+    print("Warning: Showing color map without config file.")
+    interest_classes = sorted(classes.keys(), key=classes.get)
+    remapped_classes = {}
+    for i, class_name in enumerate(interest_classes):
+      remapped_classes[class_name] = i
+      
+    plot_color_legend(remapped_classes)
 
   ## Start plotting results.
+  if not args.text:
+    # Mean result histogram
+    plot_hist(mean_results, thresh=0.2)
+    
+    # Plot grids of the images.
+    paths = zip(im_paths, gt_paths, gt_raw_paths, pred_paths, pred_raw_paths, metric_paths)
+    paths = list(paths)
 
-  # Mean result histogram
-  plot_hist(mean_results, thresh=0.2)
-  
-  # Plot grids of the images.
-  paths = zip(im_paths, gt_paths, gt_raw_paths, pred_paths, pred_raw_paths, metric_paths)
-  paths = list(paths)
-
-  show_paths = random.sample(paths, 20)
-  for ps in show_paths:
-    plot_images(ps)
-
-
-  pass
+    show_paths = random.sample(paths, 20)
+    for ps in show_paths:
+      plot_images(ps)

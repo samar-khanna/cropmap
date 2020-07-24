@@ -6,9 +6,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from segmentation import load_model, save_model
-from data_loader import get_data_loaders, ConfigHandler
-from metrics import calculate_iou_prec_recall, MeanMetric
+from segmentation import load_model, save_model, ConfigHandler
+from data_loader import get_data_loaders
+from metrics import calculate_metrics, MeanMetric
 from torch.utils.tensorboard import SummaryWriter
 
 
@@ -126,14 +126,23 @@ def passed_arguments():
                       type=str,
                       required=True,
                       help="Path to .json model config file.")
+  parser.add_argument("--split",
+                      nargs="+",
+                      type=float,
+                      default=[0.8, 0.1, 0.1],
+                      help="Train/val/test split percentages.")
   parser.add_argument("--classes",
                       type=str,
                       default=os.path.join("segmentation", "classes.json"),
                       help="Path to .json index->class name file.")
-  parser.add_argument("-ckpt", "--from_checkpoint",
-                      action="store_true",
+  parser.add_argument("--checkpoint",
+                      type=str,
                       default=False,
-                      help="Whether to load model weights from checkpoint file.")
+                      help="Path to load model weights from checkpoint file.")
+  parser.add_argument("--start_epoch",
+                      type=int,
+                      default=0,
+                      help="Start logging metrics from this epoch number.")
   args = parser.parse_args()
   return args
 
@@ -141,15 +150,16 @@ def passed_arguments():
 if __name__ == "__main__":
   args = passed_arguments()
   
-  # Create config handler
+  # Create config handler and save it in output directory
   ch = ConfigHandler(args.data_path, args.config, args.classes)
+  ch.save_config()
 
   use_cuda = torch.cuda.is_available()
   device = torch.device("cuda:0" if use_cuda else "cpu")
 
   ## TODO: Finetuning (freezing layers)
   # Load model, use DataParallel if more than 1 GPU available
-  model = load_model(ch, from_checkpoint=args.from_checkpoint)
+  model = load_model(ch, from_checkpoint=args.checkpoint)
   if torch.cuda.device_count() > 1:
     print(f"Using {torch.cuda.device_count()} GPUs")
     model = nn.DataParallel(model)
@@ -159,9 +169,15 @@ if __name__ == "__main__":
   loss_fn, optimizer = get_loss_optimizer(ch.config, model)
 
   ## Set up Data Loaders.
+  start_epoch = args.start_epoch
   epochs = ch.epochs
   b_size = ch.config.get("batch_size", 32)
-  train_loader, val_loader, _ = get_data_loaders(ch, inf_mode=False, batch_size=b_size)
+  train_loader, val_loader, _ = get_data_loaders(
+    ch,
+    train_val_test=args.split,
+    inf_mode=False,
+    batch_size=b_size
+  )
 
   ## Set up tensorboards
   metrics_path = ch.metrics_dir
@@ -169,9 +185,12 @@ if __name__ == "__main__":
   val_writer = SummaryWriter(log_dir=os.path.join(metrics_path, 'val'))
   logging.basicConfig(filename=os.path.join(metrics_path, "log.log"), level=logging.INFO)
 
-  ## Begin training
+  # Variables to keep track of when to checkpoint
   best_val_iou = -np.inf
-  for epoch in range(epochs):
+  epochs_since_last_save = 0
+
+  ## Begin training
+  for epoch in range(start_epoch, start_epoch + epochs):
     print(f"Starting epoch {epoch+1}:")
     for phase in ["train", "val"]:
       if phase == "train":
@@ -201,13 +220,13 @@ if __name__ == "__main__":
         # Conver to numpy and calculate metrics
         preds_arr = preds.detach().cpu().numpy()
         y_arr = y.detach().cpu().numpy()
-        ious, prec, recall = calculate_iou_prec_recall(preds_arr, y_arr, pred_threshold=0)
+        _metrics = calculate_metrics(preds_arr, y_arr, pred_threshold=0)
 
         # Update metrics
         epoch_loss.update(loss.item())
-        epoch_ious.update(ious)
-        epoch_prec.update(prec)
-        epoch_recall.update(recall)
+        epoch_ious.update(_metrics["iou"])
+        epoch_prec.update(_metrics["prec"])
+        epoch_recall.update(_metrics["recall"])
       
       # Create metrics dict
       metrics_dict = create_metrics_dict(
@@ -223,12 +242,19 @@ if __name__ == "__main__":
 
       # Save model checkpoint if val iou better than best recorded so far.
       if phase == "val":
-        if metrics_dict['mean_iou'] > best_val_iou:
-          print(f"Saving weights...")
+        val_iou = metrics_dict['mean/iou']
+        diff = val_iou - best_val_iou
+        if diff > 0 or (epochs_since_last_save > 10 and abs(diff/best_val_iou) < 0.05):
+          best_val_iou = val_iou if diff > 0 else best_val_iou
+          epochs_since_last_save = 0
+
           if torch.cuda.device_count() > 1:
             save_model(model.module, ch)
           else:
             save_model(model, ch)
+            
+        else:
+          epochs_since_last_save += 1
     
     print(f"Finished epoch {epoch+1}.\n")
       

@@ -8,9 +8,10 @@ import argparse
 import numpy as np
 from PIL import Image, ImageDraw
 from train import val_step, create_metrics_dict
-from segmentation import load_model, save_model
-from data_loader import get_data_loaders, ConfigHandler
-from metrics import calculate_iou_prec_recall, MeanMetric
+from utils.colors import get_color_choice
+from data_loader import get_data_loaders
+from metrics import calculate_metrics, MeanMetric
+from segmentation import load_model, save_model, ConfigHandler
 from torch.utils.tensorboard import SummaryWriter
 
 
@@ -29,16 +30,6 @@ def draw_mask_on_im(img, masks):
   # Draw the masks in a separate image as well
   raw_mask = Image.fromarray(np.zeros(img.shape[0:2])).convert('RGB')
   mask_draw = ImageDraw.Draw(raw_mask)
-
-  # Generates an (r, g, b) tuple for each class index
-  def get_color_choice(i):
-    sh = lambda m: (i << m) % 255 
-    color_choice = {
-      0: (255, sh(6), sh(3)), 1: (sh(6), 255, sh(3)), 2:(sh(6), sh(3), 255),
-      3: (255, sh(2), sh(4)), 4: (sh(2), 255, sh(4)), 5: (sh(2), sh(4), 255),
-      6: (255, 255, sh(3)), 7:(255, sh(3), 255), 8:(sh(3), 255, 255)
-    }
-    return color_choice.get(i % 9)
 
   # Draw the bitmap for each class (only if class mask not empty)
   for i, mask in enumerate(masks):
@@ -86,6 +77,16 @@ def passed_arguments():
                       type=str,
                       required=True,
                       help="Path to .json model config file.")
+  parser.add_argument("--checkpoint",
+                      type=str,
+                      default=True,
+                      help="Optional path to model's checkpoint file. " +\
+                          "If not specified, uses path from config.")
+  parser.add_argument("--split",
+                      nargs="+",
+                      type=float,
+                      default=[0.8, 0.1, 0.1],
+                      help="Train/val/test split percentages.")
   parser.add_argument("-s", "--set_type",
                       type=str,
                       default="val",
@@ -94,6 +95,11 @@ def passed_arguments():
                       type=str,
                       default=os.path.join("segmentation", "classes.json"),
                       help="Path to .json index->class name file.")
+  parser.add_argument("--inf_out",
+                      type=str,
+                      default=None,
+                      help="Path to output directory to store inference results. " +\
+                            "Defaults to `inf_dir` path in the config file." )
   parser.add_argument('-n', '--name', 
                       type=str,
                       default=None,
@@ -109,21 +115,25 @@ if __name__ == "__main__":
   assert set_type in {"train", "val", "test"}, "Only train/val/test sets permitted."
   
   # Create config handler
-  ch = ConfigHandler(args.data_path, args.config, args.classes, args.name)
+  ch = ConfigHandler(args.data_path, args.config, args.classes, 
+                     args.inf_out, args.name)
 
   use_cuda = torch.cuda.is_available()
   device = torch.device("cuda" if use_cuda else "cpu")
 
   # Load model
-  model = load_model(ch, from_checkpoint=True)
+  model = load_model(ch, from_checkpoint=args.checkpoint)
   model.to(device)
   model.eval()
 
   # Create dataset loaders for inference.
   b_size = ch.config.get("batch_size", 32)
-  train_loader, val_loader, test_loader = \
-    get_data_loaders(ch, inf_mode=True, batch_size=b_size)
-  
+  train_loader, val_loader, test_loader = get_data_loaders(
+    ch,
+    train_val_test=args.split,
+    inf_mode=True,
+    batch_size=b_size
+  )
   loaders = {"train":train_loader, "val":val_loader, "test":test_loader}
   loader = loaders[args.set_type]
   
@@ -145,14 +155,14 @@ if __name__ == "__main__":
       _pred = pred[np.newaxis, ...]
       _label_mask = label_mask[np.newaxis, ...]
 
-      iou, prec, recall = calculate_iou_prec_recall(_pred, _label_mask, pred_threshold=0)
+      _metrics = calculate_metrics(_pred, _label_mask, pred_threshold=0)
 
       # Create metrics dict
       metrics_dict = create_metrics_dict(
         ch.classes,
-        iou=iou,
-        prec=prec,
-        recall=recall
+        iou=_metrics["iou"],
+        prec=_metrics["prec"],
+        recall=_metrics["recall"]
       )
 
       # Id for saving file.

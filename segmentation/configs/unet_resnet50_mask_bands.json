@@ -1,5 +1,5 @@
 {
-  "name": "unet_resnet_50_mask_bands",
+  "name": "unet_resnet_50_scratch",
   "classifier": "UNet",
   "classifier_kwargs": {},
   "backbone": "resnet50",

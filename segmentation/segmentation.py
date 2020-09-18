@@ -36,22 +36,6 @@ class ConfigHandler():
         for key, value in config.items():
             setattr(self, key, value)
 
-        # Filter out interested classes, if specified. Otherwise use all classes.
-        # Sort the classes in order of their indices
-        interest_classes = self.config.get("interest_classes")
-        interest_classes = interest_classes if interest_classes else classes.keys()
-        interest_classes = sorted(interest_classes, key=self.classes.get)
-
-        # orig_to_new_ind maps from original class index --> new class index
-        # New classes is the mapping of class --> new_ind
-        orig_to_new_ind = {}
-        new_classes = {}
-        for i, class_name in enumerate(interest_classes):
-            orig_to_new_ind[self.classes[class_name]] = i
-            new_classes[class_name] = i
-        self.classes = new_classes
-        self.index_map = orig_to_new_ind
-
         # Indices according to train/val/test split will be stored here.
         self.indices_path = os.path.join(data_path, "indices.json")
 

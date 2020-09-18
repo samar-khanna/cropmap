@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from segmentation import load_model, save_model, ConfigHandler
-from data_loader import get_data_loaders
+from data_loader import CropDataset, get_data_loaders
 from metrics import calculate_metrics, MeanMetric
 from torch.utils.tensorboard import SummaryWriter
 
@@ -175,16 +175,18 @@ if __name__ == "__main__":
     # Load optimizer and loss
     loss_fn, optimizer = get_loss_optimizer(ch.config, model)
 
-    ## Set up Data Loaders.
+    ## Set up dataset
+    dataset = CropDataset(
+        ch,
+        train_val_test=args.split,
+        inf_mode=False
+    )
+
+    # Set up Data Loaders.
     start_epoch = args.start_epoch
     epochs = ch.epochs
     b_size = ch.config.get("batch_size", 32)
-    train_loader, val_loader, _ = get_data_loaders(
-        ch,
-        train_val_test=args.split,
-        inf_mode=False,
-        batch_size=b_size
-    )
+    train_loader, val_loader, _ = get_data_loaders(dataset, ch.indices_path, batch_size=b_size)
 
     ## Set up tensorboards
     metrics_path = ch.metrics_dir
@@ -237,7 +239,7 @@ if __name__ == "__main__":
 
             # Create metrics dict
             metrics_dict = create_metrics_dict(
-                ch.classes,
+                dataset.remapped_classes,
                 loss=epoch_loss.item(),
                 iou=epoch_ious.item(),
                 prec=epoch_prec.item(),

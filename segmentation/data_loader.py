@@ -17,7 +17,7 @@ MASK_NAME = "ground_truth.tif"
 
 class CropDataset(Dataset):
     def __init__(self, config_handler, tile_size=(224, 224), overlap=0,
-                 train_val_test=[0.8, 0.1, 0.1], inf_mode=False):
+                 train_val_test=(0.8, 0.1, 0.1), inf_mode=False):
         """
         Initialises an instance of a `CropDataset`.
         Requires:
@@ -28,14 +28,29 @@ class CropDataset(Dataset):
           `inf_mode`: Whether the dataset is being used for inference or not.
                       If not for inference, then make sure that labels exist.
         """
+        assert len(train_val_test) == 3, "Only specify percentage for train/val/test sets."
+        assert sum(train_val_test) == 1, "Train + val + test percentages should add to 1."
+
         self.tile_size = tile_size
         self.overlap = overlap
         self.train_val_test = train_val_test
         self.inf_mode = inf_mode
 
-        # Set up label mask pixel mapping based on interested classes.
-        self.num_classes = len(config_handler.classes)
-        self.map_index = lambda i: config_handler.index_map.get(i, -1)
+        # Filter out interested classes, if specified. Otherwise use all classes.
+        # Sort the classes in order of their indices
+        classes = config_handler.classes
+        interest_classes = config_handler.config.get("interest_classes")
+        interest_classes = interest_classes if interest_classes else classes.keys()
+        interest_classes = sorted(interest_classes, key=classes.get)
+
+        self.map_class_to_idx, self.map_idx_to_class = \
+            CropDataset.create_class_index_map(classes, interest_classes)
+
+        # contains interest_class_name --> label idx in dataset
+        self.remapped_classes = {
+            class_name: self.map_class_to_idx[classes[class_name]] for class_name in interest_classes
+        }
+        self.num_classes = len(self.remapped_classes)
 
         # Set up transforms if any
         transforms = getattr(config_handler, "transforms", {})
@@ -100,6 +115,24 @@ class CropDataset(Dataset):
         return total_len
 
     @staticmethod
+    def create_class_index_map(classes, interest_classes):
+        """
+        Creates 2 maps M (len=max(class_ids)+1) and R (len=len(interest_classes)).
+        M[class_id] is the mapped index used to represent class class_id in the dataset.
+        R[i] is the class id of the mapped class index i.
+        """
+
+        # map_class_to_idx maps from (original class id --> new class index in dataset)
+        # map_idx_to_class maps from (new class index --> original class id)
+        map_class_to_idx = -1 * np.ones(max(classes.values())+1, dtype=np.int)
+        map_idx_to_class = -1 * np.ones(len(interest_classes), dtype=np.int)
+        for i, class_name in enumerate(interest_classes):
+            map_class_to_idx[int(classes[class_name])] = i
+            map_idx_to_class[i] = int(classes[class_name])
+
+        return map_class_to_idx, map_idx_to_class
+
+    @staticmethod
     def one_hot_mask(mask, num_classes):
         """
         For a given mask of (1, h, w) dimensions, where each pixel value
@@ -147,8 +180,8 @@ class CropDataset(Dataset):
             with rasterio.open(mask_path, 'r') as _mask:
                 mask = _mask.read(window=window)
 
-            # Map values in mask to values within num_classes.
-            mask = np.vectorize(self.map_index)(mask)
+            # Map class ids in mask to indexes within num_classes.
+            mask = self.map_class_to_idx[mask]
             y = CropDataset.one_hot_mask(mask, self.num_classes)
 
         # Sample is (x, y) pair of image and mask.
@@ -279,26 +312,16 @@ class SubsetSequentialSampler(Sampler):
         return len(self.indices)
 
 
-def get_data_loaders(config_handler,
-                     transform_fn=None,
-                     inf_mode=False,
-                     train_val_test=[0.8, 0.1, 0.1],
+def get_data_loaders(dataset,
+                     indices_path,
                      batch_size=32,
                      num_workers=4):
     """
     Creates the train, val and test loaders to input data to the model.
     Specify if you want the loaders for an inference task.
     """
-    assert len(train_val_test)==3, "Only specify percentage for train/val/test sets."
-    assert sum(train_val_test)==1, "Train + val + test percentages should add to 1."
-
-    dataset = CropDataset(
-        config_handler,
-        train_val_test=train_val_test,
-        inf_mode=inf_mode
-    )
-
-    indices = dataset.gen_indices(indices_path=config_handler.indices_path)
+    # Generates indices if not present
+    indices = dataset.gen_indices(indices_path=indices_path)
 
     # Define samplers for each of the train, val and test data
     # Sample train data randomly, and validation, test data sequentially

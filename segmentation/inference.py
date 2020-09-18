@@ -9,7 +9,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 from train import val_step, create_metrics_dict
 from utils.colors import get_color_choice
-from data_loader import get_data_loaders
+from data_loader import CropDataset, get_data_loaders
 from metrics import calculate_metrics, MeanMetric
 from segmentation import load_model, save_model, ConfigHandler
 from torch.utils.tensorboard import SummaryWriter
@@ -126,12 +126,18 @@ if __name__ == "__main__":
     model.to(device)
     model.eval()
 
+    ## Set up dataset
+    dataset = CropDataset(
+        ch,
+        train_val_test=args.split,
+        inf_mode=True
+    )
+
     # Create dataset loaders for inference.
     b_size = ch.config.get("batch_size", 32)
     train_loader, val_loader, test_loader = get_data_loaders(
-        ch,
-        train_val_test=args.split,
-        inf_mode=True,
+        dataset,
+        ch.indices_path,
         batch_size=b_size
     )
     loaders = {"train": train_loader, "val": val_loader, "test": test_loader}
@@ -157,12 +163,18 @@ if __name__ == "__main__":
 
             _metrics = calculate_metrics(_pred, _label_mask, pred_threshold=0)
 
+            # Find the count of each class in ground truth, record in metrics dict as whole num
+            label_unique, label_counts = np.unique(label_mask, return_counts=True)
+            label_class_counts = np.zeros(dataset.num_classes, dtype=np.int)
+            label_class_counts[label_unique] = label_counts
+
             # Create metrics dict
             metrics_dict = create_metrics_dict(
-                ch.classes,
+                dataset.remapped_classes,
                 iou=_metrics["iou"],
                 prec=_metrics["prec"],
-                recall=_metrics["recall"]
+                recall=_metrics["recall"],
+                gt_class_count=label_class_counts
             )
 
             # Id for saving file.

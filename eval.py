@@ -116,18 +116,20 @@ def format_metrics_for_hist(metrics, thresh=0.2, topk=5):
 
         # Store metric results only for mean metrics and metrics above threshold
         class_results = classes_metrics.get(class_name, OrderedDict())
-        if class_results or class_name.find("mean") > -1 or metric_val > thresh:
-            if class_name in seen:
-                seen_results = seen[class_name]
-                class_results.update(seen_results)
-                del seen[class_name]
-
-            class_results[metric_type] = metric_val
-            classes_metrics[class_name] = class_results
-        else:
-            seen_results = seen.get(class_name, OrderedDict())
-            seen_results[metric_type] = metric_val
-            seen[class_name] = seen_results
+        class_results[metric_type] = metric_val
+        classes_metrics[class_name] = class_results
+        # if class_results or class_name.find("mean") > -1 or metric_val > thresh:
+        #     if class_name in seen:
+        #         seen_results = seen[class_name]
+        #         class_results.update(seen_results)
+        #         del seen[class_name]
+        #
+        #     class_results[metric_type] = metric_val
+        #     classes_metrics[class_name] = class_results
+        # else:
+        #     seen_results = seen.get(class_name, OrderedDict())
+        #     seen_results[metric_type] = metric_val
+        #     seen[class_name] = seen_results
 
     # Calculate mean of top k common classes for each metric type
     if class_counts:

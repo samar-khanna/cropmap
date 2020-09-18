@@ -165,7 +165,7 @@ if __name__ == "__main__":
 
             # Find the count of each class in ground truth, record in metrics dict as whole num
             label_unique, label_counts = np.unique(label_mask, return_counts=True)
-            label_class_counts = np.zeros(dataset.num_classes, dtype=np.int)
+            label_class_counts = np.zeros(dataset.num_classes)
             label_class_counts[label_unique.astype(np.int)] = label_counts
 
             # Create metrics dict
@@ -202,6 +202,6 @@ if __name__ == "__main__":
 
             # Save eval results.
             with open(os.path.join(ch.inf_dir, f"{img_id}_metrics.json"), 'w') as f:
-                json.dump(metrics_dict, f)
+                json.dump(metrics_dict, f, indent=2)
 
     print(f"Inference complete for set {set_type}!")

@@ -145,6 +145,7 @@ def format_metrics_for_hist(metrics, thresh=0.2, topk=5):
         topk = min(topk, len(class_counts) - 1)
         sorted_counts = sorted(class_counts.values())
         topk_class_counts = dict(filter(lambda x: x[1] > sorted_counts[topk], class_counts.items()))
+        print(topk_class_counts)
 
         metric_types = classes_metrics["mean"].keys()
         topk_mean = {metric_type: MeanMetric() for metric_type in metric_types}
@@ -160,6 +161,7 @@ def format_metrics_for_hist(metrics, thresh=0.2, topk=5):
         non_class_names = {"mean", f"top_{topk}"}
         filter_f = lambda x: x[0].lower() in non_class_names or x[0].lower() in topk_class_counts
         classes_metrics = dict(filter(filter_f, classes_metrics))
+        print(classes_metrics)
 
     return classes_metrics
 
@@ -395,7 +397,7 @@ if __name__ == "__main__":
         for inf_tag, metrics_for_hist in inf_results.items():
             for class_name, metrics in metrics_for_hist.items():
                 chosen_metric_per_tag = combined_metrics.get(class_name.lower(), {})
-                chosen_metric_per_tag[inf_tag] = metrics[chosen_metric]
+                chosen_metric_per_tag[inf_tag] = metrics[chosen_metric.lower()]
                 combined_metrics[class_name] = chosen_metric_per_tag
 
         plot_hist(combined_metrics, topk=topk, ylabel=chosen_metric, savefig="/home/sak296/fig1.png")

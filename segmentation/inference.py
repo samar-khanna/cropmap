@@ -158,8 +158,8 @@ if __name__ == "__main__":
 
         # Iterate over each image in batch.
         for ind, (img, pred, label_mask) in enumerate(zip(imgs, preds, label_masks)):
-            _pred = pred[np.newaxis, ...]
-            _label_mask = label_mask[np.newaxis, ...]
+            _pred = pred[np.newaxis, ...]  # shape (b, #c, h, w)
+            _label_mask = label_mask[np.newaxis, ...]  # shape (b, #c, h, w)
 
             _metrics = calculate_metrics(_pred, _label_mask, pred_threshold=0)
 

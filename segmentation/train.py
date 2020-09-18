@@ -31,7 +31,10 @@ def get_loss_optimizer(config, model):
     optim_kwargs = config.get("optimizer_kwargs", {"lr":0.001})
     assert optim_name in optim.__dict__, \
         "Invalid PyTorch optimizer. The name must exactly match an optimizer in the optim module"
-    optimizer = optim.__dict__[optim_name](model.parameters(), **optim_kwargs)
+
+    # Only optimize on unfrozen weights.
+    weights = filter(lambda w: w.requires_grad, model.parameters())
+    optimizer = optim.__dict__[optim_name](weights, **optim_kwargs)
     return loss_fn, optimizer
 
 

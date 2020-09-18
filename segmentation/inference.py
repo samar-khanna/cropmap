@@ -17,12 +17,12 @@ from torch.utils.tensorboard import SummaryWriter
 
 def draw_mask_on_im(img, masks):
     """
-  Helper method that opens an image, draws the segmentation masks in `masks`
-  as bitmaps, and then returns the masked image.
-  Requires:
-    `img`: np array of shape (h, w, #c)
-    `masks`: np array of shape: (#c, h, w)
-  """
+    Helper method that opens an image, draws the segmentation masks in `masks`
+    as bitmaps, and then returns the masked image.
+    Requires:
+        `img`: np array of shape (h, w, #c)
+        `masks`: np array of shape: (#c, h, w)
+    """
     # Open the image and set up an ImageDraw object
     im = Image.fromarray(img, mode='RGB')
     im_draw = ImageDraw.Draw(im)
@@ -48,12 +48,12 @@ def draw_mask_on_im(img, masks):
 
 def bytescale(img, high=255):
     """
-  Converts an image of arbitrary int dtype to an 8-bit (uint8) image.
-  Requires:
+    Converts an image of arbitrary int dtype to an 8-bit (uint8) image.
+    Requires:
     `img`: (h, w, #c) numpy array of any int dtype
-  Returns:
+    Returns:
     `im_arr`: (h, w, #c) numpy array of type uin8
-  """
+    """
     # Find min and max across each channel
     im = img.transpose(2, 0, 1)
     im = img.reshape(img.shape[-1], -1)

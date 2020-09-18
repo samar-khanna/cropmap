@@ -164,9 +164,8 @@ if __name__ == "__main__":
             _metrics = calculate_metrics(_pred, _label_mask, pred_threshold=0)
 
             # Find the count of each class in ground truth, record in metrics dict as whole num
-            label_unique, label_counts = np.unique(label_mask, return_counts=True)
-            label_class_counts = np.zeros(dataset.num_classes)
-            label_class_counts[label_unique.astype(np.int)] = label_counts
+            n = dataset.num_classes
+            label_class_counts = np.count_nonzero(label_mask.reshape(n, -1), axis=-1)
 
             # Create metrics dict
             metrics_dict = create_metrics_dict(

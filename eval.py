@@ -15,9 +15,10 @@ def passed_arguments():
     parser = argparse.ArgumentParser(description= \
                                          "Script to run inference for segmentation models.")
     parser.add_argument("-inf", "--inference",
+                        nargs="+",
                         type=str,
                         required=True,
-                        help="Path to directory containing inference results.")
+                        help="Path to directory(ies) containing inference results.")
     parser.add_argument("--text",
                         action="store_true",
                         default=False,
@@ -36,6 +37,119 @@ def passed_arguments():
                         help="Path to .json class->index name file.")
     args = parser.parse_args()
     return args
+
+
+def get_inference_out_paths(inf_path):
+    """
+    Get the paths to each type of file in inf out.
+    (im_path, gt_path, gt_raw_paths, pred_path, pred_raw_path, metric_path)
+    """
+    im_paths = []
+    gt_paths = []
+    gt_raw_paths = []
+    pred_paths = []
+    pred_raw_paths = []
+    metric_paths = []
+
+    sorted_files = sorted(os.listdir(inf_path), key=sort_key)
+    for f in sorted_files:
+        if f.find('im') > -1 and f.find('.jpg') > -1:
+            im_paths.append(os.path.join(inf_path, f))
+        elif f.find('raw_gt') > -1 and f.find('.jpg') > -1:
+            gt_raw_paths.append(os.path.join(inf_path, f))
+        elif f.find('gt') > -1 and f.find('.jpg') > -1:
+            gt_paths.append(os.path.join(inf_path, f))
+        elif f.find('raw_pred') > -1 and f.find('.jpg') > -1:
+            pred_raw_paths.append(os.path.join(inf_path, f))
+        elif f.find('pred') > -1 and f.find('.jpg') > -1:
+            pred_paths.append(os.path.join(inf_path, f))
+        elif f.find('metric') > -1 and f.find('.json') > -1:
+            metric_paths.append(os.path.join(inf_path, f))
+    print(f"Number of images evaluated: {len(im_paths)}")
+    return im_paths, gt_paths, gt_raw_paths, pred_paths, pred_raw_paths, metric_paths
+
+
+def calculate_mean_results(metric_paths):
+    """
+    Calculates mean metrics across all images in inference out.
+    """
+    # Calculate mean metrics across all images in inference out.
+    mean_results = {}
+    for i, metric_path in enumerate(metric_paths):
+        with open(metric_path, 'r') as f:
+            metrics = json.load(f)
+
+        for metric_name, val in metrics.items():
+            if metric_name not in mean_results:
+                mean_results[metric_name] = MeanMetric(val)
+            else:
+                mean_results[metric_name].update(val)
+
+    # Get rid of MeanMetrics
+    mean_results = {n: metric.item() for n, metric in mean_results.items()}
+    return mean_results
+
+
+def format_metrics_for_hist(metrics, thresh=0.2, topk=5):
+    """
+    Creates metrics dictionary ready for histogram plotting
+    `metrics`: map of metric name -> metric val
+    `topk`: if class counts available, also computes mean of top k most common classes
+    `thresh`: percentage threshold for iou, prec, recall
+    Returns:
+        metrics: Dict ordered as follows: \n
+                {class1_name: {type1: val, type2: val, ...},
+                 class2_name: {type1: val, type2: val, ...},
+                 ...}
+    """
+    class_counts = {}
+    classes_metrics = {}
+    seen = {}
+    for metric_name, metric_val in metrics.items():
+        class_name = metric_name.split('/')[0]
+        metric_type = metric_name.split('/')[-1]
+        class_name = class_name.replace("class_", "")
+
+        if metric_type.find("class_count") > -1:
+            class_counts[class_name] = metric_val
+            continue
+
+        # Store metric results only for mean metrics and metrics above threshold
+        class_results = classes_metrics.get(class_name, OrderedDict())
+        if class_results or class_name.find("mean") > -1 or metric_val > thresh:
+            if class_name in seen:
+                seen_results = seen[class_name]
+                class_results.update(seen_results)
+                del seen[class_name]
+
+            class_results[metric_type] = metric_val
+            classes_metrics[class_name] = class_results
+        else:
+            seen_results = seen.get(class_name, OrderedDict())
+            seen_results[metric_type] = metric_val
+            seen[class_name] = seen_results
+
+    # Calculate mean of top k common classes for each metric type
+    if class_counts:
+        sorted_counts = sorted(class_counts.values())
+        topk_class_counts = dict(filter(lambda x: x[1] > sorted_counts[topk], class_counts.items()))
+
+        metric_types = classes_metrics["mean"].keys()
+        topk_mean = {metric_type: MeanMetric() for metric_type in metric_types}
+
+        for class_name, class_count in topk_class_counts.items():
+            for metric_type in metric_types:
+                topk_mean[metric_type].update(classes_metrics[class_name][metric_type])
+
+        topk_mean = {metric_type: mean_result.item() for metric_type, mean_result in topk_mean.items()}
+        classes_metrics[f"top_{topk}"] = topk_mean
+
+        # also get rid of displaying all metrics that don't lie in top k
+        non_class_names = {"mean", f"top_{topk}"}
+        filter_f = lambda x: x[0].lower() in non_class_names or x[0].lower() in topk_class_counts
+        classes_metrics = dict(filter(filter_f, classes_metrics))
+
+    return classes_metrics
 
 
 def sort_key(file_name):
@@ -98,70 +212,26 @@ def plot_pie(dist, title=None, thresh=0.02):
     fig.show()
 
 
-def plot_hist(metrics, topk=5, thresh=0.01):
+def plot_hist(metrics, thresh=0.01, topk=5,
+              ylabel="Metric Scores", title="Metric scores by class", savefig=None):
     """
     Plots a histogram on the mean results of the inference task.
-    `metrics`: map of metric name -> metric val
-    `topk`: if class counts available, also computes mean of top k most common classes
-    `thresh`: percentage threshold for iou, prec, recall
+    Requires:
+      `metrics`: Dict ordered as follows: \n
+                `{class1_name: {type1: val, type2: val, ...},
+                  class2_name: {type1: val, type2: val, ...},
+                  ...}
     """
-    class_counts = {}
-    classes_metrics = {}
-    seen = {}
-    for metric_name, metric_val in metrics.items():
-        class_name = metric_name.split('/')[0]
-        metric_type = metric_name.split('/')[-1]
-        class_name = class_name.replace("class_", "")
-
-        if metric_type.find("class_count") > -1:
-            class_counts[class_name] = metric_val
-            continue
-
-        # Store metric results only for mean metrics and metrics above threshold
-        class_results = classes_metrics.get(class_name, OrderedDict())
-        if class_results or class_name.find("mean") > -1 or metric_val > thresh:
-            if class_name in seen:
-                seen_results = seen[class_name]
-                class_results.update(seen_results)
-                del seen[class_name]
-
-            class_results[metric_type] = metric_val
-            classes_metrics[class_name] = class_results
-        else:
-            seen_results = seen.get(class_name, OrderedDict())
-            seen_results[metric_type] = metric_val
-            seen[class_name] = seen_results
-
-    # Calculate mean of top k common classes for each metric type
-    if class_counts:
-        sorted_counts = sorted(class_counts.values())
-        topk_class_counts = dict(filter(lambda x: x[1] > sorted_counts[topk], class_counts.items()))
-
-        metric_types = classes_metrics["mean"].keys()
-        topk_mean = {metric_type: MeanMetric() for metric_type in metric_types}
-
-        for class_name, class_count in topk_class_counts.items():
-            for metric_type in metric_types:
-                topk_mean[metric_type].update(classes_metrics[class_name][metric_type])
-
-        topk_mean = {metric_type: mean_result.item() for metric_type, mean_result in topk_mean.items()}
-        classes_metrics[f"top_{topk}"] = topk_mean
-
-        # also get rid of displaying all metrics that don't lie in top k
-        non_class_names = {"mean", f"top_{topk}"}
-        filter_f = lambda x: x[0].lower() in non_class_names or x[0].lower() in topk_class_counts
-        classes_metrics = dict(filter(filter_f, classes_metrics))
-
     # Keep mean results first.
     sort_keys = {"mean": 0, f"top_{topk}": 1, "corn": 2, "soybeans": 3}
     sort_key = lambda k: sort_keys.get(k.lower(), len(sort_keys))
-    x_labels = sorted(classes_metrics.keys(), key=sort_key)
+    x_labels = sorted(metrics.keys(), key=sort_key)
     x = np.arange(len(x_labels))
 
     # List of rectangles for each metric type
     metric_type_results = {}
     for i, label in enumerate(x_labels):
-        class_results = classes_metrics[label]
+        class_results = metrics[label]
 
         # Unrol metric values into lists for each metric type
         for metric_type, metric_val in class_results.items():
@@ -197,15 +267,19 @@ def plot_hist(metrics, topk=5, thresh=0.01):
         autolabel(rects)
 
     # Add some text for labels, title and custom x-axis tick labels, etc.
-    ax.set_ylabel('Metric Scores')
-    ax.set_title('Metric scores by class')
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
     ax.set_xticks(x)
     ax.set_xticklabels(x_labels)
     ax.legend()
 
-    fig.tight_layout()
-    fig.show()
-    plt.show()
+    if not savefig:
+        fig.tight_layout()
+        fig.show()
+        plt.show()
+    else:
+        fig.savefig(savefig)
+        plt.close()
 
 
 def plot_images(im_paths):
@@ -242,71 +316,70 @@ if __name__ == "__main__":
     with open(args.classes, 'r') as f:
         classes = json.load(f)
 
-    inf_path = args.inference
+    inf_paths = args.inference
+    assert len(inf_paths) > 0, "Need to specify at least one inf dir."
 
-    im_paths = []
-    gt_paths = []
-    gt_raw_paths = []
-    pred_paths = []
-    pred_raw_paths = []
-    metric_paths = []
+    if len(inf_paths) == 1:
+        inf_path = inf_paths[0]
 
-    sorted_files = sorted(os.listdir(inf_path), key=sort_key)
-    for f in sorted_files:
-        if f.find('im') > -1 and f.find('.jpg') > -1:
-            im_paths.append(os.path.join(inf_path, f))
-        elif f.find('raw_gt') > -1 and f.find('.jpg') > -1:
-            gt_raw_paths.append(os.path.join(inf_path, f))
-        elif f.find('gt') > -1 and f.find('.jpg') > -1:
-            gt_paths.append(os.path.join(inf_path, f))
-        elif f.find('raw_pred') > -1 and f.find('.jpg') > -1:
-            pred_raw_paths.append(os.path.join(inf_path, f))
-        elif f.find('pred') > -1 and f.find('.jpg') > -1:
-            pred_paths.append(os.path.join(inf_path, f))
-        elif f.find('metric') > -1 and f.find('.json') > -1:
-            metric_paths.append(os.path.join(inf_path, f))
-    print(f"Number of images evaluated: {len(im_paths)}")
+        im_paths, gt_paths, gt_raw_paths, pred_paths, pred_raw_paths, metric_paths = \
+            get_inference_out_paths(inf_path)
 
-    # Calculate mean metrics across all images in inference out.
-    mean_results = {}
-    for i, metric_path in enumerate(metric_paths):
-        with open(metric_path, 'r') as f:
-            metrics = json.load(f)
+        # Get rid of MeanMetrics
+        mean_results = calculate_mean_results(metric_paths)
 
-        for metric_name, val in metrics.items():
-            if metric_name not in mean_results:
-                mean_results[metric_name] = MeanMetric(val)
-            else:
-                mean_results[metric_name].update(val)
+        print("Evaluation results for non-zero metrics:")
+        for metric_name, metric_val in mean_results.items():
+            if metric_val > 0:
+                print(f"{metric_name}: {round(metric_val, 3)}")
 
-    # Get rid of MeanMetrics
-    mean_results = {n: metric.item() for n, metric in mean_results.items()}
+        # Plot color map if config file given.
+        if args.colors:
+            print("Warning: Showing color map without config file.")
+            interest_classes = sorted(classes.keys(), key=classes.get)
+            remapped_classes = {}
+            for i, class_name in enumerate(interest_classes):
+                remapped_classes[class_name] = i
 
-    print("Evaluation results for non-zero metrics:")
-    for metric_name, metric_val in mean_results.items():
-        if metric_val > 0:
-            print(f"{metric_name}: {round(metric_val, 3)}")
+            plot_color_legend(remapped_classes)
 
-    # Plot color map if config file given.
-    if args.colors:
-        print("Warning: Showing color map without config file.")
-        interest_classes = sorted(classes.keys(), key=classes.get)
-        remapped_classes = {}
-        for i, class_name in enumerate(interest_classes):
-            remapped_classes[class_name] = i
+        ## Start plotting results.
+        if not args.text:
+            # Mean result histogram
+            hist_metrics = format_metrics_for_hist(mean_results, thresh=0.2, topk=5)
+            plot_hist(hist_metrics, thresh=0.2, topk=5)
 
-        plot_color_legend(remapped_classes)
+        # Plot grids of the images.
+        if args.images:
+            paths = zip(im_paths, gt_paths, gt_raw_paths, pred_paths, pred_raw_paths, metric_paths)
+            paths = list(paths)
 
-    ## Start plotting results.
-    if not args.text:
-        # Mean result histogram
-        plot_hist(mean_results, thresh=0.2)
+            show_paths = random.sample(paths, 20)
+            for ps in show_paths:
+                plot_images(ps)
 
-    # Plot grids of the images.
-    if args.images:
-        paths = zip(im_paths, gt_paths, gt_raw_paths, pred_paths, pred_raw_paths, metric_paths)
-        paths = list(paths)
+    # Plot comparative bar charts.
+    else:
+        # Get results per inference set.
+        inf_results = {}
+        for inf_path in inf_paths:
+            im_paths, gt_paths, gt_raw_paths, pred_paths, pred_raw_paths, metric_paths = \
+                get_inference_out_paths(inf_path)
 
-        show_paths = random.sample(paths, 20)
-        for ps in show_paths:
-            plot_images(ps)
+            # Get rid of MeanMetrics
+            mean_results = calculate_mean_results(metric_paths)
+
+            # Inference tag is descriptive name of expeirment
+            inf_tag = os.path.split(inf_path)[-1]
+            inf_results[inf_tag] = format_metrics_for_hist(mean_results, thresh=0.01, topk=4)
+
+        topk = 4
+        chosen_metric = "IoU"
+        combined_metrics = {}
+        for inf_tag, metrics_for_hist in inf_results.items():
+            for class_name, metrics in metrics_for_hist.items():
+                chosen_metric_per_tag = combined_metrics.get(class_name.lower(), {})
+                chosen_metric_per_tag[inf_tag] = metrics[chosen_metric]
+                combined_metrics[class_name] = chosen_metric_per_tag
+
+        plot_hist(combined_metrics, topk=topk, ylabel=chosen_metric, savefig="/home/sak296")

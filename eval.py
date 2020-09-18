@@ -380,6 +380,10 @@ if __name__ == "__main__":
 
             # Get rid of MeanMetrics
             mean_results = calculate_mean_results(metric_paths)
+            print("Evaluation results for non-zero metrics:")
+            for metric_name, metric_val in mean_results.items():
+                if metric_val > 0.3:
+                    print(f"{metric_name}: {round(metric_val, 3)}")
 
             # Inference tag is descriptive name of expeirment
             inf_tag = inf_path #os.path.split(inf_path)[-1]

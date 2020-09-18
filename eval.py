@@ -382,7 +382,7 @@ if __name__ == "__main__":
             mean_results = calculate_mean_results(metric_paths)
 
             # Inference tag is descriptive name of expeirment
-            inf_tag = os.path.split(inf_path)[-1]
+            inf_tag = inf_path #os.path.split(inf_path)[-1]
             inf_results[inf_tag] = format_metrics_for_hist(mean_results, thresh=0.01, topk=4)
 
         topk = 4

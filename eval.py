@@ -131,6 +131,11 @@ def format_metrics_for_hist(metrics, thresh=0.2, topk=5):
 
     # Calculate mean of top k common classes for each metric type
     if class_counts:
+        for class_name in class_counts:
+            if class_name not in classes_metrics:
+                del class_counts[class_name]
+
+        topk = min(topk, len(class_counts) - 1)
         sorted_counts = sorted(class_counts.values())
         topk_class_counts = dict(filter(lambda x: x[1] > sorted_counts[topk], class_counts.items()))
 

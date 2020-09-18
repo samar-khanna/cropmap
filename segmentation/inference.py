@@ -173,7 +173,7 @@ if __name__ == "__main__":
                 iou=_metrics["iou"],
                 prec=_metrics["prec"],
                 recall=_metrics["recall"],
-                gt_class_count=label_class_counts
+                gt_class_count=label_class_counts.astype(int)
             )
 
             # Id for saving file.

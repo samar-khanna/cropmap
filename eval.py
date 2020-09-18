@@ -136,6 +136,7 @@ def format_metrics_for_hist(metrics, thresh=0.2, topk=5):
         for class_name in class_counts:
             if class_name not in classes_metrics:
                 unseen_classes.add(class_name)
+        print(unseen_classes)
         for class_name in unseen_classes:
             del class_counts[class_name]
 
@@ -391,4 +392,4 @@ if __name__ == "__main__":
                 chosen_metric_per_tag[inf_tag] = metrics[chosen_metric]
                 combined_metrics[class_name] = chosen_metric_per_tag
 
-        plot_hist(combined_metrics, topk=topk, ylabel=chosen_metric, savefig="/home/sak296")
+        plot_hist(combined_metrics, topk=topk, ylabel=chosen_metric, savefig="/home/sak296/fig1.png")

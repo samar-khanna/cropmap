@@ -144,7 +144,6 @@ def passed_arguments():
                         default=False,
                         help="Path to load model weights from checkpoint file.")
     parser.add_argument("--freeze_backbone",
-                        type=bool,
                         action="store_true",
                         help="Whether to freeze backbone layers while training.")
     parser.add_argument("--start_epoch",

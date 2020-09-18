@@ -158,13 +158,13 @@ def load_model(config_handler, from_checkpoint=False):
   return model
 
 
-def save_model(model, config_handler):
+def save_model(model, save_path):
   """
-  Saves a segmentation model either to the directory specified in `save_dir`,
-  or to the path `save_path` specified in the model config.
+  Saves a segmentation model to `save_path`.
+  If using multiple gpus/data parallelism, then save `.module` attribute.
   """
-  save_dir = config_handler.save_dir
-  save_path = config_handler.save_path
-
-  torch.save(model.state_dict(), save_path)
+  if torch.cuda.device_count() > 1:
+    torch.save(model.module.state_dict(), save_path)
+  else:
+    torch.save(model.state_dict(), save_path)
   print(f"Saved model weights at: {save_path}")

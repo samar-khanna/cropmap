@@ -141,10 +141,9 @@ def format_metrics_for_hist(metrics, thresh=0.2, topk=5):
         # print(unseen_classes)
         # for class_name in unseen_classes:
         #     del class_counts[class_name]
-
-        topk = min(topk, len(class_counts) - 1)
+        topk = min(topk-1, len(class_counts) - 1)
         sorted_counts = sorted(class_counts.values())
-        topk_class_counts = dict(filter(lambda x: x[1] > sorted_counts[topk], class_counts.items()))
+        topk_class_counts = dict(filter(lambda x: x[1] >= sorted_counts[topk], class_counts.items()))
         print(topk_class_counts)
 
         metric_types = classes_metrics["mean"].keys()
@@ -156,6 +155,8 @@ def format_metrics_for_hist(metrics, thresh=0.2, topk=5):
 
         topk_mean = {metric_type: mean_result.item() for metric_type, mean_result in topk_mean.items()}
         classes_metrics[f"top_{topk}"] = topk_mean
+
+        print(classes_metrics)
 
         # also get rid of displaying all metrics that don't lie in top k
         non_class_names = {"mean", f"top_{topk}"}

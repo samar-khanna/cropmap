@@ -134,13 +134,13 @@ def format_metrics_for_hist(metrics, thresh=0.2, topk=5):
     # Calculate mean of top k common classes for each metric type
     if class_counts:
         # TODO: Get rid of this nonsense
-        unseen_classes = set()
-        for class_name in class_counts:
-            if class_name not in classes_metrics:
-                unseen_classes.add(class_name)
-        print(unseen_classes)
-        for class_name in unseen_classes:
-            del class_counts[class_name]
+        # unseen_classes = set()
+        # for class_name in class_counts:
+        #     if class_name not in classes_metrics:
+        #         unseen_classes.add(class_name)
+        # print(unseen_classes)
+        # for class_name in unseen_classes:
+        #     del class_counts[class_name]
 
         topk = min(topk, len(class_counts) - 1)
         sorted_counts = sorted(class_counts.values())

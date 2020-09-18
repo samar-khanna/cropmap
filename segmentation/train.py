@@ -140,6 +140,10 @@ def passed_arguments():
                         type=str,
                         default=False,
                         help="Path to load model weights from checkpoint file.")
+    parser.add_argument("--freeze_backbone",
+                        type=bool,
+                        action="store_true",
+                        help="Whether to freeze backbone layers while training.")
     parser.add_argument("--start_epoch",
                         type=int,
                         default=0,
@@ -158,9 +162,9 @@ if __name__ == "__main__":
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda:0" if use_cuda else "cpu")
 
-    ## TODO: Finetuning (freezing layers)
+    ## TODO: Finetuning (freezing layers other than backbone)
     # Load model, use DataParallel if more than 1 GPU available
-    model = load_model(ch, from_checkpoint=args.checkpoint)
+    model = load_model(ch, from_checkpoint=args.checkpoint, freeze_backbone=args.freeze_backbone)
     if torch.cuda.device_count() > 1:
         print(f"Using {torch.cuda.device_count()} GPUs")
         model = nn.DataParallel(model)

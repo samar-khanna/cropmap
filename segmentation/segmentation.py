@@ -127,11 +127,12 @@ def create_model(config_handler):
     return seg_model
 
 
-def load_model(config_handler, from_checkpoint=False):
+def load_model(config_handler, from_checkpoint=False, freeze_backbone=False):
     """
     Loads a segmentation model based on its config dictionary.
     If specified, load's model weights from a checkpoint file.
     Else, creates a new, fresh instance of the model.
+    If specified, also freezes all parameters in backbone layer.
     """
     model = create_model(config_handler)
 
@@ -154,6 +155,11 @@ def load_model(config_handler, from_checkpoint=False):
 
         state_dict = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(state_dict)
+
+    # Freeze backbone if specified
+    if config_handler.config.get("freeze_backbone", False) or freeze_backbone:
+        for param in model.backbone.parameters():
+            param.requires_grad = False
 
     return model
 

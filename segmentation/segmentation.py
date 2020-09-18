@@ -158,6 +158,7 @@ def load_model(config_handler, from_checkpoint=False, freeze_backbone=False):
 
     # Freeze backbone if specified
     if config_handler.config.get("freeze_backbone", False) or freeze_backbone:
+        print("Freezing backbone layers...")
         for param in model.backbone.parameters():
             param.requires_grad = False
 

@@ -170,8 +170,8 @@ def format_metrics_for_hist(metrics, thresh=0.2, topk=5):
     classes_metrics = {}
     seen = {}
     for metric_name, metric_val in metrics.items():
-        class_name = metric_name.split('/')[0]
-        metric_type = metric_name.split('/')[-1]
+        class_name = metric_name.split('/')[0].lower()  # Important to lowercase
+        metric_type = metric_name.split('/')[-1].lower()
         class_name = class_name.replace("class_", "")
 
         if metric_type.find("class_count") > -1:
@@ -205,9 +205,9 @@ def format_metrics_for_hist(metrics, thresh=0.2, topk=5):
                 del seen[class_name]
 
         topk_idx = min(topk-1, len(class_counts) - 1)
-        sorted_counts = sorted(class_counts.values(), reverse=True)
-        topk_class_counts = dict(filter(lambda count: count[1] >= sorted_counts[topk_idx],
-                                        class_counts.items()))
+        desc_class_counts = sorted(class_counts.items(), key=lambda kv: kv[1], reverse=True)
+        topk_class_counts = OrderedDict([(k, count) for k, count in desc_class_counts 
+                                         if count >= desc_class_counts[topk_idx][1]])
 
         metric_types = classes_metrics["mean"].keys()
         topk_mean = {metric_type: MeanMetric() for metric_type in metric_types}
@@ -219,10 +219,11 @@ def format_metrics_for_hist(metrics, thresh=0.2, topk=5):
         topk_mean = {metric_type: mean_result.item() for metric_type, mean_result in topk_mean.items()}
         classes_metrics[f"top_{topk}"] = topk_mean
 
-        # also get rid of displaying all metrics that don't lie in top k
-        non_class_names = {"mean", f"top_{topk}"}
-        filter_f = lambda nom: nom[0].lower() in non_class_names or nom[0].lower() in topk_class_counts
-        classes_metrics = dict(filter(filter_f, classes_metrics.items()))
+        # Sort bar plot for top k classes in decreasing order of prevalance, 
+        # Get rid of metrics outside of top k prevalence
+        sorted_class_names = ["mean", f"top_{topk}"]
+        sorted_class_names.extend(topk_class_counts.keys())
+        classes_metrics = OrderedDict([(name, classes_metrics[name]) for name in sorted_class_names])
 
     return classes_metrics
 
@@ -238,9 +239,9 @@ def plot_hist(metrics, thresh=0.01, topk=5,
                   ...}
     """
     # Keep mean results first.
-    sort_keys = {"mean": 0, f"top_{topk}": 1, "corn": 2, "soybeans": 3}
-    sort_key = lambda k: sort_keys.get(k.lower(), len(sort_keys))
-    x_labels = sorted(metrics.keys(), key=sort_key)
+    # sort_keys = {"mean": 0, f"top_{topk}": 1, "corn": 2, "soybeans": 3}
+    # sort_key = lambda k: sort_keys.get(k.lower(), len(sort_keys))
+    x_labels = metrics.keys()
     x = np.arange(len(x_labels))
 
     # List of rectangles for each metric type
@@ -286,13 +287,14 @@ def plot_hist(metrics, thresh=0.01, topk=5,
     ax.set_title(title)
     ax.set_xticks(x)
     ax.set_xticklabels(x_labels)
-    ax.legend()
+    ax.legend(fontsize=8, framealpha=0.4)
 
     if not savefig:
         fig.tight_layout()
         fig.show()
         plt.show()
     else:
+        fig.set_size_inches(12, 6)
         fig.savefig(savefig)
         plt.close()
 
@@ -335,6 +337,8 @@ if __name__ == "__main__":
     assert len(inf_paths) > 0, "Need to specify at least one inf dir."
 
     if len(inf_paths) == 1:
+        thresh = 0.2
+        topk = 7
         inf_path = inf_paths[0]
 
         im_paths, gt_paths, gt_raw_paths, pred_paths, pred_raw_paths, metric_paths = \
@@ -361,8 +365,8 @@ if __name__ == "__main__":
         ## Start plotting results.
         if not args.text:
             # Mean result histogram
-            hist_metrics = format_metrics_for_hist(mean_results, thresh=0.2, topk=5)
-            plot_hist(hist_metrics, thresh=0.2, topk=5)
+            hist_metrics = format_metrics_for_hist(mean_results, thresh=thresh, topk=topk)
+            plot_hist(hist_metrics, thresh=thresh, topk=topk)
 
         # Plot grids of the images.
         if args.images:

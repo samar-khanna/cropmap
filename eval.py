@@ -27,6 +27,10 @@ def passed_arguments():
                         action="store_true",
                         default=False,
                         help="Show a sequence of 20 images from inference.")
+    parser.add_argument("--save_fig",
+                        type=str,
+                        default=None,
+                        help="Path to dir where figures will be saved instead of displayed.")
     parser.add_argument("--colors",
                         action="store_true",
                         default=False,
@@ -88,6 +92,66 @@ def calculate_mean_results(metric_paths):
     # Get rid of MeanMetrics
     mean_results = {n: metric.item() for n, metric in mean_results.items()}
     return mean_results
+
+
+def sort_key(file_name):
+    d = re.search('[0-9]+', file_name)
+    return int(file_name[d.start():d.end()]) if d else float('inf')
+
+
+def classes_dist(path_to_gt, classes):
+    """
+    Records the distribution of classes in a given ground truth mask.
+    Requires:
+      `path_to_gt`: path to a ground truth `.tif` file representing the mask.
+    Returns:
+      A dictionary of class_name --> count
+    """
+    import rasterio
+    with rasterio.open(path_to_gt) as m:
+        mask = m.read()
+
+    unique, counts = np.unique(mask, return_counts=True)
+    index_dist = dict(zip(unique, counts))
+
+    invert_classes = {ind: name for name, ind in classes.items()}
+
+    dist = {invert_classes[ind]: int(count) \
+            for ind, count in index_dist.items()}
+
+    return dist
+
+
+def plot_pie(dist, title=None, thresh=0.02):
+    """
+    Creates and plots a pie chart, intended to represent distribution of
+    classes in a dataset, for example.
+    Requires:
+      dist: a dictionary of name --> count
+      thresh: percentage threshold above which metric will not be lumped into "other"
+    """
+    total = sum(dist.values())
+    dist = {n: v/total for n, v in dist.items()}
+
+    _dist = {"other":0}
+    for n, val in dist.items():
+        if val > thresh:
+            _dist[n] = val
+        else:
+            _dist["other"] += val
+
+    values = _dist.values()
+    explode = [0.1*v for v in values]
+    labels = _dist.keys()
+
+    fig, ax = plt.subplots()
+    ax.pie(values, explode=explode, labels=labels,
+           autopct="%1.1f%%", labeldistance=1.05)
+    ax.axis("equal") # Equal aspect ratio ensures that pie is drawn as a circle.
+
+    if title:
+        ax.set_title(title, pad=10)
+    fig.show()
 
 
 def format_metrics_for_hist(metrics, thresh=0.2, topk=5):
@@ -155,75 +219,12 @@ def format_metrics_for_hist(metrics, thresh=0.2, topk=5):
         topk_mean = {metric_type: mean_result.item() for metric_type, mean_result in topk_mean.items()}
         classes_metrics[f"top_{topk}"] = topk_mean
 
-        print(classes_metrics)
-
         # also get rid of displaying all metrics that don't lie in top k
         non_class_names = {"mean", f"top_{topk}"}
         filter_f = lambda nom: nom[0].lower() in non_class_names or nom[0].lower() in topk_class_counts
         classes_metrics = dict(filter(filter_f, classes_metrics.items()))
-        print(classes_metrics)
 
     return classes_metrics
-
-
-def sort_key(file_name):
-    d = re.search('[0-9]+', file_name)
-    return int(file_name[d.start():d.end()]) if d else float('inf')
-
-
-def classes_dist(path_to_gt, classes):
-    """
-    Records the distribution of classes in a given ground truth mask.
-    Requires:
-      `path_to_gt`: path to a ground truth `.tif` file representing the mask.
-    Returns:
-      A dictionary of class_name --> count
-    """
-    import rasterio
-    with rasterio.open(path_to_gt) as m:
-        mask = m.read()
-
-    unique, counts = np.unique(mask, return_counts=True)
-    index_dist = dict(zip(unique, counts))
-
-    invert_classes = {ind: name for name, ind in classes.items()}
-
-    dist = {invert_classes[ind]: int(count) \
-            for ind, count in index_dist.items()}
-
-    return dist
-
-
-def plot_pie(dist, title=None, thresh=0.02):
-    """
-    Creates and plots a pie chart, intended to represent distribution of
-    classes in a dataset, for example.
-    Requires:
-      dist: a dictionary of name --> count
-      thresh: percentage threshold above which metric will not be lumped into "other"
-    """
-    total = sum(dist.values())
-    dist = {n: v/total for n, v in dist.items()}
-
-    _dist = {"other":0}
-    for n, val in dist.items():
-        if val > thresh:
-            _dist[n] = val
-        else:
-            _dist["other"] += val
-
-    values = _dist.values()
-    explode = [0.1*v for v in values]
-    labels = _dist.keys()
-
-    fig, ax = plt.subplots()
-    ax.pie(values, explode=explode, labels=labels,
-           autopct="%1.1f%%", labeldistance=1.05)
-    ax.axis("equal") # Equal aspect ratio ensures that pie is drawn as a circle.
-
-    if title:
-        ax.set_title(title, pad=10)
-    fig.show()
 
 
 def plot_hist(metrics, thresh=0.01, topk=5,
@@ -374,6 +375,10 @@ if __name__ == "__main__":
 
     # Plot comparative bar charts.
     else:
+        topk = 4
+        chosen_metric = "IoU"
+        combined_metrics = {}
+
         # Get results per inference set.
         inf_results = {}
         for inf_path in inf_paths:
@@ -388,16 +393,13 @@ if __name__ == "__main__":
                     print(f"{metric_name}: {round(metric_val, 3)}")
 
             # Inference tag is descriptive name of expeirment
-            inf_tag = inf_path #os.path.split(inf_path)[-1]
-            inf_results[inf_tag] = format_metrics_for_hist(mean_results, thresh=0.01, topk=4)
+            inf_tag = os.path.split(inf_path)[-1]
+            inf_results[inf_tag] = format_metrics_for_hist(mean_results, thresh=0.01, topk=topk)
 
-        topk = 4
-        chosen_metric = "IoU"
-        combined_metrics = {}
         for inf_tag, metrics_for_hist in inf_results.items():
             for class_name, metrics in metrics_for_hist.items():
                 chosen_metric_per_tag = combined_metrics.get(class_name.lower(), {})
                 chosen_metric_per_tag[inf_tag] = metrics[chosen_metric.lower()]
                 combined_metrics[class_name] = chosen_metric_per_tag
 
-        plot_hist(combined_metrics, topk=topk, ylabel=chosen_metric, savefig="/home/sak296/fig1.png")
+        plot_hist(combined_metrics, topk=topk, ylabel=chosen_metric, savefig=args.save_fig)

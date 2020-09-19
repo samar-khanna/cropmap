@@ -389,7 +389,7 @@ if __name__ == "__main__":
             mean_results = calculate_mean_results(metric_paths)
 
             # Inference tag is descriptive name of expeirment
-            inf_tag = inf_path.trim(os.path.sep).split(os.path.sep)[-1]
+            inf_tag = inf_path.strip(os.path.sep).split(os.path.sep)[-1]
             print(f"Evaluation results for non-zero metrics in {inf_tag}:")
             for metric_name, metric_val in mean_results.items():
                 if metric_val > 0.3:

@@ -204,9 +204,9 @@ def format_metrics_for_hist(metrics, thresh=0.2, topk=5):
             classes_metrics[class_name] = seen_results
             del seen[class_name]
 
-        topk = min(topk-1, len(class_counts) - 1)
+        topk_idx = min(topk-1, len(class_counts) - 1)
         sorted_counts = sorted(class_counts.values(), reverse=True)
-        topk_class_counts = dict(filter(lambda count: count[1] >= sorted_counts[topk],
+        topk_class_counts = dict(filter(lambda count: count[1] >= sorted_counts[topk_idx],
                                         class_counts.items()))
 
         metric_types = classes_metrics["mean"].keys()
@@ -387,13 +387,14 @@ if __name__ == "__main__":
 
             # Get rid of MeanMetrics
             mean_results = calculate_mean_results(metric_paths)
-            print("Evaluation results for non-zero metrics:")
+
+            # Inference tag is descriptive name of expeirment
+            inf_tag = os.path.split(inf_path)[-1]
+            print(f"Evaluation results for non-zero metrics in {inf_tag}:")
             for metric_name, metric_val in mean_results.items():
                 if metric_val > 0.3:
                     print(f"{metric_name}: {round(metric_val, 3)}")
 
-            # Inference tag is descriptive name of expeirment
-            inf_tag = os.path.split(inf_path)[-1]
             inf_results[inf_tag] = format_metrics_for_hist(mean_results, thresh=0.01, topk=topk)
 
         for inf_tag, metrics_for_hist in inf_results.items():

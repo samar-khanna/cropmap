@@ -366,7 +366,8 @@ if __name__ == "__main__":
         if not args.text:
             # Mean result histogram
             hist_metrics = format_metrics_for_hist(mean_results, thresh=thresh, topk=topk)
-            plot_hist(hist_metrics, thresh=thresh, topk=topk)
+            plot_hist(hist_metrics, thresh=thresh, topk=topk,
+                      savefig=os.path.join(args.save_fig, "model_results.png"))
 
         # Plot grids of the images.
         if args.images:

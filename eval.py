@@ -116,35 +116,34 @@ def format_metrics_for_hist(metrics, thresh=0.2, topk=5):
 
         # Store metric results only for mean metrics and metrics above threshold
         class_results = classes_metrics.get(class_name, OrderedDict())
-        class_results[metric_type] = metric_val
-        classes_metrics[class_name] = class_results
-        # if class_results or class_name.find("mean") > -1 or metric_val > thresh:
-        #     if class_name in seen:
-        #         seen_results = seen[class_name]
-        #         class_results.update(seen_results)
-        #         del seen[class_name]
-        #
-        #     class_results[metric_type] = metric_val
-        #     classes_metrics[class_name] = class_results
-        # else:
-        #     seen_results = seen.get(class_name, OrderedDict())
-        #     seen_results[metric_type] = metric_val
-        #     seen[class_name] = seen_results
+        if class_results or class_name.find("mean") > -1 or metric_val > thresh:
+            if class_name in seen:
+                seen_results = seen[class_name]
+                class_results.update(seen_results)
+                del seen[class_name]
+
+            class_results[metric_type] = metric_val
+            classes_metrics[class_name] = class_results
+        else:
+            seen_results = seen.get(class_name, OrderedDict())
+            seen_results[metric_type] = metric_val
+            seen[class_name] = seen_results
 
     # Calculate mean of top k common classes for each metric type
     if class_counts:
-        # TODO: Get rid of this nonsense
-        # unseen_classes = set()
-        # for class_name in class_counts:
-        #     if class_name not in classes_metrics:
-        #         unseen_classes.add(class_name)
-        # print(unseen_classes)
-        # for class_name in unseen_classes:
-        #     del class_counts[class_name]
+
+        # If class was in class_counts, then get it from seen
+        for class_name in class_counts:
+            seen_results = seen.get(class_name)
+            if seen_results is None:
+                continue
+            classes_metrics[class_name] = seen_results
+            del seen[class_name]
+
         topk = min(topk-1, len(class_counts) - 1)
-        sorted_counts = sorted(class_counts.values())
-        topk_class_counts = dict(filter(lambda x: x[1] >= sorted_counts[topk], class_counts.items()))
-        print(topk_class_counts)
+        sorted_counts = sorted(class_counts.values(), reverse=True)
+        topk_class_counts = dict(filter(lambda count: count[1] >= sorted_counts[topk],
+                                        class_counts.items()))
 
         metric_types = classes_metrics["mean"].keys()
         topk_mean = {metric_type: MeanMetric() for metric_type in metric_types}
@@ -160,8 +159,8 @@ def format_metrics_for_hist(metrics, thresh=0.2, topk=5):
 
         # also get rid of displaying all metrics that don't lie in top k
         non_class_names = {"mean", f"top_{topk}"}
-        filter_f = lambda x: x[0].lower() in non_class_names or x[0].lower() in topk_class_counts
-        classes_metrics = dict(filter(filter_f, classes_metrics))
+        filter_f = lambda nom: nom[0].lower() in non_class_names or nom[0].lower() in topk_class_counts
+        classes_metrics = dict(filter(filter_f, classes_metrics.items()))
         print(classes_metrics)
 
     return classes_metrics

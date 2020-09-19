@@ -175,7 +175,8 @@ def format_metrics_for_hist(metrics, thresh=0.2, topk=5):
         class_name = class_name.replace("class_", "")
 
         if metric_type.find("class_count") > -1:
-            class_counts[class_name] = metric_val
+            if class_name.find("mean") == -1:  # don't log mean_class_count
+                class_counts[class_name] = metric_val
             continue
 
         # Store metric results only for mean metrics and metrics above threshold
@@ -199,10 +200,9 @@ def format_metrics_for_hist(metrics, thresh=0.2, topk=5):
         # If class was in class_counts, then get it from seen
         for class_name in class_counts:
             seen_results = seen.get(class_name)
-            if seen_results is None:
-                continue
-            classes_metrics[class_name] = seen_results
-            del seen[class_name]
+            if seen_results is not None:
+                classes_metrics[class_name] = seen_results
+                del seen[class_name]
 
         topk_idx = min(topk-1, len(class_counts) - 1)
         sorted_counts = sorted(class_counts.values(), reverse=True)
@@ -377,7 +377,6 @@ if __name__ == "__main__":
     else:
         topk = 4
         chosen_metric = "IoU"
-        combined_metrics = {}
 
         # Get results per inference set.
         inf_results = {}
@@ -397,11 +396,13 @@ if __name__ == "__main__":
 
             inf_results[inf_tag] = format_metrics_for_hist(mean_results, thresh=0.01, topk=topk)
 
+        combined_metrics = {}
         for inf_tag, metrics_for_hist in inf_results.items():
             for class_name, metrics in metrics_for_hist.items():
                 chosen_metric_per_tag = combined_metrics.get(class_name.lower(), {})
                 chosen_metric_per_tag[inf_tag] = metrics[chosen_metric.lower()]
                 combined_metrics[class_name] = chosen_metric_per_tag
 
+        print(combined_metrics)
         plot_hist(combined_metrics, topk=topk, ylabel=chosen_metric,
                   savefig=os.path.join(args.save_fig, "compare_models.png"))

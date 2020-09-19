@@ -402,4 +402,5 @@ if __name__ == "__main__":
                 chosen_metric_per_tag[inf_tag] = metrics[chosen_metric.lower()]
                 combined_metrics[class_name] = chosen_metric_per_tag
 
-        plot_hist(combined_metrics, topk=topk, ylabel=chosen_metric, savefig=args.save_fig)
+        plot_hist(combined_metrics, topk=topk, ylabel=chosen_metric,
+                  savefig=os.path.join(args.save_fig, "compare_models.png"))

@@ -99,7 +99,7 @@ def passed_arguments():
                         type=str,
                         default=None,
                         help="Path to output directory to store inference results. " + \
-                             "Defaults to `inf_dir` path in the config file.")
+                             "Defaults to `.../data_path/inference/`")
     parser.add_argument('-n', '--name',
                         type=str,
                         default=None,
@@ -115,7 +115,7 @@ if __name__ == "__main__":
     assert set_type in {"train", "val", "test"}, "Only train/val/test sets permitted."
 
     # Create config handler
-    ch = ConfigHandler(args.data_path, args.config, args.classes,
+    ch = ConfigHandler(args.data_path, args.config, args.classes, args.data_path,
                        args.inf_out, args.name)
 
     use_cuda = torch.cuda.is_available()

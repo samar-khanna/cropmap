@@ -130,6 +130,10 @@ def passed_arguments():
                         type=str,
                         required=True,
                         help="Path to .json model config file.")
+    parser.add_argument("--out_dir",
+                        type=str,
+                        default=None,
+                        help="Path to directory where model outputs will be stored.")
     parser.add_argument("--split",
                         nargs="+",
                         type=float,
@@ -158,7 +162,8 @@ if __name__ == "__main__":
     args = passed_arguments()
 
     # Create config handler and save it in output directory
-    ch = ConfigHandler(args.data_path, args.config, args.classes)
+    out_dir = args.out_dir if args.out_dir is not None else args.data_path
+    ch = ConfigHandler(args.data_path, args.config, args.classes, out_dir)
     ch.save_config()
 
     use_cuda = torch.cuda.is_available()

@@ -18,7 +18,7 @@ MODELS = {
 
 
 class ConfigHandler():
-    def __init__(self, data_path, path_to_config, classes_path,
+    def __init__(self, data_path, path_to_config, classes_path, out_dir,
                  inf_dir=None, inf_subdir=None):
         super().__init__()
 
@@ -39,11 +39,12 @@ class ConfigHandler():
         # Indices according to train/val/test split will be stored here.
         self.indices_path = os.path.join(data_path, "indices.json")
 
+        # TODO: Maybe package this functionality outside of this class to avoid confusion
         # Create out directories.
-        self.out_dir = os.path.join(config.get("out_dir", "."), self.name)
+        self.out_dir = os.path.join(out_dir, self.name)
         self.save_dir = os.path.join(self.out_dir, "checkpoints")
         self.metrics_dir = os.path.join(self.out_dir, "metrics")
-        self.inf_dir = inf_dir if inf_dir else \
+        self.inf_dir = inf_dir if inf_dir is not None else \
             os.path.join(self.out_dir, "inference")
         if inf_subdir:
             self.inf_dir = os.path.join(self.inf_dir, inf_subdir)
@@ -51,7 +52,6 @@ class ConfigHandler():
                                    self.metrics_dir, self.inf_dir)
 
         self.save_path = os.path.join(self.save_dir, f"{self.name}.bin")
-
 
     def save_config(self):
         """

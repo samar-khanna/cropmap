@@ -8,6 +8,7 @@ import numpy as np
 import torch
 import torchvision.transforms as torch_transforms
 from torch.utils.data import Dataset, DataLoader, Sampler, SubsetRandomSampler
+from torch.utils.data._utils.collate import default_collate
 import data_transforms
 
 
@@ -197,6 +198,18 @@ class CropDataset(Dataset):
         return to_tensor(sample[0]), to_tensor(sample[1])
 
     @staticmethod
+    def collate_fn(batch):
+        """
+        Converts a list of (x,y) samples into batched tensors.
+        Removes any tensor that has NaN entries.
+        """
+        def is_not_nan(sample):
+            x, y = sample
+            return not (torch.isnan(x).any() or torch.isnan(y).any())
+
+        return default_collate([sample for sample in batch if is_not_nan(sample)])
+
+    @staticmethod
     def convert_inds(_indices):
         """
         Converts a given dictionary of data indices into the correct format
@@ -323,17 +336,21 @@ def get_data_loaders(dataset,
     # Generates indices if not present
     indices = dataset.gen_indices(indices_path=indices_path)
 
+    # Removes NaN samples.
+    collate_fn = CropDataset.collate_fn
+
     # Define samplers for each of the train, val and test data
     # Sample train data randomly, and validation, test data sequentially
     train_sampler = SubsetRandomSampler(indices['train'])
-    train_loader = DataLoader(dataset, batch_size=batch_size,
+    train_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn,
                               sampler=train_sampler, num_workers=num_workers)
 
     val_sampler = SubsetSequentialSampler(indices['val'])
-    val_loader = DataLoader(dataset, batch_size=batch_size,
+    val_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn,
                             sampler=val_sampler, num_workers=num_workers)
 
     test_sampler = SubsetSequentialSampler(indices['test'])
-    test_loader = DataLoader(dataset, batch_size=batch_size, sampler=test_sampler)
+    test_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn,
+                             sampler=test_sampler)
 
     return train_loader, val_loader, test_loader

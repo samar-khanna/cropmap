@@ -1,13 +1,9 @@
 import numpy as np
 import torch
 import torchvision.transforms as torch_transforms
-from torch.utils.data import Dataset, DataLoader, Sampler, SubsetRandomSampler
+from torch.utils.data import Dataset, Sampler
 from torch.utils.data._utils.collate import default_collate
 import data_transforms
-
-
-MOSAIC_NAME = "mosaic.tif"
-MASK_NAME = "ground_truth.tif"
 
 
 class CropDataset(Dataset):

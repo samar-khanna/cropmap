@@ -196,7 +196,7 @@ class TimeSeriesDataset(CropDataset):
                 # Clean by rejecting indices of any x in time sample that contain NaN
                 if clean_indices:
                     def is_not_nan(position):
-                        x_list, y = self.__getitem__([(set_type, sample_index, position)])
+                        x_list, y = self.__getitem__((set_type, sample_index, position))
                         for x in x_list:
                             if torch.isnan(x).any():
                                 return False

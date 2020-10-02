@@ -163,18 +163,17 @@ class ImageDataset(CropDataset):
                     indices[set_type].append(new_ind)
         return indices
 
-    def gen_indices(self):
+    def gen_indices(self, regen_indices=False):
         """
         Generates indices `(r,c)` corresponding to start position of tiles,
         where the tile is formed by `mosaic[:, r:r+th, c:c+tw]`.
         If `indices_path` specified, loads indices from path. If `indices_path`
         is not yet a file on system, then generates and saves the indices.
         """
-        if self.indices_path:
-            if os.path.isfile(self.indices_path):
-                with open(self.indices_path, 'r') as f:
-                    _indices = json.load(f)
-                return ImageDataset.convert_inds(_indices)
+        if os.path.isfile(self.indices_path) and not regen_indices:
+            with open(self.indices_path, 'r') as f:
+                _indices = json.load(f)
+            return ImageDataset.convert_inds(_indices)
 
         # Note which sets each mosaic appears in. Mapping from
         # mosaic_path -> {"train": (data_path_ind, split_pct), "val":...}

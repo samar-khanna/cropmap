@@ -7,8 +7,8 @@ import torchvision
 import torchvision.models.resnet as resnet
 from torchvision.models._utils import IntermediateLayerGetter
 from torchvision.models.segmentation.fcn import FCNHead
-from fcn import FCN
-from unet import UNet
+from models.fcn import FCN
+from models.unet import UNet
 
 
 MODELS = {

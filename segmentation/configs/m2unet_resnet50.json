@@ -12,7 +12,7 @@
 
 
   "epochs": 200,
-  "batch_size": 16,
+  "batch_size": 8,
   "loss": "BCEWithLogitsLoss",
   "loss_kwargs": 
     {},

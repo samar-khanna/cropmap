@@ -44,7 +44,7 @@ class ImageDataset(CropDataset):
 
         # Check if single or multiple mosaics used for training.
         abs_path = os.path.abspath(config_handler.data_path)
-        data_map_path = os.path.join(config_handler.data_path, 'data_map.json')
+        data_map_path = os.path.join(config_handler.data_path, 'image_map.json')
         if os.path.isfile(data_map_path):
 
             # Data map specifying which masks to use. Note: this file can repeat

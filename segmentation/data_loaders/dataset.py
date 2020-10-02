@@ -52,6 +52,9 @@ class CropDataset(Dataset):
     def __getitem__(self, index):
         raise NotImplementedError("Abstract class. Don't call here.")
 
+    def create_data_loaders(self, *args, **kwargs):
+        raise NotImplementedError("Abstract class. Don't call here.")
+
     @staticmethod
     def create_class_index_map(classes, interest_classes):
         """
@@ -95,13 +98,8 @@ class CropDataset(Dataset):
     def collate_fn(batch):
         """
         Converts a list of (x,y) samples into batched tensors.
-        Removes any tensor that has NaN entries.
         """
-        def is_not_nan(sample):
-            x, y = sample
-            return not (torch.isnan(x).any() or torch.isnan(y).any())
-
-        return default_collate([sample for sample in batch if is_not_nan(sample)])
+        return default_collate(batch)
 
 
 class SubsetSequentialSampler(Sampler):

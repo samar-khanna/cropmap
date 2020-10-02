@@ -20,7 +20,7 @@ DATA_MAP_NAME = "image_map.json"
 
 class ImageDataset(CropDataset):
     def __init__(self, config_handler, tile_size=(224, 224), overlap=0,
-                 train_val_test=(0.8, 0.1, 0.1), inf_mode=False):
+                 train_val_test=(0.8, 0.1, 0.1), inf_mode=False, **kwargs):
         """
         Initialises an instance of a `CropDataset`.
         Requires:
@@ -243,32 +243,29 @@ class ImageDataset(CropDataset):
 
         return ImageDataset.convert_inds(indices)
 
+    def create_data_loaders(self, regen_indices=False, batch_size=32, num_workers=4):
+        """
+        Creates the train, val and test loaders to input data to the model.
+        Specify if you want the loaders for an inference task.
+        """
+        # Generates indices if not present
+        indices = self.gen_indices(regen_indices=regen_indices)
 
-def get_image_loaders(dataset,
-                      batch_size=32,
-                      num_workers=4):
-    """
-    Creates the train, val and test loaders to input data to the model.
-    Specify if you want the loaders for an inference task.
-    """
-    # Generates indices if not present
-    indices = dataset.gen_indices()
+        # Removes NaN samples.
+        collate_fn = ImageDataset.collate_fn
 
-    # Removes NaN samples.
-    collate_fn = ImageDataset.collate_fn
+        # Define samplers for each of the train, val and test data
+        # Sample train data randomly, and validation, test data sequentially
+        train_sampler = SubsetRandomSampler(indices['train'])
+        train_loader = DataLoader(self, batch_size=batch_size, collate_fn=collate_fn,
+                                  sampler=train_sampler, num_workers=num_workers)
 
-    # Define samplers for each of the train, val and test data
-    # Sample train data randomly, and validation, test data sequentially
-    train_sampler = SubsetRandomSampler(indices['train'])
-    train_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn,
-                              sampler=train_sampler, num_workers=num_workers)
+        val_sampler = SubsetSequentialSampler(indices['val'])
+        val_loader = DataLoader(self, batch_size=batch_size, collate_fn=collate_fn,
+                                sampler=val_sampler, num_workers=num_workers)
 
-    val_sampler = SubsetSequentialSampler(indices['val'])
-    val_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn,
-                            sampler=val_sampler, num_workers=num_workers)
+        test_sampler = SubsetSequentialSampler(indices['test'])
+        test_loader = DataLoader(self, batch_size=batch_size, collate_fn=collate_fn,
+                                 sampler=test_sampler)
 
-    test_sampler = SubsetSequentialSampler(indices['test'])
-    test_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn,
-                             sampler=test_sampler)
-
-    return train_loader, val_loader, test_loader
+        return train_loader, val_loader, test_loader

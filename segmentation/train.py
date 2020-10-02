@@ -6,10 +6,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from segmentation import load_model, save_model, ConfigHandler
-from data_loaders.image_loader import ImageDataset, get_image_loaders
-from metrics import create_metrics_dict, calculate_metrics, MeanMetric
 from torch.utils.tensorboard import SummaryWriter
+
+from metrics import create_metrics_dict, calculate_metrics, MeanMetric
+from segmentation import load_model, save_model, create_dataset, ConfigHandler
 
 
 def get_loss_optimizer(config, model):
@@ -154,17 +154,19 @@ if __name__ == "__main__":
     loss_fn, optimizer = get_loss_optimizer(ch.config, model)
 
     ## Set up dataset
-    dataset = ImageDataset(
-        ch,
+    dataset = create_dataset(
+        ch.config,
+        config_handler=ch,
         train_val_test=args.split,
         inf_mode=False
     )
 
+    # TODO: Handle other args of the .create_data_loaders() function
     # Set up Data Loaders.
     start_epoch = args.start_epoch
     epochs = ch.epochs
     b_size = ch.config.get("batch_size", 32)
-    train_loader, val_loader, _ = get_image_loaders(dataset, batch_size=b_size)
+    train_loader, val_loader, _ = dataset.create_data_loaders(batch_size=b_size)
 
     ## Set up tensorboards
     metrics_path = ch.metrics_dir

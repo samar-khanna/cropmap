@@ -9,11 +9,24 @@ from torchvision.models._utils import IntermediateLayerGetter
 from torchvision.models.segmentation.fcn import FCNHead
 from models.fcn import FCN
 from models.unet import UNet
+from models.m2unet import M2UNet
+
+from data_loaders.dataset import CropDataset
+from data_loaders.image_loader import ImageDataset
+from data_loaders.time_series_loader import TimeSeriesDataset
 
 
 MODELS = {
     "fcn": FCN,
-    "unet": UNet
+    "unet": UNet,
+    "m2unet": M2UNet
+}
+
+
+LOADERS = {
+    "fcn": ImageDataset,
+    "unet": ImageDataset,
+    "m2unet": TimeSeriesDataset
 }
 
 
@@ -156,3 +169,16 @@ def save_model(model, save_path):
     else:
         torch.save(model.state_dict(), save_path)
     print(f"Saved model weights at: {save_path}")
+
+
+def create_dataset(config, *args, **kwargs) -> CropDataset:
+    """
+    Creates a new initialised CropDataset based on the type of classifier.
+    """
+    model_type = config["classifier"].lower()
+    assert model_type in LOADERS, \
+        "Please specify a valid segmenation classifier available in MODELS"
+
+    dataset_type = LOADERS[model_type]
+
+    return dataset_type(*args, **kwargs)

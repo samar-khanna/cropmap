@@ -8,10 +8,8 @@ import argparse
 import numpy as np
 from PIL import Image, ImageDraw
 from utils.colors import get_color_choice
-from data_loaders.image_loader import ImageDataset, get_image_loaders
 from metrics import create_metrics_dict, calculate_metrics, MeanMetric
-from segmentation import load_model, save_model, ConfigHandler
-from torch.utils.tensorboard import SummaryWriter
+from segmentation import load_model, save_model, create_dataset, ConfigHandler
 
 
 def draw_mask_on_im(img, masks):
@@ -125,20 +123,20 @@ if __name__ == "__main__":
     model.to(device)
     model.eval()
 
-    ## Set up dataset
-    dataset = ImageDataset(
-        ch,
+    # Set up dataset
+    dataset = create_dataset(
+        ch.config,
         train_val_test=args.split,
         inf_mode=True
     )
 
     # Create dataset loaders for inference.
     b_size = ch.config.get("batch_size", 32)
-    train_loader, val_loader, test_loader = get_image_loaders(dataset, batch_size=b_size)
+    train_loader, val_loader, test_loader = dataset.create_data_loaders(batch_size=b_size)
     loaders = {"train": train_loader, "val": val_loader, "test": test_loader}
     loader = loaders[args.set_type]
 
-    ## Begin inference
+    # Begin inference
     for batch_index, (input_t, y) in enumerate(loader):
         # Shift to correct device
         input_t, y = input_t.to(device), y.to(device)

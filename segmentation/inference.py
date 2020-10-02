@@ -7,10 +7,9 @@ import logging
 import argparse
 import numpy as np
 from PIL import Image, ImageDraw
-from train import val_step, create_metrics_dict
 from utils.colors import get_color_choice
 from data_loaders.image_loader import ImageDataset, get_image_loaders
-from metrics import calculate_metrics, MeanMetric
+from metrics import create_metrics_dict, calculate_metrics, MeanMetric
 from segmentation import load_model, save_model, ConfigHandler
 from torch.utils.tensorboard import SummaryWriter
 

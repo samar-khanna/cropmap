@@ -73,3 +73,30 @@ def calculate_metrics(preds, label_masks, pred_threshold=0.0):
 
     metrics = {"iou": iou_scores, "prec": precision, "recall": recall}
     return metrics
+
+
+def create_metrics_dict(classes, loss=None, **metrics):
+    """
+    Creates a metrics dictionary, mapping `metric_name`--> `metric_val`. \n
+    Requires: \n
+      `classes`: Dictionary of `class_name` --> index in metric array \n
+      `loss`: Either `None`, or if specified, PyTorch loss number for the epoch \n
+      `metrics`: Each metric should be a numpy array of shape (num_classes) \n
+    """
+    metrics_dict = {}
+
+    if loss:
+        metrics_dict["epoch_loss"] = loss
+
+    # First log mean metrics
+    for metric_name, metric_arr in metrics.items():
+        metric = metric_arr
+        metrics_dict[f"mean/{metric_name}"] = np.mean(metric)
+
+        # Break down metric by class
+        for class_name, i in classes.items():
+            class_metric_name = f'class_{class_name}/{metric_name}'
+            class_metric = metric[i]
+            metrics_dict[class_metric_name] = class_metric
+
+    return metrics_dict

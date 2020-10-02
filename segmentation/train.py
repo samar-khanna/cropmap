@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.optim as optim
 from segmentation import load_model, save_model, ConfigHandler
 from data_loaders.image_loader import ImageDataset, get_image_loaders
-from metrics import calculate_metrics, MeanMetric
+from metrics import create_metrics_dict, calculate_metrics, MeanMetric
 from torch.utils.tensorboard import SummaryWriter
 
 
@@ -36,33 +36,6 @@ def get_loss_optimizer(config, model):
     weights = filter(lambda w: w.requires_grad, model.parameters())
     optimizer = optim.__dict__[optim_name](weights, **optim_kwargs)
     return loss_fn, optimizer
-
-
-def create_metrics_dict(classes, loss=None, **metrics):
-    """
-    Creates a metrics dictionary, mapping `metric_name`--> `metric_val`. \n
-    Requires: \n
-      `classes`: Dictionary of `class_name` --> index in metric array \n
-      `loss`: Either `None`, or if specified, PyTorch loss number for the epoch \n
-      `metrics`: Each metric should be a numpy array of shape (num_classes) \n
-    """
-    metrics_dict = {}
-
-    if loss:
-        metrics_dict["epoch_loss"] = loss
-
-    # First log mean metrics
-    for metric_name, metric_arr in metrics.items():
-        metric = metric_arr
-        metrics_dict[f"mean/{metric_name}"] = np.mean(metric)
-
-        # Break down metric by class
-        for class_name, i in classes.items():
-            class_metric_name = f'class_{class_name}/{metric_name}'
-            class_metric = metric[i]
-            metrics_dict[class_metric_name] = class_metric
-
-    return metrics_dict
 
 
 def log_metrics(metrics_dict, writer, epoch, phase):

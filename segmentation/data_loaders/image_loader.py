@@ -14,6 +14,8 @@ from dataset import CropDataset, SubsetSequentialSampler
 
 MOSAIC_NAME = "mosaic.tif"
 MASK_NAME = "ground_truth.tif"
+INDICES_FILE_NAME = "image_indices.json"
+DATA_MAP_NAME = "image_map.json"
 
 
 class ImageDataset(CropDataset):
@@ -41,13 +43,13 @@ class ImageDataset(CropDataset):
 
         abs_path = os.path.abspath(config_handler.data_path)
         # Indices according to train/val/test will be stored here
-        self.indices_path = os.path.join(abs_path, "image_indices.json")
+        self.indices_path = os.path.join(abs_path, INDICES_FILE_NAME)
 
         # Dict of files containing each (path_to_mosaic.tif, path_to_mask.tif)
         self.data_paths = {"train": [], "val": [], "test": []}
 
         # Check if single or multiple mosaics used for training.
-        data_map_path = os.path.join(config_handler.data_path, 'image_map.json')
+        data_map_path = os.path.join(config_handler.data_path, DATA_MAP_NAME)
         if os.path.isfile(data_map_path):
 
             # Data map specifying which masks to use. Note: this file can repeat

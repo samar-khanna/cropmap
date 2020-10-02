@@ -6,17 +6,17 @@ import rasterio
 from rasterio.windows import Window
 import numpy as np
 import torch
-import torchvision.transforms as torch_transforms
-from torch.utils.data import Dataset, DataLoader, Sampler, SubsetRandomSampler
+from torch.utils.data import DataLoader, SubsetRandomSampler
 from torch.utils.data._utils.collate import default_collate
-import data_transforms
+
+from dataset import CropDataset, SubsetSequentialSampler
 
 
 MOSAIC_NAME = "mosaic.tif"
 MASK_NAME = "ground_truth.tif"
 
 
-class CropDataset(Dataset):
+class ImageDataset(CropDataset):
     def __init__(self, config_handler, tile_size=(224, 224), overlap=0,
                  train_val_test=(0.8, 0.1, 0.1), inf_mode=False):
         """
@@ -29,6 +29,8 @@ class CropDataset(Dataset):
           `inf_mode`: Whether the dataset is being used for inference or not.
                       If not for inference, then make sure that labels exist.
         """
+        super().__init__(config_handler)
+
         assert len(train_val_test) == 3, "Only specify percentage for train/val/test sets."
         assert sum(train_val_test) == 1, "Train + val + test percentages should add to 1."
 
@@ -37,38 +39,8 @@ class CropDataset(Dataset):
         self.train_val_test = train_val_test
         self.inf_mode = inf_mode
 
-        # Filter out interested classes, if specified. Otherwise use all classes.
-        # Sort the classes in order of their indices
-        classes = config_handler.classes
-        interest_classes = config_handler.config.get("interest_classes")
-        interest_classes = interest_classes if interest_classes else classes.keys()
-        interest_classes = sorted(interest_classes, key=classes.get)
-
-        self.map_class_to_idx, self.map_idx_to_class = \
-            CropDataset.create_class_index_map(classes, interest_classes)
-
-        # contains interest_class_name --> label idx in dataset
-        self.remapped_classes = {
-            class_name: self.map_class_to_idx[classes[class_name]] for class_name in interest_classes
-        }
-        self.num_classes = len(self.remapped_classes)
-
-        # Set up transforms if any
-        transforms = getattr(config_handler, "transforms", {})
-        composed = []
-        for transform_name, transform_kwargs in transforms.items():
-            # Get transform function from our own file, or else from torchvision
-            transform_class = getattr(data_transforms, transform_name, None)
-            if not transform_class:
-                transform_class = getattr(torch_transforms, transform_name)
-
-            transform_fn = transform_class(**transform_kwargs)
-            composed.append(transform_fn)
-
-        self.transform = torch_transforms.Compose(composed) if composed else None
-
         # Dict of files containing each (path_to_mosaic.tif, path_to_mask.tif)
-        self.data_paths = {"train":[], "val":[], "test":[]}
+        self.data_paths = {"train": [], "val": [], "test": []}
 
         # Check if single or multiple mosaics used for training.
         abs_path = os.path.abspath(config_handler.data_path)
@@ -115,45 +87,6 @@ class CropDataset(Dataset):
             total_len += n_rows * n_cols
         return total_len
 
-    @staticmethod
-    def create_class_index_map(classes, interest_classes):
-        """
-        Creates 2 maps M (len=max(class_ids)+1) and R (len=len(interest_classes)).
-        M[class_id] is the mapped index used to represent class class_id in the dataset.
-        R[i] is the class id of the mapped class index i.
-        """
-
-        # map_class_to_idx maps from (original class id --> new class index in dataset)
-        # map_idx_to_class maps from (new class index --> original class id)
-        map_class_to_idx = -1 * np.ones(max(classes.values())+1, dtype=np.int)
-        map_idx_to_class = -1 * np.ones(len(interest_classes), dtype=np.int)
-        for i, class_name in enumerate(interest_classes):
-            map_class_to_idx[int(classes[class_name])] = i
-            map_idx_to_class[i] = int(classes[class_name])
-
-        return map_class_to_idx, map_idx_to_class
-
-    @staticmethod
-    def one_hot_mask(mask, num_classes):
-        """
-        For a given mask of (1, h, w) dimensions, where each pixel value
-        represents the index of the class, this expands the mask into a
-        (c, h, w) mask where each depth slice for index j is a one-hot
-        encoding for pixels that belong to class j.
-        """
-        # Expand y in to (w, h, c) array (for multiplication)
-        y = np.ones((mask.shape[2], mask.shape[1], num_classes))
-
-        # y is 3d array of repeated tile indices, ith slice is
-        # 2d array of dim (h, w) full of values i
-        y = y * np.arange(num_classes)
-        y = y.T
-
-        # One hot encoding by checking for equality with dense mask
-        y = y == mask
-
-        return y
-
     def __getitem__(self, index):
         """
         This returns only ONE sample from the dataset, for a given index.
@@ -183,7 +116,7 @@ class CropDataset(Dataset):
 
             # Map class ids in mask to indexes within num_classes.
             mask = self.map_class_to_idx[mask]
-            y = CropDataset.one_hot_mask(mask, self.num_classes)
+            y = ImageDataset.one_hot_mask(mask, self.num_classes)
 
         # Sample is (x, y) pair of image and mask.
         sample = x, y
@@ -237,7 +170,7 @@ class CropDataset(Dataset):
             if os.path.isfile(indices_path):
                 with open(indices_path, 'r') as f:
                     _indices = json.load(f)
-                return CropDataset.convert_inds(_indices)
+                return ImageDataset.convert_inds(_indices)
 
         # Note which sets each mosaic appears in. Mapping from
         # mosaic_path -> {"train": (data_path_ind, split_pct), "val":...}
@@ -306,23 +239,7 @@ class CropDataset(Dataset):
             with open(indices_path, 'w') as f:
                 json.dump(indices, f, indent=2)
 
-        return CropDataset.convert_inds(indices)
-
-
-class SubsetSequentialSampler(Sampler):
-    """
-    Almost identical to `SubsetRandomSampler` except it samples sequentially
-    from given indices (i.e. always in the same order).
-    """
-    def __init__(self, indices):
-        self.indices = indices
-
-    def __iter__(self):
-        for ind in self.indices:
-            yield ind
-
-    def __len__(self):
-        return len(self.indices)
+        return ImageDataset.convert_inds(indices)
 
 
 def get_data_loaders(dataset,
@@ -337,7 +254,7 @@ def get_data_loaders(dataset,
     indices = dataset.gen_indices(indices_path=indices_path)
 
     # Removes NaN samples.
-    collate_fn = CropDataset.collate_fn
+    collate_fn = ImageDataset.collate_fn
 
     # Define samplers for each of the train, val and test data
     # Sample train data randomly, and validation, test data sequentially

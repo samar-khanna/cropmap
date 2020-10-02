@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from segmentation import load_model, save_model, ConfigHandler
-from data_loaders.data_loader import CropDataset, get_data_loaders
+from data_loaders.single_loader import ImageDataset, get_data_loaders
 from metrics import calculate_metrics, MeanMetric
 from torch.utils.tensorboard import SummaryWriter
 
@@ -181,7 +181,7 @@ if __name__ == "__main__":
     loss_fn, optimizer = get_loss_optimizer(ch.config, model)
 
     ## Set up dataset
-    dataset = CropDataset(
+    dataset = ImageDataset(
         ch,
         train_val_test=args.split,
         inf_mode=False

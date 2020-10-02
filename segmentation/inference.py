@@ -9,7 +9,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 from train import val_step, create_metrics_dict
 from utils.colors import get_color_choice
-from data_loaders.data_loader import CropDataset, get_data_loaders
+from data_loaders.single_loader import ImageDataset, get_data_loaders
 from metrics import calculate_metrics, MeanMetric
 from segmentation import load_model, save_model, ConfigHandler
 from torch.utils.tensorboard import SummaryWriter
@@ -127,7 +127,7 @@ if __name__ == "__main__":
     model.eval()
 
     ## Set up dataset
-    dataset = CropDataset(
+    dataset = ImageDataset(
         ch,
         train_val_test=args.split,
         inf_mode=True

@@ -39,11 +39,14 @@ class ImageDataset(CropDataset):
         self.train_val_test = train_val_test
         self.inf_mode = inf_mode
 
+        abs_path = os.path.abspath(config_handler.data_path)
+        # Indices according to train/val/test will be stored here
+        self.indices_path = os.path.join(abs_path, "image_indices.json")
+
         # Dict of files containing each (path_to_mosaic.tif, path_to_mask.tif)
         self.data_paths = {"train": [], "val": [], "test": []}
 
         # Check if single or multiple mosaics used for training.
-        abs_path = os.path.abspath(config_handler.data_path)
         data_map_path = os.path.join(config_handler.data_path, 'image_map.json')
         if os.path.isfile(data_map_path):
 
@@ -158,17 +161,16 @@ class ImageDataset(CropDataset):
                     indices[set_type].append(new_ind)
         return indices
 
-
-    def gen_indices(self, indices_path=None):
+    def gen_indices(self):
         """
         Generates indices `(r,c)` corresponding to start position of tiles,
         where the tile is formed by `mosaic[:, r:r+th, c:c+tw]`.
         If `indices_path` specified, loads indices from path. If `indices_path`
         is not yet a file on system, then generates and saves the indices.
         """
-        if indices_path:
-            if os.path.isfile(indices_path):
-                with open(indices_path, 'r') as f:
+        if self.indices_path:
+            if os.path.isfile(self.indices_path):
+                with open(self.indices_path, 'r') as f:
                     _indices = json.load(f)
                 return ImageDataset.convert_inds(_indices)
 
@@ -234,16 +236,14 @@ class ImageDataset(CropDataset):
 
                 prev_split = split
 
-        # Save if specified.
-        if indices_path:
-            with open(indices_path, 'w') as f:
-                json.dump(indices, f, indent=2)
+        # Save indices for future.
+        with open(self.indices_path, 'w') as f:
+            json.dump(indices, f, indent=2)
 
         return ImageDataset.convert_inds(indices)
 
 
 def get_image_loaders(dataset,
-                      indices_path,
                       batch_size=32,
                       num_workers=4):
     """
@@ -251,7 +251,7 @@ def get_image_loaders(dataset,
     Specify if you want the loaders for an inference task.
     """
     # Generates indices if not present
-    indices = dataset.gen_indices(indices_path=indices_path)
+    indices = dataset.gen_indices()
 
     # Removes NaN samples.
     collate_fn = ImageDataset.collate_fn

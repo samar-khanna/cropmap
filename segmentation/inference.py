@@ -135,11 +135,7 @@ if __name__ == "__main__":
 
     # Create dataset loaders for inference.
     b_size = ch.config.get("batch_size", 32)
-    train_loader, val_loader, test_loader = get_image_loaders(
-        dataset,
-        ch.indices_path,
-        batch_size=b_size
-    )
+    train_loader, val_loader, test_loader = get_image_loaders(dataset, batch_size=b_size)
     loaders = {"train": train_loader, "val": val_loader, "test": test_loader}
     loader = loaders[args.set_type]
 

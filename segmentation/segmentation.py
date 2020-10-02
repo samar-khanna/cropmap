@@ -36,9 +36,6 @@ class ConfigHandler():
         for key, value in config.items():
             setattr(self, key, value)
 
-        # Indices according to train/val/test split will be stored here.
-        self.indices_path = os.path.join(data_path, "indices.json")
-
         # TODO: Maybe package this functionality outside of this class to avoid confusion
         # Create out directories.
         self.out_dir = os.path.join(out_dir, self.name)

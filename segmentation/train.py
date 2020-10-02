@@ -191,7 +191,7 @@ if __name__ == "__main__":
     start_epoch = args.start_epoch
     epochs = ch.epochs
     b_size = ch.config.get("batch_size", 32)
-    train_loader, val_loader, _ = get_image_loaders(dataset, ch.indices_path, batch_size=b_size)
+    train_loader, val_loader, _ = get_image_loaders(dataset, batch_size=b_size)
 
     ## Set up tensorboards
     metrics_path = ch.metrics_dir

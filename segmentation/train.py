@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from segmentation import load_model, save_model, ConfigHandler
-from data_loaders.image_loader import ImageDataset, get_data_loaders
+from data_loaders.image_loader import ImageDataset, get_image_loaders
 from metrics import calculate_metrics, MeanMetric
 from torch.utils.tensorboard import SummaryWriter
 
@@ -191,7 +191,7 @@ if __name__ == "__main__":
     start_epoch = args.start_epoch
     epochs = ch.epochs
     b_size = ch.config.get("batch_size", 32)
-    train_loader, val_loader, _ = get_data_loaders(dataset, ch.indices_path, batch_size=b_size)
+    train_loader, val_loader, _ = get_image_loaders(dataset, ch.indices_path, batch_size=b_size)
 
     ## Set up tensorboards
     metrics_path = ch.metrics_dir

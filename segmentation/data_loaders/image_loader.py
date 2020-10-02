@@ -242,10 +242,10 @@ class ImageDataset(CropDataset):
         return ImageDataset.convert_inds(indices)
 
 
-def get_data_loaders(dataset,
-                     indices_path,
-                     batch_size=32,
-                     num_workers=4):
+def get_image_loaders(dataset,
+                      indices_path,
+                      batch_size=32,
+                      num_workers=4):
     """
     Creates the train, val and test loaders to input data to the model.
     Specify if you want the loaders for an inference task.

@@ -146,4 +146,5 @@ cython_debug/
 ## My additions
 ###########################################
 
-data_*/
+**/data_*/
+!**/data_loaders/

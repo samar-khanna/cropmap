@@ -3,7 +3,7 @@ import torch
 import torchvision.transforms as torch_transforms
 from torch.utils.data import Dataset, Sampler
 from torch.utils.data._utils.collate import default_collate
-import data_loaders.data_transforms
+import data_loaders.data_transforms as data_transforms
 
 
 class CropDataset(Dataset):
@@ -50,6 +50,9 @@ class CropDataset(Dataset):
         raise NotImplementedError("Abstract class. Don't call here.")
 
     def __getitem__(self, index):
+        raise NotImplementedError("Abstract class. Don't call here.")
+
+    def shift_sample_to_device(self, sample, device):
         raise NotImplementedError("Abstract class. Don't call here.")
 
     def create_data_loaders(self, *args, **kwargs):

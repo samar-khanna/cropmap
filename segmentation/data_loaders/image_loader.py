@@ -135,6 +135,13 @@ class ImageDataset(CropDataset):
 
         return to_tensor(sample[0]), to_tensor(sample[1])
 
+    def shift_sample_to_device(self, sample, device):
+        """
+        Shifts tensors in sample to device.
+        """
+        t, y = sample
+        return t.to(device), y.to(device)
+
     @staticmethod
     def collate_fn(batch):
         """

@@ -201,7 +201,7 @@ if __name__ == "__main__":
 
             for batch_index, (input_t, y) in enumerate(loader):
                 # Shift to correct device
-                input_t, y = input_t.to(device), y.to(device)
+                input_t, y = dataset.shift_sample_to_device((input_t, y), device)
 
                 # Input into the model
                 preds, loss = feed_model(model, loss_fn, optimizer, input_t, y)

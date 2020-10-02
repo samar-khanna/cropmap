@@ -144,6 +144,13 @@ class TimeSeriesDataset(CropDataset):
 
         return [to_tensor(x) for x in sample[0]], to_tensor(sample[1])
 
+    def shift_sample_to_device(self, sample, device):
+        """
+        Shifts tensors in sample to device.
+        """
+        x_list, y = sample
+        return [x.to(device) for x in x_list], y.to(device)
+
     @staticmethod
     def convert_inds(_indices):
         """

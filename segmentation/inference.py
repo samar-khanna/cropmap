@@ -139,7 +139,7 @@ if __name__ == "__main__":
     # Begin inference
     for batch_index, (input_t, y) in enumerate(loader):
         # Shift to correct device
-        input_t, y = input_t.to(device), y.to(device)
+        input_t, y = dataset.shift_sample_to_device((input_t, y), device)
 
         # Input into the model
         preds = model(input_t)

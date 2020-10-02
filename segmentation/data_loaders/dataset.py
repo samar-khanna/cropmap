@@ -3,7 +3,7 @@ import torch
 import torchvision.transforms as torch_transforms
 from torch.utils.data import Dataset, Sampler
 from torch.utils.data._utils.collate import default_collate
-import data_transforms
+import data_loaders.data_transforms
 
 
 class CropDataset(Dataset):

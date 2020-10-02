@@ -9,7 +9,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, SubsetRandomSampler
 
-from dataset import CropDataset, SubsetSequentialSampler
+from data_loaders.dataset import CropDataset, SubsetSequentialSampler
 
 
 MOSAIC_NAME = "mosaic.tif"

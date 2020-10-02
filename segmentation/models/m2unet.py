@@ -8,7 +8,7 @@ from torch.nn import functional as F
 import torchvision
 from torchvision.models._utils import IntermediateLayerGetter
 
-from utils import NConvBlock, UpSampleAndMerge
+from models.utils import NConvBlock, UpSampleAndMerge
 
 
 class LightUpsample(nn.Module):

@@ -1,5 +1,5 @@
 {
-  "name": "unet_resnet_50_scratch",
+  "name": "m2unet_resnet_50_scratch",
   "classifier": "M2UNet",
   "classifier_kwargs": {},
   "backbone": "resnet50",

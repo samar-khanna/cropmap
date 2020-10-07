@@ -74,7 +74,7 @@ def passed_arguments():
                         type=str,
                         required=True,
                         help="Path to .json model config file.")
-    parser.add_argument("-d", "--data_map",
+    parser.add_argument("--data_map",
                         type=str,
                         default=None,
                         help="Path to .json file with train/val/test split for experiment.")

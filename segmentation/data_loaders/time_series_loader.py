@@ -14,15 +14,20 @@ from data_loaders.dataset import CropDataset, SubsetSequentialSampler
 
 MOSAIC_NAME = "mosaic.tif"
 MASK_NAME = "ground_truth.tif"
-INDICES_FILE_NAME = "time_series_indices.json"
-DATA_MAP_NAME = "time_series_map.json"
+INDICES_FILE_NAME = "time_series_indices"
+DATA_MAP_NAME = "time_series_map"
 
 
 TimeSeriesSample = namedtuple("TimeSeriesSample", ["inputs", "label"])
 
 
 class TimeSeriesDataset(CropDataset):
-    def __init__(self, config_handler, tile_size=(224, 224), overlap=0,
+
+    _INDICES_FILE_NAME = INDICES_FILE_NAME
+    _DATA_MAP_NAME = DATA_MAP_NAME
+
+    def __init__(self, config_handler, data_path, data_map_path=None,
+                 tile_size=(224, 224), overlap=0,
                  inf_mode=False, **kwargs):
         """
         Initialises an instance of a TimeSeriesDataset for sequences of images.
@@ -31,54 +36,51 @@ class TimeSeriesDataset(CropDataset):
                  of the input's directory.
 
         Requires:
-          `config_handler`: Object that handles the model config file.
-          `tile_size`: (h,w) denoting size of each tile to sample from area.
-          `overlap`: number of pixels adjacent tiles share.
-          `inf_mode`: Whether the dataset is being used for inference or not.
-                      If not for inference, then make sure that labels exist.
+            `config_handler`: Object that handles the model config file.
+            `data_path`: Path to dataset directory
+            `data_map_path`: Path to .json file containing train/val/test split.
+                            Inferred if not provided. Used to find path to indices
+            `tile_size`: (h,w) denoting size of each tile to sample from area.
+            `overlap`: number of pixels adjacent tiles share.
+            `inf_mode`: Whether the dataset is being used for inference or not.
+                        If not for inference, then make sure that labels exist.
         """
-        super().__init__(config_handler)
+        super().__init__(config_handler, data_path, data_map_path=data_map_path)
 
         self.tile_size = tile_size
         self.overlap = overlap
         self.inf_mode = inf_mode
 
-        abs_path = os.path.abspath(config_handler.data_path)
-
-        # Indices according to train/val/test will be stored here
-        self.indices_path = os.path.join(abs_path, INDICES_FILE_NAME)
-
         # Dict of files containing TimeSeriesSample objects
         # ([path_to_mosaic1.tif, path_to_mosaic2.tif, ...], path_to_label_mask.tif)
-        self.data_paths = {"train": [], "val": [], "test": []}
+        self.data_split = {"train": [], "val": [], "test": []}
 
         # Format of this file must be: set_type --> [sequence1, sequence2, ...]
         # Each sequence_i := [path/to/data_dir1, path/to/data_dir2]
-        data_map_path = os.path.join(config_handler.data_path, DATA_MAP_NAME)
-        assert os.path.isfile(data_map_path), "Require data map for time-series data"
+        assert os.path.isfile(self.data_map_path), "Require data map for time-series data"
 
         # Data map specifying how to group inputs in sequences and associate labels
-        with open(data_map_path, 'r') as f:
+        with open(self.data_map_path, 'r') as f:
             self.data_map = json.load(f)
 
         for set_type, sequence_list in self.data_map.items():
             # Assumes same label for all data in a time-sequence
             for time_sequence in sequence_list:
                 rel_path = os.path.relpath(time_sequence[0])
-                mask_path = os.path.join(abs_path, rel_path, MASK_NAME)
+                mask_path = os.path.join(self.data_path, rel_path, MASK_NAME)
                 if not os.path.isfile(mask_path):
                     mask_path = None
 
                 sample = TimeSeriesSample(
-                    inputs=[os.path.join(abs_path, os.path.relpath(data_dir), MOSAIC_NAME)
+                    inputs=[os.path.join(self.data_path, os.path.relpath(data_dir), MOSAIC_NAME)
                             for data_dir in time_sequence],
                     label=mask_path
                 )
-                self.data_paths[set_type].append(sample)
+                self.data_split[set_type].append(sample)
 
         # Store the shapes for all the mosaic files in the dataset.
         self.mosaic_shapes = {}
-        for set_type, samples in self.data_paths.items():
+        for set_type, samples in self.data_split.items():
             for sample in samples:
                 for mosaic_path in sample.inputs:
                     if mosaic_path not in self.mosaic_shapes:
@@ -109,7 +111,7 @@ class TimeSeriesDataset(CropDataset):
         window = Window(c, r, tw, th)
 
         # Access the right sample file paths
-        time_sample = self.data_paths[set_type][i]
+        time_sample = self.data_split[set_type][i]
         mask_path = time_sample.label
 
         x_series = []
@@ -183,7 +185,7 @@ class TimeSeriesDataset(CropDataset):
 
         # Before convert_inds, is of form: set_type --> {time_sample_index: [inds]}
         indices = {}
-        for set_type, time_samples in self.data_paths.items():
+        for set_type, time_samples in self.data_split.items():
             for sample_index, time_sample in enumerate(time_samples):
                 # Require same shape for all mosaics in a time series
                 sample_shape = self.mosaic_shapes[time_sample.inputs[0]]

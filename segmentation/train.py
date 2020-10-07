@@ -98,11 +98,15 @@ def passed_arguments():
     parser.add_argument("-d", "--data_path",
                         type=str,
                         required=True,
-                        help="Path to directory containting datasets.")
+                        help="Path to directory containing datasets.")
     parser.add_argument("-c", "--config",
                         type=str,
                         required=True,
                         help="Path to .json model config file.")
+    parser.add_argument("-d", "--data_map",
+                        type=str,
+                        default=None,
+                        help="Path to .json file with train/val/test split for experiment.")
     parser.add_argument("--out_dir",
                         type=str,
                         default=None,
@@ -157,6 +161,8 @@ if __name__ == "__main__":
     dataset = create_dataset(
         ch.config,
         config_handler=ch,
+        data_path=args.data_path,
+        data_map_path=args.data_map,
         train_val_test=args.split,
         inf_mode=False
     )

@@ -14,24 +14,31 @@ from data_loaders.dataset import CropDataset, SubsetSequentialSampler
 
 MOSAIC_NAME = "mosaic.tif"
 MASK_NAME = "ground_truth.tif"
-INDICES_FILE_NAME = "image_indices.json"
-DATA_MAP_NAME = "image_map.json"
+INDICES_FILE_NAME = "image_indices"
+DATA_MAP_NAME = "image_map"
 
 
 class ImageDataset(CropDataset):
-    def __init__(self, config_handler, tile_size=(224, 224), overlap=0,
-                 train_val_test=(0.8, 0.1, 0.1), inf_mode=False, **kwargs):
+
+    _INDICES_FILE_NAME = INDICES_FILE_NAME
+    _DATA_MAP_NAME = DATA_MAP_NAME
+
+    def __init__(self, config_handler, data_path, data_map_path=None,
+                 tile_size=(224, 224), overlap=0, train_val_test=(0.8, 0.1, 0.1),
+                 inf_mode=False, **kwargs):
         """
         Initialises an instance of a `CropDataset`.
         Requires:
-          `config_handler`: Object that handles the model config file.
-          `tile_size`: (h,w) denoting size of each tile to sample from area.
-          `overlap`: number of pixels adjacent tiles share.
-          `train_val_test`: Percentage split (must add to 1) of data sizes
-          `inf_mode`: Whether the dataset is being used for inference or not.
-                      If not for inference, then make sure that labels exist.
+            `config_handler`: Object that handles the model config file.
+            `data_path`: Path to dataset directory
+            `data_map_path`: Path to .json file containing train/val/test split (optional)
+            `tile_size`: (h,w) denoting size of each tile to sample from area.
+            `overlap`: number of pixels adjacent tiles share.
+            `train_val_test`: Percentage split (must add to 1) of data sizes
+            `inf_mode`: Whether the dataset is being used for inference or not.
+                        If not for inference, then make sure that labels exist.
         """
-        super().__init__(config_handler)
+        super().__init__(config_handler, data_path, data_map_path=data_map_path)
 
         assert len(train_val_test) == 3, "Only specify percentage for train/val/test sets."
         assert sum(train_val_test) == 1, "Train + val + test percentages should add to 1."
@@ -41,41 +48,27 @@ class ImageDataset(CropDataset):
         self.train_val_test = train_val_test
         self.inf_mode = inf_mode
 
-        abs_path = os.path.abspath(config_handler.data_path)
-        # Indices according to train/val/test will be stored here
-        self.indices_path = os.path.join(abs_path, INDICES_FILE_NAME)
-
         # Dict of files containing each (path_to_mosaic.tif, path_to_mask.tif)
-        self.data_paths = {"train": [], "val": [], "test": []}
+        self.data_split = {"train": [], "val": [], "test": []}
 
-        # Check if single or multiple mosaics used for training.
-        data_map_path = os.path.join(config_handler.data_path, DATA_MAP_NAME)
-        if os.path.isfile(data_map_path):
+        # Data map specifying which masks to use. Note: this file can repeat
+        # names for train/val/test. To separate tiles from the same file,
+        # the train/val/test split will be used.
+        with open(self.data_map_path, 'r') as f:
+            self.data_map = json.load(f)
 
-            # Data map specifying which masks to use. Note: this file can repeat
-            # names for train/val/test. To separate tiles from the same file,
-            # the train/val/test split will be used.
-            with open(data_map_path, 'r') as f:
-                self.data_map = json.load(f)
-
-            for set_type, data_dirs in self.data_map.items():
-                for data_dir in data_dirs:
-                    rel_path = os.path.relpath(data_dir)
-                    mosaic_path = os.path.join(abs_path, rel_path, MOSAIC_NAME)
-                    mask_path = os.path.join(abs_path, rel_path, MASK_NAME)
-                    if not os.path.isfile(mask_path):
-                        mask_path = None
-                    self.data_paths[set_type].append((mosaic_path, mask_path))
-        else:
-            mosaic_path = os.path.join(abs_path, MOSAIC_NAME)
-            mask_path = os.path.join(abs_path, MASK_NAME)
-
-            for set_type in ["train", "val", "test"]:
-                self.data_paths[set_type].append((mosaic_path, mask_path))
+        for set_type, data_dirs in self.data_map.items():
+            for data_dir in data_dirs:
+                rel_path = os.path.relpath(data_dir)
+                mosaic_path = os.path.join(self.data_path, rel_path, MOSAIC_NAME)
+                mask_path = os.path.join(self.data_path, rel_path, MASK_NAME)
+                if not os.path.isfile(mask_path):
+                    mask_path = None
+                self.data_split[set_type].append((mosaic_path, mask_path))
 
         # Store the shapes for all the mosaic files in the dataset.
         self.mosaic_shapes = {}
-        for set_type, paths in self.data_paths.items():
+        for set_type, paths in self.data_split.items():
             for (mosaic_path, _) in paths:
                 if mosaic_path not in self.mosaic_shapes:
                     with rasterio.open(mosaic_path, 'r') as mosaic:
@@ -103,7 +96,7 @@ class ImageDataset(CropDataset):
         th, tw = self.tile_size
 
         # Access the right mosaic and mask file paths
-        mosaic_path, mask_path = self.data_paths[set_type][i]
+        mosaic_path, mask_path = self.data_split[set_type][i]
 
         # Sample the data using windows
         window = Window(c, r, tw, th)
@@ -162,7 +155,7 @@ class ImageDataset(CropDataset):
         `{set_type: {data_paths_index: [(r1, c1), ...]}}` to a list of the form
         `[(set_type, data_paths_index, (r1, c1)), ...]`
         """
-        indices = {"train":[], "val":[], "test":[]}
+        indices = {"train": [], "val": [], "test": []}
         for set_type, data_paths_dict in _indices.items():
             for data_path_ind, offsets in data_paths_dict.items():
                 for (r, c) in offsets:
@@ -186,10 +179,10 @@ class ImageDataset(CropDataset):
         # mosaic_path -> {"train": (data_path_ind, split_pct), "val":...}
         # If appears in 2/3 sets, extra given in order of preferernce [train, val, test]
         mosaic_splits = {}
-        for i, (mosaic_path, _) in enumerate(self.data_paths["train"]):
+        for i, (mosaic_path, _) in enumerate(self.data_split["train"]):
             mosaic_splits[mosaic_path] = {"train": {"ind": i, "pct":1.0}}
 
-        for i, (mosaic_path, _) in enumerate(self.data_paths["val"]):
+        for i, (mosaic_path, _) in enumerate(self.data_split["val"]):
             splits = mosaic_splits.get(mosaic_path, {})
             splits["val"] = {"ind": i}
             if "train" in splits:
@@ -200,7 +193,7 @@ class ImageDataset(CropDataset):
                 splits["val"]["pct"] = 1.0
             mosaic_splits[mosaic_path] = splits
 
-        for i, (mosaic_path, _) in enumerate(self.data_paths["test"]):
+        for i, (mosaic_path, _) in enumerate(self.data_split["test"]):
             splits = mosaic_splits.get(mosaic_path, {})
             splits["test"] = {"ind": i}
             # Either train present, or train, val present, or just val

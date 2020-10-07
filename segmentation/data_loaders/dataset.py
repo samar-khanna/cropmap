@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import torch
 import torchvision.transforms as torch_transforms
@@ -7,15 +8,27 @@ import data_loaders.data_transforms as data_transforms
 
 
 class CropDataset(Dataset):
-    def __init__(self, config_handler):
+
+    _INDICES_FILE_NAME = "indices"
+    _DATA_MAP_NAME = "data_map"
+
+    def __init__(self, config_handler, data_path, data_map_path=None):
         """
         Abstract class meant to be subclassed for all Cropmap datasets.
         Initialises the class data and the data transforms.
 
         Requires:
           `config_handler`: Object that handles the model config file.
-          `tile_size`: (h,w) denoting size of each tile to sample from area.
+          `data_path`: Path to dataset directory
+          `data_map_path`: Path to .json file containing train/val/test split (optional)
         """
+        self.data_path = os.path.abspath(data_path)
+        self.data_map_path = data_map_path if data_map_path is not None \
+            else os.path.join(self.data_path, f"{self._DATA_MAP_NAME}.json")
+        self.indices_path = os.path.join(
+            self.data_path, f"{self._DATA_MAP_NAME}_{self._INDICES_FILE_NAME}.json"
+        )
+
         # Filter out interested classes, if specified. Otherwise use all classes.
         # Sort the classes in order of their indices
         classes = config_handler.classes

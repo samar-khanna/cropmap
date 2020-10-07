@@ -9,7 +9,6 @@ import data_loaders.data_transforms as data_transforms
 
 class CropDataset(Dataset):
 
-    _INDICES_FILE_NAME = "indices"
     _DATA_MAP_NAME = "data_map"
 
     def __init__(self, config_handler, data_path, data_map_path=None):
@@ -26,7 +25,7 @@ class CropDataset(Dataset):
         self.data_map_path = data_map_path if data_map_path is not None \
             else os.path.join(self.data_path, f"{self._DATA_MAP_NAME}.json")
         self.indices_path = os.path.join(
-            self.data_path, f"{self._DATA_MAP_NAME}_{self._INDICES_FILE_NAME}.json"
+            self.data_path, f"{self._DATA_MAP_NAME}_indices.json"
         )
 
         # Filter out interested classes, if specified. Otherwise use all classes.

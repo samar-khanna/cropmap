@@ -14,13 +14,11 @@ from data_loaders.dataset import CropDataset, SubsetSequentialSampler
 
 MOSAIC_NAME = "mosaic.tif"
 MASK_NAME = "ground_truth.tif"
-INDICES_FILE_NAME = "image_indices"
 DATA_MAP_NAME = "image_map"
 
 
 class ImageDataset(CropDataset):
 
-    _INDICES_FILE_NAME = INDICES_FILE_NAME
     _DATA_MAP_NAME = DATA_MAP_NAME
 
     def __init__(self, config_handler, data_path, data_map_path=None,
@@ -54,6 +52,7 @@ class ImageDataset(CropDataset):
         # Data map specifying which masks to use. Note: this file can repeat
         # names for train/val/test. To separate tiles from the same file,
         # the train/val/test split will be used.
+        assert os.path.isfile(self.data_map_path), "Require data map for image data"
         with open(self.data_map_path, 'r') as f:
             self.data_map = json.load(f)
 

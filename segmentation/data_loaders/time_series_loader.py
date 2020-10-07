@@ -14,7 +14,6 @@ from data_loaders.dataset import CropDataset, SubsetSequentialSampler
 
 MOSAIC_NAME = "mosaic.tif"
 MASK_NAME = "ground_truth.tif"
-INDICES_FILE_NAME = "time_series_indices"
 DATA_MAP_NAME = "time_series_map"
 
 
@@ -23,7 +22,6 @@ TimeSeriesSample = namedtuple("TimeSeriesSample", ["inputs", "label"])
 
 class TimeSeriesDataset(CropDataset):
 
-    _INDICES_FILE_NAME = INDICES_FILE_NAME
     _DATA_MAP_NAME = DATA_MAP_NAME
 
     def __init__(self, config_handler, data_path, data_map_path=None,

@@ -5,11 +5,13 @@ import argparse
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.optim as optim
+
 from torch.utils.tensorboard import SummaryWriter
 
 from metrics import create_metrics_dict, calculate_metrics, MeanMetric
-from segmentation import load_model, save_model, create_dataset, ConfigHandler
+from segmentation import (
+    load_model, save_model, create_dataset, get_loss_optimizer, ConfigHandler
+)
 
 
 def passed_arguments():
@@ -53,32 +55,6 @@ def passed_arguments():
                         help="Start logging metrics from this epoch number.")
     args = parser.parse_args()
     return args
-
-
-def get_loss_optimizer(config, model):
-    """
-    Instantiates loss function and optimizer based on name and kwargs.
-    Ensure that names are valid in the torch.nn and torch.optim modules.
-    Also ensure keyword arguments match.
-    Defaults to using BinaryCrossentropy (from logits), and Adam(lr=0.0001)
-    """
-    # Set up loss.
-    loss_name = config.get("loss", "BCEWithLogitsLoss")
-    loss_kwargs = config.get("loss_kwargs", {})
-    assert loss_name in nn.__dict__, \
-        "Invalid PyTorch loss. The name must exactly match a loss in the nn module"
-    loss_fn = nn.__dict__[loss_name](**loss_kwargs)
-
-    # Set up optimizer
-    optim_name = config.get("optimizer", "Adam")
-    optim_kwargs = config.get("optimizer_kwargs", {"lr":0.001})
-    assert optim_name in optim.__dict__, \
-        "Invalid PyTorch optimizer. The name must exactly match an optimizer in the optim module"
-
-    # Only optimize on unfrozen weights.
-    weights = filter(lambda w: w.requires_grad, model.parameters())
-    optimizer = optim.__dict__[optim_name](weights, **optim_kwargs)
-    return loss_fn, optimizer
 
 
 def log_metrics(metrics_dict, writer, epoch, phase):

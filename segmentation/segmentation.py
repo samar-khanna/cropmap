@@ -2,14 +2,13 @@ import os
 import json
 import torch
 import torch.nn as nn
-from torch.nn import functional as F
-import torchvision
+import torch.optim as optim
 import torchvision.models.resnet as resnet
-from torchvision.models._utils import IntermediateLayerGetter
-from torchvision.models.segmentation.fcn import FCNHead
+
 from models.fcn import FCN
 from models.unet import UNet
 from models.m2unet import M2UNet
+import models.loss as custom_loss
 
 from data_loaders.dataset import CropDataset
 from data_loaders.image_loader import ImageDataset
@@ -169,6 +168,36 @@ def save_model(model, save_path):
     else:
         torch.save(model.state_dict(), save_path)
     print(f"Saved model weights at: {save_path}")
+
+
+def get_loss_optimizer(config, model):
+    """
+    Instantiates loss function and optimizer based on name and kwargs.
+    Ensure that names are valid in the torch.nn and torch.optim modules.
+    Also ensure keyword arguments match.
+    Defaults to using BinaryCrossentropy (from logits), and Adam(lr=0.0001)
+    """
+    # Set up loss.
+    loss_name = config.get("loss", "BCEWithLogitsLoss")
+    loss_kwargs = config.get("loss_kwargs", {})
+    if loss_name in custom_loss.__dict__:
+        loss_fn = custom_loss.__dict__[loss_name](**loss_kwargs)
+    elif loss_name in nn.__dict__:
+        loss_fn = nn.__dict__[loss_name](**loss_kwargs)
+    else:
+        raise ValueError(("Invalid PyTorch loss. The name must exactly match a loss" 
+                          " in the nn module or a loss defined in models/loss.py"))
+
+    # Set up optimizer
+    optim_name = config.get("optimizer", "Adam")
+    optim_kwargs = config.get("optimizer_kwargs", {"lr": 0.001})
+    assert optim_name in optim.__dict__, \
+        "Invalid PyTorch optimizer. The name must exactly match an optimizer in the optim module"
+
+    # Only optimize on unfrozen weights.
+    weights = filter(lambda w: w.requires_grad, model.parameters())
+    optimizer = optim.__dict__[optim_name](weights, **optim_kwargs)
+    return loss_fn, optimizer
 
 
 def create_dataset(config, *args, **kwargs) -> CropDataset:

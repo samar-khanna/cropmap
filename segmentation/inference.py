@@ -151,13 +151,15 @@ if __name__ == "__main__":
         # Input into the model
         preds = model(input_t)
 
+        # TODO: Fix inference for time series
         # Convert from tensor to numpy array
-        imgs = input_t.detach().cpu().numpy()
+        # imgs = input_t.detach().cpu().numpy()
         preds = preds.detach().cpu().numpy()
         label_masks = y.detach().cpu().numpy()
 
+        # TODO: Add back images to this loop later
         # Iterate over each image in batch.
-        for ind, (img, pred, label_mask) in enumerate(zip(imgs, preds, label_masks)):
+        for ind, (pred, label_mask) in enumerate(zip(preds, label_masks)):
             _pred = pred[np.newaxis, ...]  # shape (b, #c, h, w)
             _label_mask = label_mask[np.newaxis, ...]  # shape (b, #c, h, w)
 
@@ -179,25 +181,25 @@ if __name__ == "__main__":
             # Id for saving file.
             img_id = (batch_index * b_size) + ind
 
-            # Convert from b,g,r (indices/bands 3, 2, 1) to r,g,b
-            # Convert to (h, w, #c) shape and scale to uint8 values
-            img = img[1:4, ...][::-1]
-            img = img.transpose(1, 2, 0)
-            img = bytescale(img, high=255)
-
-            # Save original image
-            im = Image.fromarray(img, mode="RGB")
-            im.save(os.path.join(ch.inf_dir, f"{img_id}_im.jpg"))
-
-            # Draw pred mask on image
-            pred_im, pred_mask = draw_mask_on_im(img, pred > 0)
-            pred_im.save(os.path.join(ch.inf_dir, f"{img_id}_pred.jpg"))
-            pred_mask.save(os.path.join(ch.inf_dir, f"{img_id}_raw_pred.jpg"))
-
-            # Draw ground truth mask on image
-            gt_im, gt_mask = draw_mask_on_im(img, label_mask)
-            gt_im.save(os.path.join(ch.inf_dir, f"{img_id}_gt.jpg"))
-            gt_mask.save(os.path.join(ch.inf_dir, f"{img_id}_raw_gt.jpg"))
+            # # Convert from b,g,r (indices/bands 3, 2, 1) to r,g,b
+            # # Convert to (h, w, #c) shape and scale to uint8 values
+            # img = img[1:4, ...][::-1]
+            # img = img.transpose(1, 2, 0)
+            # img = bytescale(img, high=255)
+            #
+            # # Save original image
+            # im = Image.fromarray(img, mode="RGB")
+            # im.save(os.path.join(ch.inf_dir, f"{img_id}_im.jpg"))
+            #
+            # # Draw pred mask on image
+            # pred_im, pred_mask = draw_mask_on_im(img, pred > 0)
+            # pred_im.save(os.path.join(ch.inf_dir, f"{img_id}_pred.jpg"))
+            # pred_mask.save(os.path.join(ch.inf_dir, f"{img_id}_raw_pred.jpg"))
+            #
+            # # Draw ground truth mask on image
+            # gt_im, gt_mask = draw_mask_on_im(img, label_mask)
+            # gt_im.save(os.path.join(ch.inf_dir, f"{img_id}_gt.jpg"))
+            # gt_mask.save(os.path.join(ch.inf_dir, f"{img_id}_raw_gt.jpg"))
 
             # Save eval results.
             with open(os.path.join(ch.inf_dir, f"{img_id}_metrics.json"), 'w') as f:

@@ -22,11 +22,14 @@ class CropDataset(Dataset):
           `data_map_path`: Path to .json file containing train/val/test split (optional)
         """
         self.data_path = os.path.abspath(data_path)
+
+        data_map_name = self._DATA_MAP_NAME
+        if data_map_path is not None:
+            data_map_name = data_map_path.split(os.path.sep)[-1].replace(".json", "")
+
         self.data_map_path = data_map_path if data_map_path is not None \
-            else os.path.join(self.data_path, f"{self._DATA_MAP_NAME}.json")
-        self.indices_path = os.path.join(
-            self.data_path, f"{self._DATA_MAP_NAME}_indices.json"
-        )
+            else os.path.join(self.data_path, f"{data_map_name}.json")
+        self.indices_path = os.path.join(self.data_path, f"{data_map_name}_indices.json")
 
         # Filter out interested classes, if specified. Otherwise use all classes.
         # Sort the classes in order of their indices

@@ -29,7 +29,10 @@ class CropDataset(Dataset):
 
         self.data_map_path = data_map_path if data_map_path is not None \
             else os.path.join(self.data_path, f"{data_map_name}.json")
-        self.indices_path = os.path.join(self.data_path, f"{data_map_name}_indices.json")
+        self.indices_path = os.path.join(
+            self.data_map_path.replace(f"{data_map_name}.json", ""),
+            f"{data_map_name}_indices.json"
+        )
 
         # Filter out interested classes, if specified. Otherwise use all classes.
         # Sort the classes in order of their indices

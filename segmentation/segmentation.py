@@ -48,6 +48,8 @@ class ConfigHandler():
         for key, value in config.items():
             setattr(self, key, value)
 
+        self.num_classes = len(self.config.get("interest_classes") or self.classes.keys())
+
         # TODO: Maybe package this functionality outside of this class to avoid confusion
         # Create out directories.
         self.out_dir = os.path.join(out_dir, self.name)
@@ -113,7 +115,7 @@ def create_model(config_handler):
         "Please specify a valid segmenation classifier available in MODELS"
 
     # Create Segmentation model
-    num_classes = len(config_handler.classes)
+    num_classes = config_handler.num_classes
     seg_model = MODELS[config["classifier"].lower()]
     seg_model = seg_model(backbone, num_classes=num_classes, **config["classifier_kwargs"])
 

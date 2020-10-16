@@ -9,7 +9,10 @@ class MeanMetric():
     def __init__(self, data=None):
         super().__init__()
         self.n = 0
-        self.data = data
+        self.data = None
+
+        if data is not None:
+            self.update(data)
 
     def update(self, vals):
         """
@@ -17,6 +20,10 @@ class MeanMetric():
         Requires:
           vals is an np array.
         """
+        if np.isnan(vals).any():
+            print("Warning: vals contains one or more NaN values.")
+            return
+
         # Update average
         if self.data is not None:
             self.data = (self.data * self.n) + vals
@@ -41,13 +48,14 @@ class MeanMetric():
         return self.data
 
 
-def calculate_metrics(preds, label_masks, pred_threshold=0.0):
+def calculate_metrics(preds, label_masks, pred_threshold=0.0, zero_nans=True):
     """
     Calculate IoU, Precision and Recall per class for entire batch of images.
     Requires:
       preds: model preds array, shape        (batch, #c, h, w)
       label_masks: ground truth masks, shape (batch, #c, h, w)
       pred_threshold: Confidence threshold over which pixel prediction counted.
+      zero_nans: whether to zero out nan metrics.
     Returns:
       ious, precs, recall, kappa per class: shape (#c)
     """
@@ -62,14 +70,17 @@ def calculate_metrics(preds, label_masks, pred_threshold=0.0):
     preds = preds > pred_threshold
     intersection = np.logical_and(preds, label_masks)
     union = np.logical_or(preds, label_masks)
+    
     iou_scores = np.sum(intersection, axis=0) / np.sum(union, axis=0)
-    iou_scores[np.isnan(iou_scores)] = 0.0
 
     precision = np.sum(intersection, axis=0)/np.sum(preds, axis=0)
-    precision[np.isnan(precision)] = 0.0
 
     recall = np.sum(intersection, axis=0)/np.sum(label_masks, axis=0)
-    recall[np.isnan(recall)] = 0.0
+
+    if zero_nans:
+        iou_scores[np.isnan(iou_scores)] = 0.0
+        precision[np.isnan(precision)] = 0.0
+        recall[np.isnan(recall)] = 0.0
 
     metrics = {"iou": iou_scores, "prec": precision, "recall": recall}
     return metrics
@@ -91,7 +102,7 @@ def create_metrics_dict(classes, loss=None, **metrics):
     # First log mean metrics
     for metric_name, metric_arr in metrics.items():
         metric = metric_arr
-        metrics_dict[f"mean/{metric_name}"] = np.mean(metric)
+        metrics_dict[f"mean/{metric_name}"] = np.nanmean(metric)
 
         # Break down metric by class
         for class_name, i in classes.items():

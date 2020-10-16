@@ -163,7 +163,7 @@ if __name__ == "__main__":
             _pred = pred[np.newaxis, ...]  # shape (b, #c, h, w)
             _label_mask = label_mask[np.newaxis, ...]  # shape (b, #c, h, w)
 
-            _metrics = calculate_metrics(_pred, _label_mask, pred_threshold=0)
+            _metrics = calculate_metrics(_pred, _label_mask, pred_threshold=0, zero_nans=False)
 
             # Find the count of each class in ground truth, record in metrics dict as whole num
             n = dataset.num_classes

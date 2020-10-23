@@ -73,24 +73,83 @@ def get_inference_out_paths(inf_path):
     return im_paths, gt_paths, gt_raw_paths, pred_paths, pred_raw_paths, metric_paths
 
 
+def parse_class_name_metric_type(string):
+    """
+    Parses key in input metrics dictionary into class name and metric type for that class.
+    """
+    class_name = metric_name.split('/')[0].lower()  # Important to lowercase
+    metric_type = metric_name.split('/')[-1].lower()
+    class_name = class_name.replace("class_", "")
+    return class_name, metric_type
+
+
+def calculate_metrics_from_confusion_matrix(cm, metric_types=("iou", "prec", "recall")):
+    """
+    Calculates metrics based on confusion matrix.
+    Requires:
+    `confusion_matrix`: (2, 2) array with [[tn, fp], [fn, tp]]
+    """
+    tn, fp, fn, tp = cm[0, 0], cm[0, 1], cm[1, 0], cm[1, 1]
+    
+    metrics = {}
+    for metric_type in metric_types:
+        if metric_type.lower() == "iou":
+            iou = tp / (tp + fp + fn)
+            iou[np.isnan(iou)] = 0.
+            metrics["iou"] = iou
+        elif metric_type.lower() == "prec":
+            prec = tp / (tp + fp)
+            prec[np.isnan(prec)] = 0.
+            metrics["prec"] = prec
+        elif metric_type.lower() == "recall":
+            recall = tp / (tp + fn)
+            recall[np.isnan(recall)] = 0.
+            metrics["recall"] = recall
+    
+    return metrics
+
+
 def calculate_mean_results(metric_paths):
     """
     Calculates mean metrics across all images in inference out.
     """
     # Calculate mean metrics across all images in inference out.
     mean_results = {}
+    class_confusion_matrices = {}
     for i, metric_path in enumerate(metric_paths):
         with open(metric_path, 'r') as f:
             metrics = json.load(f)
 
         for metric_name, val in metrics.items():
-            if metric_name not in mean_results:
+            class_name, metric_type = parse_class_name_metric_type(metric_name)
+
+            if metric_type.lower() in {"tn", "fp", "fn", "tp"}:
+                cm = class_confusion_matrices.get(class_name, np.zeros((2, 2)))
+                if metric_type.lower() == "tn":
+                    cm[0, 0] += val
+                elif metric_type.lower() == "fp":
+                    cm[0, 1] += val
+                elif metric_type.lower() == "fn":
+                    cm[1, 0] += val
+                elif metric_type.lower() == "tp":
+                    cm[1, 1] += val
+                class_confusion_matrices[class_name] = cm
+            
+            elif metric_name not in mean_results:
                 mean_results[metric_name] = MeanMetric(val)
             else:
                 mean_results[metric_name].update(val)
 
     # Get rid of MeanMetrics
     mean_results = {n: metric.item() for n, metric in mean_results.items()}
+
+    # Add in the other metrics from the confusion matrix
+    for class_name, cm in class_confusion_matrices.items():
+        metric_types = ["iou", "prec", "recall"]
+        cm_metrics = calculate_metrics_from_confusion_matrix(cm, metric_types=metric_types)
+        for metric_type, val in cm_metrics.items():
+            mean_results[f"{class_name}/{metric_type}"] = val
+
     return mean_results
 
 
@@ -170,9 +229,7 @@ def format_metrics_for_hist(metrics, thresh=0.2, topk=5):
     classes_metrics = {}
     seen = {}
     for metric_name, metric_val in metrics.items():
-        class_name = metric_name.split('/')[0].lower()  # Important to lowercase
-        metric_type = metric_name.split('/')[-1].lower()
-        class_name = class_name.replace("class_", "")
+        class_name, metric_type = parse_class_name_metric_type(metric_name)
 
         if metric_type.find("class_count") > -1:
             if class_name.find("mean") == -1:  # don't log mean_class_count

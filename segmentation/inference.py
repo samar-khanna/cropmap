@@ -8,7 +8,7 @@ import argparse
 import numpy as np
 from PIL import Image, ImageDraw
 from utils.colors import get_color_choice
-from metrics import create_metrics_dict, calculate_metrics, MeanMetric
+from metrics import create_metrics_dict, calculate_metrics, confusion_matrix
 from segmentation import load_model, save_model, create_dataset, ConfigHandler
 
 
@@ -163,7 +163,8 @@ if __name__ == "__main__":
             _pred = pred[np.newaxis, ...]  # shape (b, #c, h, w)
             _label_mask = label_mask[np.newaxis, ...]  # shape (b, #c, h, w)
 
-            _metrics = calculate_metrics(_pred, _label_mask, pred_threshold=0, zero_nans=False)
+            # Get raw confusion matrix
+            CM = confusion_matrix(_pred, _label_mask, pred_threshold=0)
 
             # Find the count of each class in ground truth, record in metrics dict as whole num
             n = dataset.num_classes
@@ -172,9 +173,10 @@ if __name__ == "__main__":
             # Create metrics dict
             metrics_dict = create_metrics_dict(
                 dataset.remapped_classes,
-                iou=_metrics["iou"],
-                prec=_metrics["prec"],
-                recall=_metrics["recall"],
+                tn=CM[:, 0, 0],
+                fp=CM[:, 0, 1],
+                fn=CM[:, 1, 0],
+                tp=CM[:, 1, 1],
                 gt_class_count=label_class_counts.tolist()
             )
 

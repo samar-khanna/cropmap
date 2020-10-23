@@ -48,6 +48,41 @@ class MeanMetric():
         return self.data
 
 
+def confusion_matrix(preds, ground_truth, pred_threshold=0.0):
+    """
+    Calculate Confusion Matrix per class for entire batch of images.
+    Requires:
+      preds: model preds array, shape        (batch, #c, h, w)
+      ground_truth: ground truth masks, shape (batch, #c, h, w)
+      pred_threshold: Confidence threshold over which pixel prediction counted.
+    Returns:
+      confusion matrix per class: shape (#c, 2, 2)
+      (0,0): TN, (0,1): FP, (1,0): FN, (1,1): TP
+    """
+    # Change view so that shape is (batch, h, w, #c)
+    preds = preds.transpose(0, 2, 3, 1)
+    ground_truth = ground_truth.transpose(0, 2, 3, 1)
+
+    # Reduce dimensions across all but classes dimension.
+    preds = preds.reshape(-1, preds.shape[-1])
+    ground_truth = ground_truth.reshape(-1, ground_truth.shape[-1])
+
+    # Pred values are true if above threshold
+    preds = preds > pred_threshold
+
+    # Intersection is the true positives
+    intersection = np.logical_and(preds, ground_truth)
+
+    # Calculate confusion matrix for each class
+    tp = np.sum(intersection, axis=0)
+    fp = np.sum(preds, axis=0) - tp
+    fn = np.sum(ground_truth, axis=0) - tp
+    tn = ground_truth.shape[0] - tp - fp - fn
+
+    # Confusion matrix shape is (#c, 2, 2)
+    return np.array([tn, fp, fn, tp]).T.reshape(-1, 2, 2)
+
+
 def calculate_metrics(preds, label_masks, pred_threshold=0.0, zero_nans=True):
     """
     Calculate IoU, Precision and Recall per class for entire batch of images.
@@ -59,23 +94,13 @@ def calculate_metrics(preds, label_masks, pred_threshold=0.0, zero_nans=True):
     Returns:
       ious, precs, recall, kappa per class: shape (#c)
     """
-    # Change view so that shape is (batch, h, w, #c)
-    preds = preds.transpose(0, 2, 3, 1)
-    label_masks = label_masks.transpose(0, 2, 3, 1)
+    CM = confusion_matrix(preds, label_masks, pred_threshold=pred_threshold)
+    tn, fp, fn, tp = CM[:, 0, 0], CM[:, 0, 1], CM[:, 1, 0], CM[:, 1, 1]
 
-    # Reduce dimensions across all but classes dimension.
-    preds = preds.reshape(-1, preds.shape[-1])
-    label_masks = label_masks.reshape(-1, label_masks.shape[-1])
-
-    preds = preds > pred_threshold
-    intersection = np.logical_and(preds, label_masks)
-    union = np.logical_or(preds, label_masks)
-    
-    iou_scores = np.sum(intersection, axis=0) / np.sum(union, axis=0)
-
-    precision = np.sum(intersection, axis=0)/np.sum(preds, axis=0)
-
-    recall = np.sum(intersection, axis=0)/np.sum(label_masks, axis=0)
+    # Dimensions of each of following arrays is (#c)
+    iou_scores = tp / (tp + fp + fn)
+    precision = tp / (tp + fp)
+    recall = tp / (tp + fn)
 
     if zero_nans:
         iou_scores[np.isnan(iou_scores)] = 0.0

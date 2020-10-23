@@ -420,7 +420,7 @@ if __name__ == "__main__":
             plot_color_legend(remapped_classes)
 
         ## Start plotting results.
-        if not args.text:
+        if args.save_fig is not None or not args.text:
             # Mean result histogram
             hist_metrics = format_metrics_for_hist(mean_results, thresh=thresh, topk=topk)
             plot_hist(hist_metrics, thresh=thresh, topk=topk,

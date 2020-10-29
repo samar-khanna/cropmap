@@ -20,7 +20,7 @@ MODELS = {
     "fcn": FCN,
     "unet": UNet,
     "m2unet": M2UNet,
-    "block_unet": BlockUNet
+    "blockunet": BlockUNet
 }
 
 
@@ -28,7 +28,7 @@ LOADERS = {
     "fcn": ImageDataset,
     "unet": ImageDataset,
     "m2unet": TimeSeriesDataset,
-    "block_unet": TimeSeriesDataset
+    "blockunet": TimeSeriesDataset
 }
 
 

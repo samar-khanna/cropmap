@@ -8,6 +8,7 @@ import torchvision.models.resnet as resnet
 from models.fcn import FCN
 from models.unet import UNet
 from models.m2unet import M2UNet
+from models.block_unet import BlockUNet
 import models.loss as custom_loss
 
 from data_loaders.dataset import CropDataset
@@ -18,14 +19,16 @@ from data_loaders.time_series_loader import TimeSeriesDataset
 MODELS = {
     "fcn": FCN,
     "unet": UNet,
-    "m2unet": M2UNet
+    "m2unet": M2UNet,
+    "block_unet": BlockUNet
 }
 
 
 LOADERS = {
     "fcn": ImageDataset,
     "unet": ImageDataset,
-    "m2unet": TimeSeriesDataset
+    "m2unet": TimeSeriesDataset,
+    "block_unet": TimeSeriesDataset
 }
 
 

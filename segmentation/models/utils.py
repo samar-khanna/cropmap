@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+import torchvision.models.resnet as resnet
 
 
 class NConvBlock(nn.Module):
@@ -75,3 +76,31 @@ class UpSampleAndMerge(nn.Module):
         x_out = self.double_conv(x_out)
 
         return x_out
+
+
+def create_resnet_backbone(config):
+    """
+    Creates a ResNet backbone using the parameters described in config.
+    The model config must contain a valid resnet name available in torchvision.models.resnet
+    Replaces the input channels with the correct number of channels for this task.
+    """
+    backbone_name = config["backbone"].lower()
+    assert backbone_name.find("resnet") > -1, "Only resnet backbones supported"
+
+    # Initialise ResNet backbone
+    backbone = resnet.__dict__[backbone_name](
+        # replace_stride_with_dilation=[False, True, True],
+        **config.get("backbone_kwargs", {})
+    )
+
+    # Reformat first conv to take in new #channels
+    in_channels = config.get("input_shape", [3])[0]
+    old_conv = backbone.conv1
+    backbone.conv1 = nn.Conv2d(in_channels, old_conv.out_channels,
+                               kernel_size=old_conv.kernel_size,
+                               stride=old_conv.stride,
+                               padding=old_conv.padding)
+    if config.get("backbone_kwargs", {}).get("pretrained"):
+        backbone.conv1.weight[:, :3] = old_conv.weight
+
+    return backbone

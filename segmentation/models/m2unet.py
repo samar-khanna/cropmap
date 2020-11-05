@@ -8,7 +8,7 @@ from torch.nn import functional as F
 import torchvision
 from torchvision.models._utils import IntermediateLayerGetter
 
-from models.utils import NConvBlock, UpSampleAndMerge
+from models.utils import NConvBlock, UpSampleAndMerge, create_resnet_backbone
 
 
 class LightUpsample(nn.Module):
@@ -100,6 +100,17 @@ class M2UNet(nn.Module):
         self.final_conv = nn.Conv2d(self.up1.out_channels, num_classes,
                                     kernel_size=1, stride=1)
         self.final_side_out = nn.Conv2d(num_classes, self.r, kernel_size=1, stride=1)
+
+    @classmethod
+    def create(cls, config, num_classes):
+        """
+        Creates a new M2UNet model given the config dictionary.
+        Initialises a ResNet backbone (optionally pretrained) for the segmentation model.
+        """
+        backbone = create_resnet_backbone(config)
+
+        # Create Segmentation model
+        return cls(backbone, num_classes=num_classes, **config["classifier_kwargs"])
 
     def forward(self, x_list):
         x0 = x_list[0]

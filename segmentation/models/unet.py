@@ -5,7 +5,7 @@ import torchvision
 from torchvision.models.resnet import BasicBlock
 from torchvision.models.segmentation.fcn import FCNHead
 from torchvision.models._utils import IntermediateLayerGetter
-from models.utils import UpSampleAndMerge
+from models.utils import UpSampleAndMerge, create_resnet_backbone
 
 
 class UNet(nn.Module):
@@ -39,6 +39,17 @@ class UNet(nn.Module):
         # Final conv to reduce #channels to #classes
         self.final_conv = nn.Conv2d(self.up1.out_channels, num_classes,
                                     kernel_size=1, stride=1)
+
+    @classmethod
+    def create(cls, config, num_classes):
+        """
+        Creates a new UNet model given the config dictionary.
+        Initialises a ResNet backbone (optionally pretrained) for the segmentation model.
+        """
+        backbone = create_resnet_backbone(config)
+
+        # Create Segmentation model
+        return cls(backbone, num_classes=num_classes, **config["classifier_kwargs"])
 
     def forward(self, x):
         input_shape = x.shape[-2:]

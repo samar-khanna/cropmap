@@ -4,6 +4,7 @@ from torch.nn import functional as F
 import torchvision
 from torchvision.models.segmentation.fcn import FCNHead
 from torchvision.models._utils import IntermediateLayerGetter
+from models.utils import create_resnet_backbone
 
 
 class FCN(nn.Module):
@@ -19,6 +20,17 @@ class FCN(nn.Module):
         last_conv = getattr(layer[-1], "conv3", layer[-1].conv2)
         out_channels = last_conv.out_channels
         self.classifier = FCNHead(in_channels=out_channels, channels=num_classes)
+
+    @classmethod
+    def create(cls, config, num_classes):
+        """
+        Creates a new FCN model given the config dictionary.
+        Initialises a ResNet backbone (optionally pretrained) for the segmentation model.
+        """
+        backbone = create_resnet_backbone(config)
+
+        # Create Segmentation model
+        return cls(backbone, num_classes=num_classes)
 
     def forward(self, x):
         input_shape = x.shape[-2:]

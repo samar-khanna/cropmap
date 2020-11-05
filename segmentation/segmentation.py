@@ -3,12 +3,12 @@ import json
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torchvision.models.resnet as resnet
 
 from models.fcn import FCN
 from models.unet import UNet
 from models.m2unet import M2UNet
 from models.block_unet import BlockUNet
+from models.simple_net import SimpleNet
 import models.loss as custom_loss
 
 from data_loaders.dataset import CropDataset
@@ -20,7 +20,8 @@ MODELS = {
     "fcn": FCN,
     "unet": UNet,
     "m2unet": M2UNet,
-    "blockunet": BlockUNet
+    "blockunet": BlockUNet,
+    "simplenet": SimpleNet
 }
 
 
@@ -28,7 +29,8 @@ LOADERS = {
     "fcn": ImageDataset,
     "unet": ImageDataset,
     "m2unet": TimeSeriesDataset,
-    "blockunet": TimeSeriesDataset
+    "blockunet": TimeSeriesDataset,
+    "simplenet": TimeSeriesDataset
 }
 
 
@@ -92,35 +94,16 @@ class ConfigHandler():
 def create_model(config_handler):
     """
     Creates a new segmentation model given the config dictionary.
-    Initialises a ResNet backbone (optionally pretrained) for the segmentation model.
+    Uses the specialised creator functions for each model.
     """
     config = config_handler.config
-    backbone_name = config["backbone"].lower()
-    assert backbone_name.find("resnet") > -1, "Only resnet backbones supported"
-
-    # Initialise ResNet backbone
-    backbone = resnet.__dict__[backbone_name](
-        # replace_stride_with_dilation=[False, True, True],
-        **config.get("backbone_kwargs", {})
-    )
-
-    # Reformat first conv to take in new #channels
-    in_channels = config.get("input_shape", [3])[0]
-    old_conv = backbone.conv1
-    backbone.conv1 = nn.Conv2d(in_channels, old_conv.out_channels,
-                               kernel_size=old_conv.kernel_size,
-                               stride=old_conv.stride,
-                               padding=old_conv.padding)
-    if config.get("backbone_kwargs", {}).get("pretrained"):
-        backbone.conv1.weight[:, :3] = old_conv.weight
-
     assert config["classifier"].lower() in MODELS, \
         "Please specify a valid segmenation classifier available in MODELS"
 
     # Create Segmentation model
     num_classes = config_handler.num_classes
-    seg_model = MODELS[config["classifier"].lower()]
-    seg_model = seg_model(backbone, num_classes=num_classes, **config["classifier_kwargs"])
+    seg_model_class = MODELS[config["classifier"].lower()]
+    seg_model = seg_model_class.create(config, num_classes)
 
     return seg_model
 

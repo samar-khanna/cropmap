@@ -1,0 +1,34 @@
+{
+  "name": "m2unet_resnet34_weighted_focal_cali_classes",
+  "classifier": "M2UNet",
+  "classifier_kwargs": {},
+  "backbone": "resnet34",
+  "backbone_kwargs": {
+    "pretrained": false
+  },
+  "input_shape": [9, 224, 224],
+  "interest_classes": [
+    "Fallow-Idle Cropland",
+    "Almonds",
+    "Pistachios",
+    "Cotton",
+    "Winter Wheat",
+    "Grapes",
+    "Alfalfa",
+    "Walnuts"
+  ],
+  "augment": {},
+
+
+  "epochs": 200,
+  "batch_size": 16,
+  "loss": "FocalLoss",
+  "loss_kwargs": {
+    "weight": [5.22, 9.64, 16.5, 22.10, 22.16, 20.94, 16.88, 28.99]
+  },
+  "optimizer": "Adam",
+  "optimizer_kwargs": 
+    {
+      "lr":0.001
+    }
+}

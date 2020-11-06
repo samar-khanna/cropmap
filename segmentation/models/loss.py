@@ -32,6 +32,7 @@ class FocalLoss(nn.Module):
 
         # Need self.weight to be of shape self.inputs.shape[-1]
         if self.weight is not None:
+            focal_loss = focal_loss.permute(0, 2, 3, 1)  # shift #c to last dim
             focal_loss *= self.weight
 
         return torch.mean(focal_loss) if self.reduce else focal_loss

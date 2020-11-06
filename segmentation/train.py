@@ -131,7 +131,7 @@ if __name__ == "__main__":
     model.to(device)
 
     # Load optimizer and loss
-    loss_fn, optimizer = get_loss_optimizer(ch.config, model)
+    loss_fn, optimizer = get_loss_optimizer(ch.config, model, device)
 
     ## Set up dataset
     dataset = create_dataset(

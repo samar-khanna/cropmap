@@ -158,7 +158,7 @@ def save_model(model, save_path):
     print(f"Saved model weights at: {save_path}")
 
 
-def get_loss_optimizer(config, model):
+def get_loss_optimizer(config, model, device):
     """
     Instantiates loss function and optimizer based on name and kwargs.
     Ensure that names are valid in the torch.nn and torch.optim modules.
@@ -173,7 +173,7 @@ def get_loss_optimizer(config, model):
     for key in loss_kwargs:
         if key.find("weight") > -1:
             loss_kwargs[key] = torch.as_tensor(
-                loss_kwargs[key], dtype=torch.float32, device=model.device
+                loss_kwargs[key], dtype=torch.float32, device=device
             ) / sum(loss_kwargs[key])
     if loss_name in custom_loss.__dict__:
         loss_fn = custom_loss.__dict__[loss_name](**loss_kwargs)

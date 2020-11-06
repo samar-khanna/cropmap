@@ -168,11 +168,13 @@ def get_loss_optimizer(config, model):
     # Set up loss.
     loss_name = config.get("loss", "BCEWithLogitsLoss")
     loss_kwargs = config.get("loss_kwargs", {})
+
+    # If weights are given, then convert to tensor and normalize to sum to 1.
     for key in loss_kwargs:
         if key.find("weight") > -1:
             loss_kwargs[key] = torch.as_tensor(
                 loss_kwargs[key], dtype=torch.float32, device=model.device
-            )
+            ) / sum(loss_kwargs[key])
     if loss_name in custom_loss.__dict__:
         loss_fn = custom_loss.__dict__[loss_name](**loss_kwargs)
     elif loss_name in nn.__dict__:

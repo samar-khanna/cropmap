@@ -1,4 +1,5 @@
 import os
+import json
 import numpy as np
 import torch
 import torchvision.transforms as torch_transforms
@@ -11,7 +12,14 @@ class CropDataset(Dataset):
 
     _DATA_MAP_NAME = "data_map"
 
-    def __init__(self, config_handler, data_path, data_map_path=None):
+    def __init__(
+            self,
+            data_path,
+            classes,
+            interest_classes=(),
+            data_map_path=None,
+            transforms=None
+    ):
         """
         Abstract class meant to be subclassed for all Cropmap datasets.
         Initialises the class data and the data transforms.
@@ -34,10 +42,11 @@ class CropDataset(Dataset):
             f"{data_map_name}_indices.json"
         )
 
+        # Load all classes.
+        self.all_classes = classes
+
         # Filter out interested classes, if specified. Otherwise use all classes.
         # Sort the classes in order of their indices
-        classes = config_handler.classes
-        interest_classes = config_handler.config.get("interest_classes")
         interest_classes = interest_classes if interest_classes else classes.keys()
         interest_classes = sorted(interest_classes, key=classes.get)
 
@@ -51,7 +60,7 @@ class CropDataset(Dataset):
         self.num_classes = len(self.remapped_classes)
 
         # Set up transforms if any
-        transforms = getattr(config_handler, "transforms", {})
+        transforms = transforms if transforms is not None else {}
         composed = []
         for transform_name, transform_kwargs in transforms.items():
             # Get transform function from our own file, or else from torchvision

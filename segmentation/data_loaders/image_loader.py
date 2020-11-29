@@ -21,13 +21,14 @@ class ImageDataset(CropDataset):
 
     _DATA_MAP_NAME = DATA_MAP_NAME
 
-    def __init__(self, config_handler, data_path, data_map_path=None,
+    def __init__(self,
+                 data_path, classes, interest_classes=(), data_map_path=None, transforms=None,
                  tile_size=(224, 224), overlap=0, train_val_test=(0.8, 0.1, 0.1),
                  inf_mode=False, **kwargs):
         """
         Initialises an instance of a `CropDataset`.
         Requires:
-            `config_handler`: Object that handles the model config file.
+            `config`: Config file for trainer.
             `data_path`: Path to dataset directory
             `data_map_path`: Path to .json file containing train/val/test split (optional)
             `tile_size`: (h,w) denoting size of each tile to sample from area.
@@ -36,7 +37,7 @@ class ImageDataset(CropDataset):
             `inf_mode`: Whether the dataset is being used for inference or not.
                         If not for inference, then make sure that labels exist.
         """
-        super().__init__(config_handler, data_path, data_map_path=data_map_path)
+        super().__init__(data_path, classes, interest_classes, data_map_path, transforms)
 
         assert len(train_val_test) == 3, "Only specify percentage for train/val/test sets."
         assert sum(train_val_test) == 1, "Train + val + test percentages should add to 1."

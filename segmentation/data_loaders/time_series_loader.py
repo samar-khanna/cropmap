@@ -24,7 +24,8 @@ class TimeSeriesDataset(CropDataset):
 
     _DATA_MAP_NAME = DATA_MAP_NAME
 
-    def __init__(self, config_handler, data_path, data_map_path=None,
+    def __init__(self,
+                 data_path, classes, interest_classes=(), data_map_path=None, transforms=None,
                  tile_size=(224, 224), overlap=0,
                  inf_mode=False, **kwargs):
         """
@@ -34,7 +35,7 @@ class TimeSeriesDataset(CropDataset):
                  of the input's directory.
 
         Requires:
-            `config_handler`: Object that handles the model config file.
+            `config`: Config file for trainer.
             `data_path`: Path to dataset directory
             `data_map_path`: Path to .json file containing train/val/test split.
                             Inferred if not provided. Used to find path to indices
@@ -43,7 +44,7 @@ class TimeSeriesDataset(CropDataset):
             `inf_mode`: Whether the dataset is being used for inference or not.
                         If not for inference, then make sure that labels exist.
         """
-        super().__init__(config_handler, data_path, data_map_path=data_map_path)
+        super().__init__(data_path, classes, interest_classes, data_map_path, transforms)
 
         self.tile_size = tile_size
         self.overlap = overlap

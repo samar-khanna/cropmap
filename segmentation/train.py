@@ -15,8 +15,7 @@ from segmentation import (
 
 
 def passed_arguments():
-    parser = argparse.ArgumentParser(description= \
-                                         "Script to train segmentation models.")
+    parser = argparse.ArgumentParser(description="Script to train segmentation models.")
     parser.add_argument("-d", "--data_path",
                         type=str,
                         required=True,
@@ -124,7 +123,10 @@ if __name__ == "__main__":
 
     ## TODO: Finetuning (freezing layers other than backbone)
     # Load model, use DataParallel if more than 1 GPU available
-    model = load_model(ch, from_checkpoint=args.checkpoint, freeze_backbone=args.freeze_backbone)
+    checkpoint_path = args.checkpoint
+    if type(args.checkpoint) is bool and args.checkpoint:
+        checkpoint_path = ch.save_path
+    model = load_model(ch.config, ch.num_classes, checkpoint_path, args.freeze_backbone)
     if torch.cuda.device_count() > 1:
         print(f"Using {torch.cuda.device_count()} GPUs")
         model = nn.DataParallel(model)
@@ -135,10 +137,12 @@ if __name__ == "__main__":
 
     ## Set up dataset
     dataset = create_dataset(
-        ch.config,
-        config_handler=ch,
+        ch.config["classifier"].lower(),
         data_path=args.data_path,
         data_map_path=args.data_map,
+        classes=ch.classes,
+        interest_classes=ch.config.get("interest_classes", []),
+        transforms=ch.config.get("transforms", {}),
         train_val_test=args.split,
         inf_mode=False
     )

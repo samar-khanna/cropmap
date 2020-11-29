@@ -123,16 +123,21 @@ if __name__ == "__main__":
     device = torch.device("cuda" if use_cuda else "cpu")
 
     # Load model
-    model = load_model(ch, from_checkpoint=args.checkpoint)
+    checkpoint_path = args.checkpoint
+    if type(args.checkpoint) is bool and args.checkpoint:
+        checkpoint_path = ch.save_path
+    model = load_model(ch.config, ch.num_classes, from_checkpoint=checkpoint_path)
     model.to(device)
     model.eval()
 
     # Set up dataset
     dataset = create_dataset(
-        ch.config,
-        config_handler=ch,
+        ch.config["classifier"].lower(),
         data_path=args.data_path,
         data_map_path=args.data_map,
+        classes=ch.classes,
+        interest_classes=ch.config.get("interest_classes", []),
+        transforms=ch.config.get("transforms", {}),
         train_val_test=args.split,
         inf_mode=True
     )

@@ -91,43 +91,37 @@ class ConfigHandler():
         for p in dirs: f_mkdir(p)
 
 
-def create_model(config_handler):
+def create_model(model_config, num_classes):
     """
     Creates a new segmentation model given the config dictionary.
     Uses the specialised creator functions for each model.
     """
-    config = config_handler.config
-    assert config["classifier"].lower() in MODELS, \
+    assert model_config["classifier"].lower() in MODELS, \
         "Please specify a valid segmenation classifier available in MODELS"
 
     # Create Segmentation model
-    num_classes = config_handler.num_classes
-    seg_model_class = MODELS[config["classifier"].lower()]
-    seg_model = seg_model_class.create(config, num_classes)
+    seg_model_class = MODELS[model_config["classifier"].lower()]
+    seg_model = seg_model_class.create(model_config, num_classes)
 
     return seg_model
 
 
-def load_model(config_handler, from_checkpoint=False, freeze_backbone=False):
+def load_model(model_config, num_classes, from_checkpoint=None, freeze_backbone=False):
     """
     Loads a segmentation model based on its config dictionary.
     If specified, load's model weights from a checkpoint file.
     Else, creates a new, fresh instance of the model.
     If specified, also freezes all parameters in backbone layer.
     """
-    model = create_model(config_handler)
+    model = create_model(model_config, num_classes)
 
     if from_checkpoint:
         if type(from_checkpoint) is str:
             checkpoint_path = from_checkpoint
             assert os.path.isfile(from_checkpoint), \
                 f"Model's .bin checkpoint file doesn't exist at: {checkpoint_path}"
-        elif type(from_checkpoint) is bool:
-            checkpoint_path = config_handler.save_path
-            assert os.path.isfile(config_handler.save_path), \
-                f"Model's .bin checkpoint file doesn't exist on config path: {checkpoint_path}"
         else:
-            raise ValueError(f"Keyword arg `from_checkpoint` must be either a bool or str")
+            raise ValueError(f"Keyword arg `from_checkpoint` must be a string")
 
         print(f"Loading model weights from checkpoint path {checkpoint_path}")
 
@@ -137,8 +131,9 @@ def load_model(config_handler, from_checkpoint=False, freeze_backbone=False):
         state_dict = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(state_dict)
 
+    # TODO: Finetuning (freezing layers other than backbone)
     # Freeze backbone if specified
-    if config_handler.config.get("freeze_backbone", False) or freeze_backbone:
+    if freeze_backbone:
         print("Freezing backbone layers...")
         for param in model.backbone.parameters():
             param.requires_grad = False
@@ -195,14 +190,13 @@ def get_loss_optimizer(config, model, device):
     return loss_fn, optimizer
 
 
-def create_dataset(config, *args, **kwargs) -> CropDataset:
+def create_dataset(classifier_name, *args, **kwargs) -> CropDataset:
     """
     Creates a new initialised CropDataset based on the type of classifier.
     """
-    model_type = config["classifier"].lower()
-    assert model_type in LOADERS, \
+    assert classifier_name in LOADERS, \
         "Please specify a valid segmenation classifier available in MODELS"
 
-    dataset_type = LOADERS[model_type]
+    dataset_type = LOADERS[classifier_name]
 
     return dataset_type(*args, **kwargs)

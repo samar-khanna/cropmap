@@ -103,7 +103,7 @@ class Trainer:
         @return: Initialised Trainer
         """
         # Create output directory, save directory and metrics directories.
-        exp_name = trainer_config["name"]
+        exp_name = "_".join((model_config["name"], trainer_config["name"]))
         out_dir = os.path.join(out_dir if out_dir is not None else data_path, exp_name)
         save_dir = os.path.join(out_dir, "checkpoints")
         metrics_dir = os.path.join(out_dir, "metrics")

@@ -1,9 +1,10 @@
+import numpy as np
 import torch.nn as nn
 import torch.optim as optim
 
 from trainers.trainer import Trainer
 from data_loaders.dataset import CropDataset
-from metrics import create_metrics_dict, calculate_metrics, MeanMetric
+from metrics import calculate_metrics, MeanMetric
 
 
 class DefaultTrainer(Trainer):
@@ -48,6 +49,33 @@ class DefaultTrainer(Trainer):
             train_writer=train_writer,
             val_writer=val_writer
         )
+
+    def create_metrics_dict(self, **metrics):
+        """
+        Creates a metrics dictionary, mapping `metric_name`--> `metric_val`
+        The metrics are 1) averaged over all classes 2) per class
+        @param loss: Either `None`, or if specified, PyTorch loss number for the epoch
+        @param metrics: Each metric should be a numpy array of shape (num_classes)
+        @return: {metric_name: metric_val}
+        """
+        # Dictionary of `class_name` --> index in metric array
+        classes = self.dataset.remapped_classes
+
+        metrics_dict = {}
+
+        # First log mean metrics
+        for metric_name, metric_arr in metrics.items():
+            metric = metric_arr
+            metrics_dict[f"mean/{metric_name}"] = np.nanmean(metric)
+
+            # Break down metric by class
+            if isinstance(metric_arr, np.ndarray):
+                for class_name, i in classes.items():
+                    class_metric_name = f'class_{class_name}/{metric_name}'
+                    class_metric = metric[i]
+                    metrics_dict[class_metric_name] = class_metric
+
+        return metrics_dict
 
     def train_one_step(self, images, labels):
         """
@@ -122,7 +150,7 @@ class DefaultTrainer(Trainer):
         epoch_metrics = {metric_name: val.item() for metric_name, val in epoch_metrics.items()}
 
         # Create metrics dict
-        return create_metrics_dict(self.dataset.remapped_classes, **epoch_metrics)
+        return self.create_metrics_dict(**epoch_metrics)
 
     def validate_one_epoch(self, val_loaders):
         return self._run_one_epoch(val_loaders, is_train=False)

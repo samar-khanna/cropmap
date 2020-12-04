@@ -1,5 +1,7 @@
 import os
 import torch
+import torch.nn as nn
+from typing import Callable, Any, Optional
 
 from segmentation import MODELS, LOADERS
 from data_loaders.dataset import CropDataset
@@ -79,6 +81,71 @@ def save_model(model, save_path):
     else:
         torch.save(model.state_dict(), save_path)
     print(f"Saved model weights at: {save_path}")
+
+
+def apply_to_model_parameters(
+        model: nn.Module,
+        param_func: Callable[[Any], Any],
+        module_func: Optional[Callable[[Any], Any]] = None,
+        memo_key_func: Optional[Callable[[Any], Any]] = None,
+        memo=None
+) -> nn.Module:
+    """
+    Recursively applies a function to each parameter of a nn.Module model such that
+    the new model's parameters are linked to the original in the computational graph.
+    Useful for MAML ops.
+    Inspiration: https://github.com/learnables/learn2learn/blob/master/learn2learn/utils.py#L51
+    @param model: PyTorch model whose parameters will be changed for every layer
+    @param param_func: (nn.Parameter) -> nn.Parameter
+                        Modifies parameter.
+    @param module_func: (nn.Module) -> nn.Module
+                        Optional function modifies module itself before param-level changes.
+    @param memo_key_func: (nn.Parameter) -> Any
+                        Optional function to use for memo keys. If None, uses param_key
+    @param memo: Cache that prevents parameters from being operated on twice
+    @return: Updated parameter model.
+    """
+    if not isinstance(model, torch.nn.Module):
+        return model
+
+    # Sets up module before param level changes. Params will be iterated from old model
+    new_model = module_func(model) if module_func is not None else model
+
+    # This is for any shared parameters for two different sections of the net
+    memo = {} if memo is None else memo
+
+    # 1) Re-write all parameters using _parameters field to preserve gradients
+    model_params = getattr(new_model, '_parameters', [])
+    for param_key in model_params:
+        if model._parameters[param_key] is not None:
+            param = model._parameters[param_key]
+            memo_key = memo_key_func(param) if memo_key_func is not None else param_key
+            if memo_key in memo:
+                new_model._parameters[param_key] = memo[memo_key]
+            else:
+                new_param = param_func(param)
+                new_model._parameters[param_key] = new_param
+                memo[memo_key] = new_param
+
+    # TODO: Confirm if need buffers or not, coz I don't think so
+
+    # 2) Recursively applyt to each sub-module
+    submodules = getattr(new_model, '_modules', [])
+    for submodule_key in submodules:
+        submodule = submodules[submodule_key]
+        new_model._modules[submodule_key] = apply_to_model_parameters(
+            submodule,
+            param_func,
+            module_func=module_func,
+            memo_key_func=memo_key_func,
+            memo=memo
+        )
+
+    # Need to do this for RNNs apparently
+    if hasattr(new_model, 'flatten_parameters'):
+        new_model = new_model._apply(lambda x: x)
+
+    return new_model
 
 
 def create_dataset(classifier_name, *args, **kwargs) -> CropDataset:

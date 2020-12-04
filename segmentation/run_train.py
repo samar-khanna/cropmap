@@ -70,11 +70,11 @@ if __name__ == "__main__":
         classes = json.load(f)
 
     # Contains config parameters for model
-    with open(args.model_config, 'r') as f:
+    with open(args.model, 'r') as f:
         model_config = json.load(f)
 
     # Contains config parameters for trainer
-    with open(args.trainer_config, 'r') as f:
+    with open(args.trainer, 'r') as f:
         trainer_config = json.load(f)
 
     trainer_type = trainer_config.get("trainer", "default").lower()

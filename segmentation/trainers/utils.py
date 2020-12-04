@@ -87,6 +87,7 @@ def apply_to_model_parameters(
         model: nn.Module,
         param_func: Callable[[Any], Any],
         module_func: Optional[Callable[[Any], Any]] = None,
+        param_check_func: Callable[[Any], bool] = lambda p: True,
         memo_key_func: Optional[Callable[[Any], Any]] = None,
         memo=None
 ) -> nn.Module:
@@ -100,6 +101,8 @@ def apply_to_model_parameters(
                         Modifies parameter.
     @param module_func: (nn.Module) -> nn.Module
                         Optional function modifies module itself before param-level changes.
+    @param param_check_func: (nn.Parameter) -> Bool
+                            Optional function that determines if this param should be changed.
     @param memo_key_func: (nn.Parameter) -> Any
                         Optional function to use for memo keys. If None, uses param_key
     @param memo: Cache that prevents parameters from being operated on twice
@@ -117,8 +120,8 @@ def apply_to_model_parameters(
     # 1) Re-write all parameters using _parameters field to preserve gradients
     model_params = getattr(new_model, '_parameters', [])
     for param_key in model_params:
-        if model._parameters[param_key] is not None:
-            param = model._parameters[param_key]
+        param = model._parameters[param_key]
+        if param is not None and param_check_func(param):
             memo_key = memo_key_func(param) if memo_key_func is not None else param_key
             if memo_key in memo:
                 new_model._parameters[param_key] = memo[memo_key]

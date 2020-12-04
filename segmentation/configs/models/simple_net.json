@@ -1,5 +1,5 @@
 {
-  "name": "simple_net_focal_cali_classes",
+  "name": "simple_net",
   "classifier": "SimpleNet",
   "classifier_kwargs": {
     "num_conv": 4,
@@ -7,5 +7,5 @@
   },
   "backbone": "",
   "backbone_kwargs": {},
-  "input_shape": [18, 224, 224]
+  "input_shape": [9, 224, 224]
 }

@@ -114,7 +114,7 @@ class ImageDataset(CropDataset):
 
             # Map class ids in mask to indexes within num_classes.
             mask = self.map_class_to_idx[mask]
-            y = ImageDataset.one_hot_mask(mask, self.num_classes)
+            y = self.one_hot_mask(mask, self.num_classes)
 
         # Sample is (x, y) pair of image and mask.
         sample = x, y
@@ -173,7 +173,7 @@ class ImageDataset(CropDataset):
         if os.path.isfile(self.indices_path) and not regen_indices:
             with open(self.indices_path, 'r') as f:
                 _indices = json.load(f)
-            return ImageDataset.convert_inds(_indices)
+            return self.convert_inds(_indices)
 
         # Note which sets each mosaic appears in. Mapping from
         # mosaic_path -> {"train": (data_path_ind, split_pct), "val":...}
@@ -241,7 +241,7 @@ class ImageDataset(CropDataset):
         with open(self.indices_path, 'w') as f:
             json.dump(indices, f, indent=2)
 
-        return ImageDataset.convert_inds(indices)
+        return self.convert_inds(indices)
 
     def create_data_loaders(self, regen_indices=False, batch_size=32, num_workers=4):
         """

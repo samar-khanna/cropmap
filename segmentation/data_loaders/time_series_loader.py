@@ -131,7 +131,7 @@ class TimeSeriesDataset(CropDataset):
 
             # Map class ids in mask to indexes within num_classes.
             mask = self.map_class_to_idx[mask]
-            y = TimeSeriesDataset.one_hot_mask(mask, self.num_classes)
+            y = self.one_hot_mask(mask, self.num_classes)
 
         # Sample is ([x1, ..., xt], y) pair of image sequence and mask.
         sample = x_series, y
@@ -178,7 +178,7 @@ class TimeSeriesDataset(CropDataset):
         if os.path.isfile(self.indices_path) and not regen_indices:
             with open(self.indices_path, 'r') as f:
                 _indices = json.load(f)
-            return TimeSeriesDataset.convert_inds(_indices)
+            return self.convert_inds(_indices)
 
         print("Generating indices...")
 
@@ -224,7 +224,7 @@ class TimeSeriesDataset(CropDataset):
             json.dump(indices, f, indent=2)
 
         print(f"Done creating indices at {self.indices_path}")
-        return TimeSeriesDataset.convert_inds(indices)
+        return self.convert_inds(indices)
 
     def create_data_loaders(self, regen_indices=False, batch_size=32, num_workers=4):
         """

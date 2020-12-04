@@ -1,0 +1,10 @@
+{
+  "name": "m2unet_resnet34_focal_cali_classes",
+  "classifier": "M2UNet",
+  "classifier_kwargs": {},
+  "backbone": "resnet34",
+  "backbone_kwargs": {
+    "pretrained": false
+  },
+  "input_shape": [9, 224, 224]
+}

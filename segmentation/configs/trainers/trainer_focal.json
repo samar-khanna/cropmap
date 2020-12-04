@@ -1,0 +1,10 @@
+{
+  "name": "all_classes_focal",
+  "trainer": "default",
+  "epochs": 200,
+  "batch_size": 16,
+  "loss": "FocalLoss",
+  "loss_kwargs": {},
+  "optimizer": "Adam",
+  "optimizer_kwargs": {"lr":0.001}
+}

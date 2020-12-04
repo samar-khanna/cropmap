@@ -1,0 +1,10 @@
+{
+  "name": "unet_resnet_50_scratch",
+  "classifier": "UNet",
+  "classifier_kwargs": {},
+  "backbone": "resnet50",
+  "backbone_kwargs": {
+    "pretrained": false
+  },
+  "input_shape": [10, 224, 224]
+}

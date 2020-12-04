@@ -1,0 +1,12 @@
+{
+  "name": "block_unet_resnet34_focal_cali_classes",
+  "classifier": "BlockUNet",
+  "classifier_kwargs": {
+    "block_length": 2
+  },
+  "backbone": "resnet34",
+  "backbone_kwargs": {
+    "pretrained": false
+  },
+  "input_shape": [18, 224, 224]
+}

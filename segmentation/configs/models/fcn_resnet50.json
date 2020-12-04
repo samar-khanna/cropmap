@@ -1,0 +1,10 @@
+{
+  "name": "fcn_resnet_50_scratch",
+  "classifier": "FCN",
+  "classifier_kwargs": {},
+  "backbone": "resnet50",
+  "backbone_kwargs": {
+    "pretrained": false
+  },
+  "input_shape": [10, 224, 224]
+}

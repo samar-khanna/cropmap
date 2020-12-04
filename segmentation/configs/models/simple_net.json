@@ -1,0 +1,11 @@
+{
+  "name": "simple_net_focal_cali_classes",
+  "classifier": "SimpleNet",
+  "classifier_kwargs": {
+    "num_conv": 4,
+    "intermediate_channels": 128
+  },
+  "backbone": "",
+  "backbone_kwargs": {},
+  "input_shape": [18, 224, 224]
+}

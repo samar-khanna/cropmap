@@ -109,12 +109,14 @@ class MAMLTrainer(Trainer):
         @return: Updated model with changed parameters.
         """
         if grads is not None:
-            for param, grad in zip(model.parameters(), grads):
+            diff_params = (p for p in model.parameters() if p.requires_grad)
+            for param, grad in zip(diff_params, grads):
                 param.update = -lr * grad
 
         updated_model = apply_to_model_parameters(
             model,
             param_func=lambda p: p + p.update,
+            param_check_func=lambda p: getattr(p, 'update', None) is not None
         )
         return updated_model
 
@@ -190,7 +192,8 @@ class MAMLTrainer(Trainer):
         loss = self.loss_fn(preds, labels)
 
         # Manually calculate gradients and update (no optimizer)
-        grads = torch.autograd.grad(loss, phi.parameters(), create_graph=self.use_higher_order)
+        diff_params = (p for p in phi.parameters() if p.requires_grad)
+        grads = torch.autograd.grad(loss, diff_params, create_graph=self.use_higher_order)
 
         phi = self.update_model(phi, grads=grads, lr=self.inner_loop_lr)
 

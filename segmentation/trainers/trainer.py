@@ -113,6 +113,10 @@ class Trainer:
 
         save_path = os.path.join(save_dir, f"{exp_name}.bin")
 
+        # SAVE config file in output directory at beginning of training
+        cls.save_config(trainer_config, out_dir, 'trainer_config')
+        cls.save_config(model_config, out_dir, 'model_config')
+
         # Set up loggers
         train_writer, val_writer = cls.create_loggers(metrics_dir)
 
@@ -140,10 +144,6 @@ class Trainer:
         if type(checkpoint_path) is bool and checkpoint_path:
             checkpoint_path = save_path
         model = load_model(model_config, num_classes, checkpoint_path, freeze_backbone)
-
-        # Save config file in output directory at beginning of training
-        cls.save_config(trainer_config, out_dir, 'trainer_config')
-        cls.save_config(model_config, out_dir, 'model_config')
 
         return cls(
             model=model,

@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 import torch.nn as nn
 import torch.optim as optim
 
@@ -77,6 +78,19 @@ class DefaultTrainer(Trainer):
 
         return metrics_dict
 
+    def format_and_compute_loss(self, preds, targets):
+        """
+        Wrapper function for formatting preds and targets for loss.
+        @param preds: (b, #c, h, w) shape tensor of model outputs, #c is num classes
+        @param targets: (b, 1 or #c, h, w) shape tensor of targets.
+                        If only 1 channel, then squeeze it for CrossEntropy
+        @return: loss value
+        """
+        # If there is no channel dimension in the target, remove it for CrossEntropy
+        if len(targets.shape) == 4 and targets.shape[1] == 1:
+            targets = targets.squeeze(1).type(torch.long)
+        return self.loss_fn(preds, targets)
+
     def train_one_step(self, images, labels):
         """
         Performs one training step over a batch.
@@ -90,7 +104,7 @@ class DefaultTrainer(Trainer):
 
         # Feed model
         preds = self.model(images)
-        loss = self.loss_fn(preds, labels)
+        loss = self.format_and_compute_loss(preds, labels)
 
         # Backpropagate
         loss.backward()
@@ -108,7 +122,7 @@ class DefaultTrainer(Trainer):
         """
         # Feed model
         preds = self.model(images)
-        loss = self.loss_fn(preds, labels)
+        loss = self.format_and_compute_loss(preds, labels)
 
         return preds, loss
 

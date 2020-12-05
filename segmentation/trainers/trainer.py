@@ -88,7 +88,8 @@ class Trainer:
             model_config,
             classes,
             checkpoint_path,
-            freeze_backbone
+            freeze_backbone,
+            **kwargs
     ):
         """
         Creates a Trainer out of raw arguments
@@ -100,6 +101,7 @@ class Trainer:
         @param classes: JSON file containing Cropmap class name --> class id
         @param checkpoint_path: Path to .bin checkpoint file containing model weights
         @param freeze_backbone: Whether to freeze model backbone while training
+        @param kwargs: Extra keyword arguments to pass to init function.
         @return: Initialised Trainer
         """
         # Create output directory, save directory and metrics directories.
@@ -114,22 +116,8 @@ class Trainer:
         # Set up loggers
         train_writer, val_writer = cls.create_loggers(metrics_dir)
 
-        # Set up dataset
-        classifier_name = model_config["classifier"].lower()
-        interest_classes = trainer_config.get("interest_classes", [])
-        transforms = trainer_config.get("transforms", {})
-        dataset = cls.create_dataset(classifier_name, data_path, data_map_path,
-                                     classes, interest_classes, transforms)
-
-        # TODO: Find a way to break this link between model and trainer config
-        # Set up model using its config file and number of classes from trainer config.
-        num_classes = len(interest_classes or classes.keys())
-        if type(checkpoint_path) is bool and checkpoint_path:
-            checkpoint_path = save_path
-        model = load_model(model_config, num_classes, checkpoint_path, freeze_backbone)
-
         # Set up loss
-        loss_name = trainer_config.get("loss", "BCEWithLogitsLoss")
+        loss_name = trainer_config.get("loss", "CrossEntropyLoss")
         loss_kwargs = trainer_config.get("loss_kwargs", {})
         loss_fn = cls.create_loss(loss_name, loss_kwargs)
 
@@ -137,6 +125,21 @@ class Trainer:
         optim_name = trainer_config.get("optimizer", "Adam")
         optim_kwargs = trainer_config.get("optimizer_kwargs", {"lr": 0.001})
         optimizer_class = cls.create_optimizer(optim_name)
+
+        # Set up dataset
+        use_one_hot = loss_name.lower().find("bce") > -1 or loss_name.lower().find("focal") > -1
+        classifier_name = model_config["classifier"].lower()
+        interest_classes = trainer_config.get("interest_classes", [])
+        transforms = trainer_config.get("transforms", {})
+        dataset = cls.create_dataset(classifier_name, data_path, data_map_path,
+                                     classes, interest_classes, use_one_hot, transforms)
+
+        # TODO: Find a way to break this link between model and trainer config
+        # Set up model using its config file and number of classes from trainer config.
+        num_classes = len(interest_classes or classes.keys())
+        if type(checkpoint_path) is bool and checkpoint_path:
+            checkpoint_path = save_path
+        model = load_model(model_config, num_classes, checkpoint_path, freeze_backbone)
 
         # Save config file in output directory at beginning of training
         cls.save_config(trainer_config, out_dir, 'trainer_config')
@@ -153,7 +156,8 @@ class Trainer:
             metric_names=trainer_config.get("metrics", []),
             optim_kwargs=optim_kwargs,
             train_writer=train_writer,
-            val_writer=val_writer
+            val_writer=val_writer,
+            **kwargs
         )
 
     @staticmethod
@@ -172,14 +176,15 @@ class Trainer:
 
     @staticmethod
     def create_dataset(classifier_name, data_path, data_map_path,
-                       classes, interest_classes, transforms):
+                       classes, interest_classes, use_one_hot, transforms):
         """
         Creates a CropDataset
-        @param classifier_name: Name of model classifier, as this will determine which dataset to use
+        @param classifier_name: Name of model classifier, which determines which dataset to use
         @param data_path: Path to directory containing datasets
         @param data_map_path: Path to .json file containing dataset split information
         @param classes: JSON file containing class name --> class id
         @param interest_classes: List of specific classes (subset) to run experiment
+        @param use_one_hot: Whether the mask will use one-hot encoding or class id per pixel.
         @param transforms: Dictionary of transform names to use for data augmentation
         @return: CropDataset
         """
@@ -191,11 +196,18 @@ class Trainer:
             interest_classes=interest_classes,
             transforms=transforms,
             train_val_test=(0.8, 0.1, 0.1),
+            one_hot_mask=use_one_hot,
             inf_mode=False
         )
 
     @staticmethod
-    def create_loss(loss_name, loss_kwargs):
+    def create_loss(loss_name, loss_kwargs) -> nn.Module:
+        """
+        Creates an initialised PyTorch loss nn.Module
+        @param loss_name: Name of loss module, either in custom_loss or PyTorch nn
+        @param loss_kwargs: Keyword arguments to initialise the loss
+        @return: instantiated loss module
+        """
         # If weights are given, then convert to tensor and normalize to sum to 1.
         for key in loss_kwargs:
             if key.find("weight") > -1:
@@ -220,7 +232,7 @@ class Trainer:
         """
         # Set up optimizer
         assert optim_name in optim.__dict__, \
-            "Invalid PyTorch optimizer. The name must exactly match an optimizer in the optim module"
+            "Invalid PyTorch optimizer. Expected exact match with optimizer in the optim module"
 
         # Only optimize on unfrozen weights.
         optimizer = optim.__dict__[optim_name]
@@ -305,7 +317,7 @@ class Trainer:
             # Save model checkpoint if val iou better than best recorded so far.
             val_iou = val_metrics['mean/iou']
             diff = val_iou - best_val_iou
-            if diff > 0 or (epochs_since_last_save > 10 and abs(diff/best_val_iou) < 0.05):
+            if diff > 0 or (epochs_since_last_save > 10 and abs(diff / best_val_iou) < 0.05):
                 best_val_iou = val_iou if diff > 0 else best_val_iou
                 epochs_since_last_save = 0
 

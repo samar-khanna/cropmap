@@ -24,8 +24,8 @@ class FocalLoss(nn.Module):
         self.register_buffer('weight', weight)
 
     def forward(self, inputs, targets):
-        bce_loss = F.binary_cross_entropy(inputs, targets, reduction='none') if self.with_logits \
-            else F.binary_cross_entropy_with_logits(inputs, targets, reduction='none')
+        bce_loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction='none') \
+            if self.with_logits else F.binary_cross_entropy(inputs, targets, reduction='none')
 
         pt = (-bce_loss).exp()
         focal_loss = self.alpha * ((1 - pt) ** self.gamma) * bce_loss

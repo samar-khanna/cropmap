@@ -24,6 +24,8 @@ class MAMLTrainer(Trainer):
             optim_kwargs=None,
             train_writer=None,
             val_writer=None,
+            inner_loop_lr=0.001,
+            use_higher_order=True,
     ):
         """
         Creates a default Cropmap segmentation model Trainer, for regular TimeSeries or Image models.
@@ -52,12 +54,38 @@ class MAMLTrainer(Trainer):
             train_writer=train_writer,
             val_writer=val_writer
         )
-        self.inner_loop_lr = 0.001
-        self.use_higher_order = True
+        self.inner_loop_lr = inner_loop_lr
+        self.use_higher_order = use_higher_order
+
+    @classmethod
+    def create_trainer(
+            cls,
+            data_path,
+            out_dir,
+            data_map_path,
+            trainer_config,
+            model_config,
+            classes,
+            checkpoint_path,
+            freeze_backbone,
+            **kwargs
+    ):
+        maml_kwargs = trainer_config.get("trainer_kwargs", {})
+        return super().create_trainer(
+            data_path=data_path,
+            out_dir=out_dir,
+            data_map_path=data_map_path,
+            trainer_config=trainer_config,
+            model_config=model_config,
+            classes=classes,
+            checkpoint_path=checkpoint_path,
+            freeze_backbone=freeze_backbone,
+            **maml_kwargs
+        )
 
     @staticmethod
     def create_dataset(classifier_name, data_path, data_map_path,
-                       classes, interest_classes, transforms):
+                       classes, interest_classes, use_one_hot, transforms):
         return TaskDataset(
             data_path=data_path,
             classes=classes,
@@ -65,6 +93,7 @@ class MAMLTrainer(Trainer):
             data_map_path=data_map_path,
             transforms=transforms,
             train_val_test=(0.8, 0.1, 0.1),
+            use_one_hot=use_one_hot,
             inf_mode=False
         )
 
@@ -98,25 +127,37 @@ class MAMLTrainer(Trainer):
         return cloned_model
 
     @staticmethod
-    def update_model(model, grads=None, lr=0.001):
+    def update_model(model, loss=None, lr=0.001, use_higher_order=True):
         """
         Updates model parameters using data in the .update field of each parameter.
         Specifically, new_param <- param + param.update.
         If grads and learning rate are specified, does SGD update: new_p <- p - lr * grad
         @param model: PyTorch model to be updated
-        @param grads: Optional generator of model gradients, should match with model params.
+        @param loss: Optional loss value which will be used to differentiate model
         @param lr: Learning rate for SGD update.
+        @param use_higher_order: If loss is not None, can differentiate with higher order grad
         @return: Updated model with changed parameters.
         """
-        if grads is not None:
+        if loss is not None:
+            # Manually calculate gradients and update (no optimizer)
+            grads = torch.autograd.grad(
+                loss,
+                (p for p in model.parameters() if p.requires_grad),
+                create_graph=use_higher_order
+            )
+
+            # Regen the generator
             diff_params = (p for p in model.parameters() if p.requires_grad)
             for param, grad in zip(diff_params, grads):
-                param.update = -lr * grad
+                if grad is not None:
+                    param.update = -lr * grad
 
+        # TODO: Figure out why memo_key_func is identity and if p.data_ptr works.
         updated_model = apply_to_model_parameters(
             model,
             param_func=lambda p: p + p.update,
-            param_check_func=lambda p: getattr(p, 'update', None) is not None
+            param_check_func=lambda p: getattr(p, 'update', None) is not None,
+            memo_key_func=lambda p: p,
         )
         return updated_model
 
@@ -130,11 +171,18 @@ class MAMLTrainer(Trainer):
         # Dictionary of `class_name` --> index in metric array
         classes = self.dataset.remapped_classes
 
-        # TODO: Document this nonsense
+        # TODO: Document this nonsense and do something about the aggregate
+        aggregate_metrics = {}
         metrics_dict = {}
         for task_name, task_metrics in metrics.items():
             for task_type, epoch_metrics in task_metrics.items():
                 for metric_name, metric in epoch_metrics.items():
+                    # Record aggregate across tasks
+                    aggregate = aggregate_metrics.get(f'mean/{metric_name}', MeanMetric())
+                    aggregate.update(np.nanmean(metric))
+                    aggregate_metrics[f'mean/{metric_name}'] = aggregate
+
+                    # Fine-grained
                     metric_suffix = f'{task_name}/{task_type}/{metric_name}'
                     metrics_dict[f"mean/{metric_suffix}"] = np.nanmean(metric)
 
@@ -145,7 +193,21 @@ class MAMLTrainer(Trainer):
                             class_metric = metric[i]
                             metrics_dict[class_metric_name] = class_metric
 
-        return metrics_dict
+        # Merge
+        return {**metrics_dict, **{k: v.item() for k, v in aggregate_metrics.items()}}
+
+    def format_and_compute_loss(self, preds, targets):
+        """
+        Wrapper function for formatting preds and targets for loss.
+        @param preds: (b, #c, h, w) shape tensor of model outputs, #c is num classes
+        @param targets: (b, 1 or #c, h, w) shape tensor of targets.
+                        If only 1 channel, then squeeze it for CrossEntropy
+        @return: loss value
+        """
+        # If there is no channel dimension in the target, remove it for CrossEntropy
+        if len(targets.shape) == 4 and targets.shape[1] == 1:
+            targets = targets.squeeze(1).type(torch.long)
+        return self.loss_fn(preds, targets)
 
     def validate_one_epoch(self, val_loaders):
         self.model.eval()
@@ -162,7 +224,7 @@ class MAMLTrainer(Trainer):
 
                 # Just evaluate model
                 preds = self.model(input_t)
-                loss = self.loss_fn(preds, y)
+                loss = self.format_and_compute_loss(preds, y)
 
                 preds_arr = preds.detach().cpu().numpy()
                 y_arr = y.detach().cpu().numpy()
@@ -189,13 +251,11 @@ class MAMLTrainer(Trainer):
         @return: predictions, loss
         """
         preds = phi(images)
-        loss = self.loss_fn(preds, labels)
+        loss = self.format_and_compute_loss(preds, labels)
 
         # Manually calculate gradients and update (no optimizer)
-        diff_params = (p for p in phi.parameters() if p.requires_grad)
-        grads = torch.autograd.grad(loss, diff_params, create_graph=self.use_higher_order)
-
-        phi = self.update_model(phi, grads=grads, lr=self.inner_loop_lr)
+        phi = self.update_model(phi, loss=loss, lr=self.inner_loop_lr,
+                                use_higher_order=self.use_higher_order)
 
         return preds, loss
 
@@ -209,10 +269,11 @@ class MAMLTrainer(Trainer):
         @return: predictions, loss
         """
         preds = phi(images)
-        loss = self.loss_fn(preds, labels)
+        loss = self.format_and_compute_loss(preds, labels)
 
-        # Just backpropagate, don't update
-        loss.backward(create_graph=self.use_higher_order)
+        # Just backpropagate, don't update. We don't need higher order here.
+        # Backward pass will accumulate gradients.
+        loss.backward()
 
         return loss, preds
 

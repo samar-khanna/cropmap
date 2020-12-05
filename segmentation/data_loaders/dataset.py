@@ -21,13 +21,14 @@ class CropDataset(Dataset):
             transforms=None
     ):
         """
-        Abstract class meant to be subclassed for all Cropmap datasets.
+        Abstract class meant to be subclassed for all datasets.
         Initialises the class data and the data transforms.
 
-        Requires:
-          `config_handler`: Object that handles the model config file.
-          `data_path`: Path to dataset directory
-          `data_map_path`: Path to .json file containing train/val/test split (optional)
+        @param data_path: Path to directory containing dataset
+        @param classes: Dict of {class_name: class_id}
+        @param interest_classes: List of class names to use (subset of all classes)
+        @param data_map_path: Path to .json file containing train/val/test splits
+        @param transforms: Sequence of transform names available in `data_transforms` file
         """
         self.data_path = os.path.abspath(data_path)
 

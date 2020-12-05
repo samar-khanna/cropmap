@@ -32,12 +32,13 @@ class TaskDataset(CropDataset):
 
     def __init__(self,
                  data_path, classes, interest_classes=(), data_map_path=None, transforms=None,
-                 tile_size=(224, 224), overlap=0, train_val_test=Splits(),
+                 tile_size=(224, 224), overlap=0, train_val_test=Splits(), use_one_hot=False,
                  inf_mode=False, **kwargs):
         super().__init__(data_path, classes, interest_classes, data_map_path, transforms)
 
         self.tile_size = tile_size
         self.overlap = overlap
+        self.use_one_hot = use_one_hot
         self.inf_mode = inf_mode
         self.train_val_test = train_val_test
 
@@ -124,7 +125,7 @@ class TaskDataset(CropDataset):
 
                 # Map class ids in mask to indexes within num_classes.
                 mask = self.map_class_to_idx[mask]
-                y = self.one_hot_mask(mask, self.num_classes)
+                y = self.one_hot_mask(mask, self.num_classes) if self.use_one_hot else mask
 
         # Sample is (x, y) pair of image and mask.
         sample = x, y

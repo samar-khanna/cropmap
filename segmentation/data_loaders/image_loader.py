@@ -24,18 +24,20 @@ class ImageDataset(CropDataset):
     def __init__(self,
                  data_path, classes, interest_classes=(), data_map_path=None, transforms=None,
                  tile_size=(224, 224), overlap=0, train_val_test=(0.8, 0.1, 0.1),
-                 inf_mode=False, **kwargs):
+                 use_one_hot=False, inf_mode=False, **kwargs):
         """
-        Initialises an instance of a `CropDataset`.
-        Requires:
-            `config`: Config file for trainer.
-            `data_path`: Path to dataset directory
-            `data_map_path`: Path to .json file containing train/val/test split (optional)
-            `tile_size`: (h,w) denoting size of each tile to sample from area.
-            `overlap`: number of pixels adjacent tiles share.
-            `train_val_test`: Percentage split (must add to 1) of data sizes
-            `inf_mode`: Whether the dataset is being used for inference or not.
-                        If not for inference, then make sure that labels exist.
+        Initialises a dataset that loads single images (not time-series)
+        @param data_path: Path to directory containing dataset
+        @param classes: Dict of {class_name: class_id}
+        @param interest_classes: List of class names to use (subset of all classes)
+        @param data_map_path: Path to .json file containing train/val/test splits
+        @param transforms: Sequence of transform names available in `data_transforms` file
+        @param tile_size: Size of tile for each sample
+        @param overlap: Number of pixels that each tile overlaps with others
+        @param train_val_test: Split percentage for train, val, and test (for a given mosaic)
+        @param use_one_hot: Whether the mask will use one-hot encoding or class id per pixel.
+        @param inf_mode: Whether data is being loaded in inference mode
+        @param kwargs: Any external kwargs
         """
         super().__init__(data_path, classes, interest_classes, data_map_path, transforms)
 
@@ -44,6 +46,7 @@ class ImageDataset(CropDataset):
 
         self.tile_size = tile_size
         self.overlap = overlap
+        self.use_one_hot = use_one_hot
         self.train_val_test = train_val_test
         self.inf_mode = inf_mode
 
@@ -114,7 +117,7 @@ class ImageDataset(CropDataset):
 
             # Map class ids in mask to indexes within num_classes.
             mask = self.map_class_to_idx[mask]
-            y = self.one_hot_mask(mask, self.num_classes)
+            y = self.one_hot_mask(mask, self.num_classes) if self.use_one_hot else mask
 
         # Sample is (x, y) pair of image and mask.
         sample = x, y

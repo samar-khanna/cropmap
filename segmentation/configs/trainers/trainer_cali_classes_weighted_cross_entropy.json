@@ -1,0 +1,22 @@
+{
+  "name": "cali_classes_weighted_focal",
+  "trainer": "default",
+  "interest_classes": [
+    "Fallow-Idle Cropland",
+    "Almonds",
+    "Pistachios",
+    "Cotton",
+    "Winter Wheat",
+    "Grapes",
+    "Alfalfa",
+    "Walnuts"
+  ],
+  "epochs": 200,
+  "batch_size": 16,
+  "loss": "CrossEntropyLoss",
+  "loss_kwargs": {
+    "weight": [5.22, 9.64, 16.5, 22.10, 22.16, 20.94, 16.88, 28.99]
+  },
+  "optimizer": "Adam",
+  "optimizer_kwargs": {"lr":0.001}
+}

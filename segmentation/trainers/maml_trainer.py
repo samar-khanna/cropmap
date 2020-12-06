@@ -207,6 +207,13 @@ class MAMLTrainer(Trainer):
         # If there is no channel dimension in the target, remove it for CrossEntropy
         if len(targets.shape) == 4 and targets.shape[1] == 1:
             targets = targets.squeeze(1).type(torch.long)
+            valid_mask = targets != -1
+            targets[~valid_mask] = 0
+            loss_t = self.loss_fn(preds, targets)
+
+            # Only compute loss for valid pixels
+            return (loss_t * valid_mask).mean()
+
         return self.loss_fn(preds, targets)
 
     def validate_one_epoch(self, val_loaders):

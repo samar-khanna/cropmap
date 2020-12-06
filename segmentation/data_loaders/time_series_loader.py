@@ -264,14 +264,16 @@ class TimeSeriesDataset(CropDataset):
         # Sample train data randomly, and validation, test data sequentially
         train_sampler = SubsetRandomSampler(indices['train'])
         train_loader = DataLoader(self, batch_size=batch_size,
-                                  sampler=train_sampler, num_workers=num_workers)
+                                  sampler=train_sampler, num_workers=num_workers,
+                                  collate_fn=self.collate_fn)
 
         val_sampler = SubsetSequentialSampler(indices['val'])
         val_loader = DataLoader(self, batch_size=batch_size,
-                                sampler=val_sampler, num_workers=num_workers)
+                                sampler=val_sampler, num_workers=num_workers,
+                                collate_fn=self.collate_fn)
 
         test_sampler = SubsetSequentialSampler(indices['test'])
         test_loader = DataLoader(self, batch_size=batch_size,
-                                 sampler=test_sampler)
+                                 sampler=test_sampler, collate_fn=self.collate_fn)
 
         return train_loader, val_loader, test_loader

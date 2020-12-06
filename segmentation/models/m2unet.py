@@ -150,7 +150,7 @@ class M2UNet(nn.Module):
                 s3 = self.side_out3(x2)
                 s2 = self.side_out2(x1)
                 s1 = self.side_out1(x0)
-                s0 = self.final_side_out(final_out)
+                s0 = self.final_side_out(final_out.clone())  # clone() since we did inplace above
                 side_out = torch.cat((s0, s1, s2, s3, s4), dim=1)
 
         # Return upsampled out from final layer

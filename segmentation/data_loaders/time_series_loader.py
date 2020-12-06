@@ -157,27 +157,20 @@ class TimeSeriesDataset(CropDataset):
     @staticmethod
     def collate_fn(batch):
         """
-        Custom collate for time-series to handle variable length sequences
+        Custom collate for time-series to handle variable length sequences.
+        Pads shorter time series inputs with -1 so that no data is lost.
         @param batch: [(series1, y1), (series2, y2), ...]
         @return:
         """
-        # Pad shorter time series inputs with None so that no data is lost
+        # Change from [(x_series0, y0), ..., (x_seriest, y_t)]
+        # to [(x_series0, ..., x_seriest), (y0, ..., y_t)]
         x_series, y = tuple(zip(*batch))
         max_len = max(map(lambda series: len(series), x_series))
-        x_series = [series + [None]*(max_len - len(series)) for series in x_series]
+        x_series = [series + [-1 * torch.ones_like(x_series[0][0])]*(max_len - len(series))
+                    for series in x_series]
 
-        # Change pairing from [(x11, ..., x1t), ..., (xt1, ..., xtt)] to
-        # pairing [(x11, ..., xt1), ..., (x1t, ..., xtt)]
-        x_transpose = tuple(zip(*x_series))
-
-        # Remove all None elements from transpose
-        x_transpose = [tuple(filter(lambda seq: seq is not None, seq)) for seq in x_transpose]
-
-        # Stack the xs
         super_class = super(TimeSeriesDataset, TimeSeriesDataset)
-        x_batch = [super_class.collate_fn(x) for x in x_transpose]
-        y_batch = super_class.collate_fn(y)
-        return x_batch, y_batch
+        return super_class.collate_fn(x_series), super_class.collate_fn(y)
 
     @staticmethod
     def convert_inds(_indices):

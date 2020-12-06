@@ -122,7 +122,6 @@ class M2UNet(nn.Module):
 
         # Get mask of valid valid samples for each batched element in time series input
         valid_in_batch = [~(x == -1).view(-1, c*h*w).all(dim=-1) for x in x_list]
-        batch_lens = [mask.sum() for mask in valid_in_batch]
 
         # Need this tensor to construct output for variable batch sizes
         final_out = torch.empty((b, self.num_classes, h, w), dtype=torch.float32, device=device)
@@ -142,10 +141,7 @@ class M2UNet(nn.Module):
             x_out = F.interpolate(x_out, size=input_shape, mode="bilinear", align_corners=False)
 
             # Keep previous correct output if there are invalid samples in batch
-            if batch_lens[i] < b:
-                final_out[valid_in_batch[i]] = x_out[valid_in_batch[i]]
-            else:
-                final_out = x_out
+            final_out[valid_in_batch[i]] = x_out[valid_in_batch[i]]
 
             # Don't need side outputs at final layer
             if i < len(x_list) - 1:

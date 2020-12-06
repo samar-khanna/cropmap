@@ -97,6 +97,7 @@ class M2UNet(nn.Module):
             setattr(self, f"side_out{l}", side_out)
 
         # Final conv to reduce #channels to #classes
+        self.num_classes = num_classes
         self.final_conv = nn.Conv2d(self.up1.out_channels, num_classes,
                                     kernel_size=1, stride=1)
         self.final_side_out = nn.Conv2d(num_classes, self.r, kernel_size=1, stride=1)
@@ -113,10 +114,18 @@ class M2UNet(nn.Module):
         return cls(backbone, num_classes=num_classes, **config["classifier_kwargs"])
 
     def forward(self, x_list):
+        # ASSUMPTION: x0 has max batch size with all valid samples.
         x0 = x_list[0]
         b, c, h, w = x0.shape
-        side_out = torch.zeros((b, self.num_layers, h, w), dtype=x0.dtype, device=x0.device)
+        device = x0.device
+        side_out = torch.zeros((b, self.num_layers, h, w), dtype=x0.dtype, device=device)
 
+        # Get mask of valid valid samples for each batched element in time series input
+        valid_in_batch = [~(x == -1).view(-1, c*h*w).all(dim=-1) for x in x_list]
+        batch_lens = [mask.sum() for mask in valid_in_batch]
+
+        # Need this tensor to construct output for variable batch sizes
+        final_out = torch.empty((b, self.num_classes, h, w), dtype=torch.float32, device=device)
         for i, x_in in enumerate(x_list):
             input_shape = x_in.shape[-2:]
 
@@ -132,6 +141,12 @@ class M2UNet(nn.Module):
             x_out = self.final_conv(x0)  # 1/4
             x_out = F.interpolate(x_out, size=input_shape, mode="bilinear", align_corners=False)
 
+            # Keep previous correct output if there are invalid samples in batch
+            if batch_lens[i] < b:
+                final_out[valid_in_batch[i]] = x_out[valid_in_batch[i]]
+            else:
+                final_out = x_out
+
             # Don't need side outputs at final layer
             if i < len(x_list) - 1:
                 # Get the side outputs and concatenate them along channels
@@ -139,11 +154,11 @@ class M2UNet(nn.Module):
                 s3 = self.side_out3(x2)
                 s2 = self.side_out2(x1)
                 s1 = self.side_out1(x0)
-                s0 = self.final_side_out(x_out)
+                s0 = self.final_side_out(final_out)
                 side_out = torch.cat((s0, s1, s2, s3, s4), dim=1)
 
         # Return upsampled out from final layer
-        return x_out
+        return final_out
 
 
 if __name__ == "__main__":

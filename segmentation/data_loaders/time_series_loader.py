@@ -161,6 +161,7 @@ class TimeSeriesDataset(CropDataset):
         @param batch: [(series1, y1), (series2, y2), ...]
         @return:
         """
+        # Pad shorter time series inputs with None so that no data is lost
         x_series, y = tuple(zip(*batch))
         max_len = max(map(lambda series: len(series), x_series))
         x_series = [series + [None]*(max_len - len(series)) for series in x_series]

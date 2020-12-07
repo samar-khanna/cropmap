@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 
 class FocalLoss(nn.Module):
-    def __init__(self, alpha=0.25, gamma=2, with_logits=False, reduce=True, weight=None):
+    def __init__(self, alpha=0.25, gamma=2, with_logits=True, reduce=True, weight=None):
         """
         Implements Focal Loss for binary classification (i.e. assumes targets are one-hot).
         FocalLoss is detailed: https://arxiv.org/pdf/1708.02002.pdf

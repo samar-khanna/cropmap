@@ -15,7 +15,8 @@
   "batch_size": 16,
   "loss": "CrossEntropyLoss",
   "loss_kwargs": {
-    "weight": [5.22, 9.64, 16.5, 22.10, 22.16, 20.94, 16.88, 28.99]
+    "weight": [5.22, 9.64, 16.5, 22.10, 22.16, 20.94, 16.88, 28.99],
+    "reduction": "none"
   },
   "optimizer": "Adam",
   "optimizer_kwargs": {"lr":0.001}

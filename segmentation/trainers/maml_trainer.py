@@ -19,6 +19,7 @@ class MAMLTrainer(Trainer):
             optim_class: optim.Optimizer,
             batch_size: int,
             num_epochs: int,
+            use_one_hot: bool,
             save_path: str,
             metric_names=(),
             optim_kwargs=None,
@@ -35,6 +36,7 @@ class MAMLTrainer(Trainer):
         @param optim_class: PyTorch optimizer that updates model params
         @param batch_size: Batch size of input images for training
         @param num_epochs: Number of epochs to run training
+        @param use_one_hot: Whether the mask will use one-hot encoding or class id per pixel
         @param save_path: Path where model weights will be saved
         @param metric_names: Names of metrics that will measure training performance per epoch
         @param optim_kwargs: Keyword arguments for PyTorch optimizer
@@ -48,6 +50,7 @@ class MAMLTrainer(Trainer):
             optim_class=optim_class,
             batch_size=batch_size,
             num_epochs=num_epochs,
+            use_one_hot=use_one_hot,
             save_path=save_path,
             metric_names=metric_names,
             optim_kwargs=optim_kwargs,
@@ -205,7 +208,7 @@ class MAMLTrainer(Trainer):
         @return: loss value
         """
         # If there is no channel dimension in the target, remove it for CrossEntropy
-        if len(targets.shape) == 4 and targets.shape[1] == 1:
+        if not self.use_one_hot:
             targets = targets.squeeze(1).type(torch.long)
             valid_mask = targets != -1
             targets[~valid_mask] = 0
@@ -235,6 +238,9 @@ class MAMLTrainer(Trainer):
 
                 preds_arr = preds.detach().cpu().numpy()
                 y_arr = y.detach().cpu().numpy()
+                if not self.use_one_hot:
+                    y_arr = self.dataset.one_hot_mask(y_arr, self.dataset.num_classes)
+
                 _metrics = calculate_metrics(preds_arr, y_arr, pred_threshold=0)
                 _metrics["loss"] = loss.item()
 

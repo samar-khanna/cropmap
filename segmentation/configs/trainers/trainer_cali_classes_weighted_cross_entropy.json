@@ -1,5 +1,5 @@
 {
-  "name": "cali_classes_weighted_focal",
+  "name": "cali_classes_weighted_cross_entropy",
   "trainer": "default",
   "interest_classes": [
     "Fallow-Idle Cropland",

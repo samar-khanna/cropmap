@@ -24,7 +24,7 @@ class ImageDataset(CropDataset):
     def __init__(self,
                  data_path, classes, interest_classes=(), data_map_path=None, transforms=None,
                  tile_size=(224, 224), overlap=0, train_val_test=(0.8, 0.1, 0.1),
-                 use_one_hot=False, inf_mode=False, **kwargs):
+                 use_one_hot=True, inf_mode=False, **kwargs):
         """
         Initialises a dataset that loads single images (not time-series)
         @param data_path: Path to directory containing dataset

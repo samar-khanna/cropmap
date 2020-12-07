@@ -200,7 +200,7 @@ class Trainer:
             interest_classes=interest_classes,
             transforms=transforms,
             train_val_test=(0.8, 0.1, 0.1),
-            one_hot_mask=use_one_hot,
+            use_one_hot=use_one_hot,
             inf_mode=False
         )
 

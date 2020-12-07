@@ -26,7 +26,7 @@ class TimeSeriesDataset(CropDataset):
 
     def __init__(self,
                  data_path, classes, interest_classes=(), data_map_path=None, transforms=None,
-                 tile_size=(224, 224), overlap=0, use_one_hot=False,
+                 tile_size=(224, 224), overlap=0, use_one_hot=True,
                  inf_mode=False, **kwargs):
         """
         Initialises an instance of a TimeSeriesDataset for sequences of images.

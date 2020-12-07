@@ -32,7 +32,7 @@ class TaskDataset(CropDataset):
 
     def __init__(self,
                  data_path, classes, interest_classes=(), data_map_path=None, transforms=None,
-                 tile_size=(224, 224), overlap=0, train_val_test=Splits(), use_one_hot=False,
+                 tile_size=(224, 224), overlap=0, train_val_test=Splits(), use_one_hot=True,
                  inf_mode=False, **kwargs):
         super().__init__(data_path, classes, interest_classes, data_map_path, transforms)
 

@@ -349,7 +349,7 @@ class MAMLTrainer(Trainer):
 
             # Inner loop
             support_metrics = self.inner_loop(phi, support_loader, is_support=True)
-            query_metrics = self.inner_loop(phi, query_loader, is_support=True)
+            query_metrics = self.inner_loop(phi, query_loader, is_support=False)
 
             # Keep metrics ready
             epoch_metrics[task_name] = {"support": support_metrics, "query": query_metrics}

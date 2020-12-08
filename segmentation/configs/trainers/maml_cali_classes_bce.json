@@ -1,0 +1,24 @@
+{
+  "name": "maml_cali_classes_bce",
+  "trainer": "MAML",
+  "interest_classes": [
+    "Fallow-Idle Cropland",
+    "Almonds",
+    "Pistachios",
+    "Cotton",
+    "Winter Wheat",
+    "Grapes",
+    "Alfalfa",
+    "Walnuts"
+  ],
+  "epochs": 200,
+  "batch_size": 8,
+  "loss": "BCEWithLogitsLoss",
+  "loss_kwargs": {},
+  "optimizer": "Adam",
+  "optimizer_kwargs": {"lr":0.001},
+
+  "num_shots": 2,
+  "inner_loop_lr": 0.001,
+  "use_higher_order": true
+}

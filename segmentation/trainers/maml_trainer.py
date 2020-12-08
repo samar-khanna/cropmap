@@ -25,6 +25,7 @@ class MAMLTrainer(Trainer):
             optim_kwargs=None,
             train_writer=None,
             val_writer=None,
+            num_shots=2,
             inner_loop_lr=0.001,
             use_higher_order=True,
     ):
@@ -42,6 +43,9 @@ class MAMLTrainer(Trainer):
         @param optim_kwargs: Keyword arguments for PyTorch optimizer
         @param train_writer: Tensorboard writer for training metrics
         @param val_writer: Tensorboard writer for validation metrics
+        @param num_shots: Number of samples from support/query to feed to model
+        @param inner_loop_lr: Learning rate for support set SGD update
+        @param use_higher_order: Whether to use higher order grad to track support set update.
         """
         super().__init__(
             model=model,
@@ -57,6 +61,7 @@ class MAMLTrainer(Trainer):
             train_writer=train_writer,
             val_writer=val_writer
         )
+        self.num_shots = num_shots
         self.inner_loop_lr = inner_loop_lr
         self.use_higher_order = use_higher_order
 
@@ -319,6 +324,10 @@ class MAMLTrainer(Trainer):
             # Update metrics for task
             for metric_name, current_val in task_metrics.items():
                 current_val.update(_metrics[metric_name])
+
+            # Only pass few shots to learner
+            if batch_index == self.num_shots:
+                break
 
         # Get rid of the mean metrics
         task_metrics = {metric_name: val.item() for metric_name, val in task_metrics.items()}

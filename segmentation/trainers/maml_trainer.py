@@ -293,7 +293,7 @@ class MAMLTrainer(Trainer):
         # Backward pass will accumulate gradients.
         loss.backward()
 
-        return loss, preds
+        return preds, loss
 
     def inner_loop(self, phi, loader, is_support):
         """

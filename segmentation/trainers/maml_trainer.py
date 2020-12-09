@@ -25,7 +25,7 @@ class MAMLTrainer(Trainer):
             optim_kwargs=None,
             train_writer=None,
             val_writer=None,
-            num_shots=2,
+            num_shots=None,
             inner_loop_lr=0.001,
             use_higher_order=True,
     ):
@@ -326,7 +326,7 @@ class MAMLTrainer(Trainer):
                 current_val.update(_metrics[metric_name])
 
             # Only pass few shots to learner
-            if batch_index == self.num_shots:
+            if self.num_shots is not None and batch_index == self.num_shots:
                 break
 
         # Get rid of the mean metrics

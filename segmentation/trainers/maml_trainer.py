@@ -291,7 +291,7 @@ class MAMLTrainer(Trainer):
 
         # Just backpropagate, don't update. We don't need higher order here.
         # Backward pass will accumulate gradients.
-        loss.backward()
+        loss.backward(retain_graph=True)
 
         return preds, loss
 

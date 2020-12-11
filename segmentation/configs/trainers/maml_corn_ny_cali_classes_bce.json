@@ -2,7 +2,6 @@
   "name": "maml_corn_ny_cali_classes_bce",
   "trainer": "MAML",
   "trainer_kwargs": {
-    "num_shots": 6,
     "inner_loop_lr": 0.001,
     "use_higher_order": true
   },
@@ -21,8 +20,9 @@
     "Alfalfa",
     "Walnuts"
   ],
-  "epochs": 2000,
+  "num_shots": 6,
   "batch_size": 4,
+  "epochs": 2000,
   "loss": "BCEWithLogitsLoss",
   "loss_kwargs": {},
   "optimizer": "Adam",

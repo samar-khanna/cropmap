@@ -1,6 +1,10 @@
 {
   "name": "maml_cali_classes_bce",
   "trainer": "MAML",
+  "trainer_kwargs": {
+    "inner_loop_lr": 0.001,
+    "use_higher_order": true
+  },
   "interest_classes": [
     "Fallow-Idle Cropland",
     "Almonds",
@@ -11,14 +15,11 @@
     "Alfalfa",
     "Walnuts"
   ],
-  "epochs": 200,
-  "batch_size": 8,
+  "num_shots": 4,
+  "batch_size": 4,
+  "epochs": 400,
   "loss": "BCEWithLogitsLoss",
   "loss_kwargs": {},
   "optimizer": "SGD",
-  "optimizer_kwargs": {"lr":0.001},
-
-  "num_shots": 2,
-  "inner_loop_lr": 0.001,
-  "use_higher_order": true
+  "optimizer_kwargs": {"lr":0.001, "momentum": 0.9}
 }

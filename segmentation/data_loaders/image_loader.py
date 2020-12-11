@@ -224,8 +224,8 @@ class ImageDataset(CropDataset):
             # Clean by rejecting indices of any x in time sample that contain NaN
             if clean_indices:
                 def is_not_nan(position):
-                    c, y = position
-                    x = self.read_window(mosaic_path, c, r, tw, th)
+                    col, row = position
+                    x = self.read_window(mosaic_path, col, row, tw, th)
                     return not np.isnan(x).any()
 
                 inds = list(filter(is_not_nan, inds))

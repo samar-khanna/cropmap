@@ -221,17 +221,17 @@ class ImageDataset(CropDataset):
                 for c in range(0, w-step_w, step_w):
                     inds.append((r, c))
 
+            # Shuffle em up
+            random.shuffle(inds)
+
             # Clean by rejecting indices of any x in time sample that contain NaN
             if clean_indices:
                 def is_not_nan(position):
-                    col, row = position
+                    row, col = position
                     x = self.read_window(mosaic_path, col, row, tw, th)
                     return not np.isnan(x).any()
 
                 inds = list(filter(is_not_nan, inds))
-
-            # Shuffle em up
-            random.shuffle(inds)
 
             # Split them into each train/val/test, as specified
             splits = mosaic_splits[mosaic_path]

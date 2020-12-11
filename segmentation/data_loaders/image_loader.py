@@ -226,7 +226,7 @@ class ImageDataset(CropDataset):
                 def is_not_nan(position):
                     c, y = position
                     x = self.read_window(mosaic_path, c, r, tw, th)
-                    return not torch.isnan(x).any()
+                    return not np.isnan(x).any()
 
                 inds = list(filter(is_not_nan, inds))
 

@@ -1,0 +1,30 @@
+{
+  "name": "maml_corn_ny_cali_classes_bce",
+  "trainer": "MAML",
+  "trainer_kwargs": {
+    "num_shots": 6,
+    "inner_loop_lr": 0.001,
+    "use_higher_order": true
+  },
+  "interest_classes": [
+    "Corn",
+    "Soybeans",
+    "Potatoes",
+    "Oats",
+    "Apples",
+    "Fallow-Idle Cropland",
+    "Almonds",
+    "Pistachios",
+    "Cotton",
+    "Winter Wheat",
+    "Grapes",
+    "Alfalfa",
+    "Walnuts"
+  ],
+  "epochs": 2000,
+  "batch_size": 4,
+  "loss": "BCEWithLogitsLoss",
+  "loss_kwargs": {},
+  "optimizer": "Adam",
+  "optimizer_kwargs": {"lr":0.001}
+}

@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from typing import Optional
 
 from torch.utils.tensorboard import SummaryWriter
 
@@ -20,6 +21,7 @@ class Trainer:
             dataset: CropDataset,
             loss_fn: nn.Module,
             optim_class: optim.Optimizer,
+            num_shots: Optional[int],
             batch_size: int,
             num_epochs: int,
             use_one_hot: bool,
@@ -35,6 +37,7 @@ class Trainer:
         @param dataset: CropDataset instance
         @param loss_fn: PyTorch module that will compute loss
         @param optim_class: PyTorch optimizer that updates model params
+        @param num_shots: Number of batched samples from training set to feed to model
         @param batch_size: Batch size of input images for training
         @param num_epochs: Number of epochs to run training
         @param use_one_hot: Whether the mask will use one-hot encoding or class id per pixel
@@ -44,6 +47,7 @@ class Trainer:
         @param train_writer: Tensorboard writer for training metrics
         @param val_writer: Tensorboard writer for validation metrics
         """
+        self.num_shots = num_shots
         self.batch_size = batch_size
         self.num_epochs = num_epochs
 
@@ -153,6 +157,7 @@ class Trainer:
             dataset=dataset,
             loss_fn=loss_fn,
             optim_class=optimizer_class,
+            num_shots=trainer_config.get("num_shots", None),
             batch_size=trainer_config.get("batch_size", 32),
             num_epochs=trainer_config.get("epochs", 200),
             use_one_hot=use_one_hot,

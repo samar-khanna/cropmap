@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from typing import Optional
 
 from trainers.trainer import Trainer
 from trainers.utils import apply_to_model_parameters
@@ -17,6 +18,7 @@ class MAMLTrainer(Trainer):
             dataset: TaskDataset,
             loss_fn: nn.Module,
             optim_class: optim.Optimizer,
+            num_shots: Optional[int],
             batch_size: int,
             num_epochs: int,
             use_one_hot: bool,
@@ -25,7 +27,6 @@ class MAMLTrainer(Trainer):
             optim_kwargs=None,
             train_writer=None,
             val_writer=None,
-            num_shots=None,
             inner_loop_lr=0.001,
             use_higher_order=True,
     ):
@@ -35,6 +36,7 @@ class MAMLTrainer(Trainer):
         @param dataset: CropDataset instance
         @param loss_fn: PyTorch module that will compute loss
         @param optim_class: PyTorch optimizer that updates model params
+        @param num_shots: Number of batched samples from support/query to feed to model
         @param batch_size: Batch size of input images for training
         @param num_epochs: Number of epochs to run training
         @param use_one_hot: Whether the mask will use one-hot encoding or class id per pixel
@@ -43,7 +45,6 @@ class MAMLTrainer(Trainer):
         @param optim_kwargs: Keyword arguments for PyTorch optimizer
         @param train_writer: Tensorboard writer for training metrics
         @param val_writer: Tensorboard writer for validation metrics
-        @param num_shots: Number of samples from support/query to feed to model
         @param inner_loop_lr: Learning rate for support set SGD update
         @param use_higher_order: Whether to use higher order grad to track support set update.
         """
@@ -52,6 +53,7 @@ class MAMLTrainer(Trainer):
             dataset=dataset,
             loss_fn=loss_fn,
             optim_class=optim_class,
+            num_shots=num_shots,
             batch_size=batch_size,
             num_epochs=num_epochs,
             use_one_hot=use_one_hot,
@@ -61,7 +63,6 @@ class MAMLTrainer(Trainer):
             train_writer=train_writer,
             val_writer=val_writer
         )
-        self.num_shots = num_shots
         self.inner_loop_lr = inner_loop_lr
         self.use_higher_order = use_higher_order
 
@@ -326,7 +327,7 @@ class MAMLTrainer(Trainer):
                 current_val.update(_metrics[metric_name])
 
             # Only pass few shots to learner
-            if self.num_shots is not None and batch_index == self.num_shots:
+            if self.num_shots is not None and (batch_index+1) == self.num_shots:
                 break
 
         # Get rid of the mean metrics

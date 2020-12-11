@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from typing import Optional
 
 from trainers.trainer import Trainer
 from data_loaders.dataset import CropDataset
@@ -15,6 +16,7 @@ class DefaultTrainer(Trainer):
             dataset: CropDataset,
             loss_fn: nn.Module,
             optim_class: optim.Optimizer,
+            num_shots: Optional[int],
             batch_size: int,
             num_epochs: int,
             use_one_hot: bool,
@@ -30,6 +32,7 @@ class DefaultTrainer(Trainer):
         @param dataset: CropDataset instance
         @param loss_fn: PyTorch module that will compute loss
         @param optim_class: PyTorch optimizer that updates model params
+        @param num_shots: Number of batched samples from training set to feed to model
         @param batch_size: Batch size of input images for training
         @param num_epochs: Number of epochs to run training
         @param use_one_hot: Whether the mask will use one-hot encoding or class id per pixel
@@ -44,6 +47,7 @@ class DefaultTrainer(Trainer):
             dataset=dataset,
             loss_fn=loss_fn,
             optim_class=optim_class,
+            num_shots=num_shots,
             batch_size=batch_size,
             num_epochs=num_epochs,
             use_one_hot=use_one_hot,
@@ -172,6 +176,9 @@ class DefaultTrainer(Trainer):
             # Update metrics for epoch
             for metric_name, current_val in epoch_metrics.items():
                 current_val.update(_metrics[metric_name])
+
+            if self.num_shots is not None and (batch_index+1) == self.num_shots:
+                break
 
         # Get rid of the mean metrics
         epoch_metrics = {metric_name: val.item() for metric_name, val in epoch_metrics.items()}

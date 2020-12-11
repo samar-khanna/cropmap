@@ -110,9 +110,7 @@ class TaskDataset(CropDataset):
         mosaic_path, mask_path = task_info.mosaic_path, task_info.mask_path
 
         # Sample the data using windows
-        window = Window(c, r, tw, th)
-        with rasterio.open(mosaic_path, 'r') as mosaic:
-            x = mosaic.read(window=window)
+        x = self.read_window(mosaic_path, c, r, tw, th)
 
         # If in inference mode and mask doesn't exist, then create dummy label.
         if self.inf_mode and not mask_path:
@@ -120,12 +118,11 @@ class TaskDataset(CropDataset):
         else:
             assert mask_path, "Ground truth mask must exist for training."
 
-            with rasterio.open(mask_path, 'r') as _mask:
-                mask = _mask.read(window=window)
+            mask = self.read_window(mask_path, c, r, tw, th)
 
-                # Map class ids in mask to indexes within num_classes.
-                mask = self.map_class_to_idx[mask]
-                y = self.one_hot_mask(mask, self.num_classes) if self.use_one_hot else mask
+            # Map class ids in mask to indexes within num_classes.
+            mask = self.map_class_to_idx[mask]
+            y = self.one_hot_mask(mask, self.num_classes) if self.use_one_hot else mask
 
         # Sample is (x, y) pair of image and mask.
         sample = x, y

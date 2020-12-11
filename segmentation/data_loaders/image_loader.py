@@ -102,9 +102,7 @@ class ImageDataset(CropDataset):
         mosaic_path, mask_path = self.data_split[set_type][i]
 
         # Sample the data using windows
-        window = Window(c, r, tw, th)
-        with rasterio.open(mosaic_path, 'r') as mosaic:
-            x = mosaic.read(window=window)
+        x = self.read_window(mosaic_path, c, r, tw, th)
 
         # If in inference mode and mask doesn't exist, then create dummy label.
         if self.inf_mode and not mask_path:
@@ -112,8 +110,7 @@ class ImageDataset(CropDataset):
         else:
             assert mask_path, "Ground truth mask must exist for training."
 
-            with rasterio.open(mask_path, 'r') as _mask:
-                mask = _mask.read(window=window)
+            mask = self.read_window(mask_path, c, r, tw, th)
 
             # Map class ids in mask to indexes within num_classes.
             mask = self.map_class_to_idx[mask]
@@ -166,7 +163,7 @@ class ImageDataset(CropDataset):
                     indices[set_type].append(new_ind)
         return indices
 
-    def gen_indices(self, regen_indices=False):
+    def gen_indices(self, regen_indices=False, clean_indices=True):
         """
         Generates indices `(r,c)` corresponding to start position of tiles,
         where the tile is formed by `mosaic[:, r:r+th, c:c+tw]`.
@@ -223,6 +220,15 @@ class ImageDataset(CropDataset):
             for r in range(0, h-step_h, step_h):
                 for c in range(0, w-step_w, step_w):
                     inds.append((r, c))
+
+            # Clean by rejecting indices of any x in time sample that contain NaN
+            if clean_indices:
+                def is_not_nan(position):
+                    c, y = position
+                    x = self.read_window(mosaic_path, c, r, tw, th)
+                    return not torch.isnan(x).any()
+
+                inds = list(filter(is_not_nan, inds))
 
             # Shuffle em up
             random.shuffle(inds)

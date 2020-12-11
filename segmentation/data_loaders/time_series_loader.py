@@ -109,7 +109,6 @@ class TimeSeriesDataset(CropDataset):
         """
         set_type, i, (r, c) = index
         th, tw = self.tile_size
-        window = Window(c, r, tw, th)
 
         # Access the right sample file paths
         time_sample = self.data_split[set_type][i]
@@ -118,8 +117,7 @@ class TimeSeriesDataset(CropDataset):
         x_series = []
         for mosaic_path in time_sample.inputs:
             # Sample the data using same window (same region)
-            with rasterio.open(mosaic_path, 'r') as mosaic:
-                x = mosaic.read(window=window)
+            x = self.read_window(mosaic_path, c, r, tw, th)
             x_series.append(x)
 
         # If in inference mode and mask doesn't exist, then create dummy label.
@@ -128,8 +126,7 @@ class TimeSeriesDataset(CropDataset):
         else:
             assert mask_path is not None, "Ground truth mask must exist for training."
 
-            with rasterio.open(mask_path, 'r') as _mask:
-                mask = _mask.read(window=window)
+            mask = self.read_window(mask_path, c, r, tw, th)
 
             # Map class ids in mask to indexes within num_classes.
             mask = self.map_class_to_idx[mask]

@@ -1,7 +1,7 @@
 import os
-import json
+import rasterio
+from rasterio.windows import Window
 import numpy as np
-import torch
 import torchvision.transforms as torch_transforms
 from torch.utils.data import Dataset, Sampler
 from torch.utils.data._utils.collate import default_collate
@@ -124,6 +124,22 @@ class CropDataset(Dataset):
         y = y == mask
 
         return y
+
+    @staticmethod
+    def read_window(path_to_tif, col: int, row: int, width: int, height: int):
+        """
+        Reads a section of a .tif file given by the col, row, width and height.
+        @param path_to_tif: Path to .tif file to be read
+        @param col: Column offset
+        @param row: Row offset
+        @param width: Width of window to read
+        @param height: Height of window to read
+        @return: Numpy array of resulting window/tile of .tif file.
+        """
+        window = Window(col, row, width, height)
+        with rasterio.open(path_to_tif, 'r') as fd:
+            arr = fd.read(window=window)
+        return arr
 
     @staticmethod
     def collate_fn(batch):

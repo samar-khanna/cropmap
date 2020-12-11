@@ -1,0 +1,25 @@
+{
+  "name": "corn_ny_cali_classes_bce",
+  "trainer": "default",
+    "interest_classes": [
+    "Corn",
+    "Soybeans",
+    "Potatoes",
+    "Oats",
+    "Apples",
+    "Fallow-Idle Cropland",
+    "Almonds",
+    "Pistachios",
+    "Cotton",
+    "Winter Wheat",
+    "Grapes",
+    "Alfalfa",
+    "Walnuts"
+  ],
+  "epochs": 110,
+  "batch_size": 4,
+  "loss": "BCEWithLogitsLoss",
+  "loss_kwargs": {},
+  "optimizer": "Adam",
+  "optimizer_kwargs": {"lr":0.001}
+}

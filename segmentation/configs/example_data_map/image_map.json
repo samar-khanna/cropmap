@@ -1,0 +1,14 @@
+{
+  "train": [
+    "./cropmap_inputs/2014/2014-05", "./cropmap_inputs/2014/2014-06", "./cropmap_inputs/2014/2014-07",
+    "./cropmap_inputs/2015/2015-05", "./cropmap_inputs/2015/2015-06", "./cropmap_inputs/2015/2015-07",
+    "./cropmap_inputs/2016/2016-05", "./cropmap_inputs/2016/2016-06", "./cropmap_inputs/2016/2016-07",
+    "./cropmap_inputs/2017/2017-06", "./cropmap_inputs/2017/2017-07"
+  ],
+  "val": [
+    "./cropmap_inputs/2018/2018-05", "./cropmap_inputs/2018/2018-06", "./cropmap_inputs/2018/2018-07"
+  ],
+  "test": [
+    "./cropmap_inputs/2019/2019-05", "./cropmap_inputs/2019/2019-06", "./cropmap_inputs/2019/2019-07"
+  ]
+}

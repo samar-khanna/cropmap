@@ -77,8 +77,8 @@ def parse_class_name_metric_type(string):
     """
     Parses key in input metrics dictionary into class name and metric type for that class.
     """
-    class_name = metric_name.split('/')[0].lower()  # Important to lowercase
-    metric_type = metric_name.split('/')[-1].lower()
+    class_name = string.split('/')[0].lower()  # Important to lowercase
+    metric_type = string.split('/')[-1].lower()
     class_name = class_name.replace("class_", "")
     return class_name, metric_type
 
@@ -95,15 +95,15 @@ def calculate_metrics_from_confusion_matrix(cm, metric_types=("iou", "prec", "re
     for metric_type in metric_types:
         if metric_type.lower() == "iou":
             iou = tp / (tp + fp + fn)
-            iou[np.isnan(iou)] = 0.
+            iou = 0. if np.isnan(iou) else iou
             metrics["iou"] = iou
         elif metric_type.lower() == "prec":
             prec = tp / (tp + fp)
-            prec[np.isnan(prec)] = 0.
+            prec = 0. if np.isnan(prec) else prec
             metrics["prec"] = prec
         elif metric_type.lower() == "recall":
             recall = tp / (tp + fn)
-            recall[np.isnan(recall)] = 0.
+            recall = 0. if np.isnan(recall) else recall
             metrics["recall"] = recall
     
     return metrics

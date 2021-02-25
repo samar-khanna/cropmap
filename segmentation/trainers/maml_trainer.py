@@ -5,7 +5,7 @@ import torch.optim as optim
 from typing import Optional
 
 from trainers.trainer import Trainer
-from trainers.utils import apply_to_model_parameters
+from trainers.utils import apply_to_model_parameters, compute_masked_loss
 
 from data_loaders.task_loader import TaskDataset
 from metrics import calculate_metrics, MeanMetric
@@ -216,14 +216,8 @@ class MAMLTrainer(Trainer):
         # If there is no channel dimension in the target, remove it for CrossEntropy
         if not self.use_one_hot:
             targets = targets.squeeze(1).type(torch.long)
-            valid_mask = targets != -1
-            targets[~valid_mask] = 0
-            loss_t = self.loss_fn(preds, targets)
 
-            # Only compute loss for valid pixels
-            return (loss_t * valid_mask).mean()
-
-        return self.loss_fn(preds, targets)
+        return compute_masked_loss(self.loss_fn, preds, targets, invalid_value=-1)
 
     def validate_one_epoch(self, val_loaders):
         self.model.eval()

@@ -6,6 +6,7 @@ from typing import Optional
 
 from trainers.trainer import Trainer
 from data_loaders.dataset import CropDataset
+from trainers.utils import compute_masked_loss
 from metrics import calculate_metrics, MeanMetric
 
 
@@ -27,7 +28,7 @@ class DefaultTrainer(Trainer):
             val_writer=None,
     ):
         """
-        Creates a default Cropmap segmentation model Trainer, for regular TimeSeries or Image models.
+        Creates a default segmentation model Trainer, for regular TimeSeries or Image models.
         @param model: Segmentation model to be trained
         @param dataset: CropDataset instance
         @param loss_fn: PyTorch module that will compute loss
@@ -96,14 +97,8 @@ class DefaultTrainer(Trainer):
         # If there is no channel dimension in the target, remove it for CrossEntropy
         if not self.use_one_hot:
             targets = targets.squeeze(1).type(torch.long)
-            valid_mask = targets != -1
-            targets[~valid_mask] = 0
-            loss_t = self.loss_fn(preds, targets)
 
-            # Only compute loss for valid pixels
-            return (loss_t * valid_mask).mean()
-
-        return self.loss_fn(preds, targets)
+        return compute_masked_loss(self.loss_fn, preds, targets, invalid_value=-1)
 
     def train_one_step(self, images, labels):
         """

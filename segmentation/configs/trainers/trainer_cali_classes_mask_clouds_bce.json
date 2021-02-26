@@ -1,0 +1,27 @@
+{
+  "name": "cali_classes_mask_clouds_bce",
+  "trainer": "default",
+  "transforms": {
+    "MaskCloudyTargetsTransform": {
+      "mask_value": -1,
+      "cloud_value": 0.0,
+      "is_conservative": false
+    }
+  },
+  "interest_classes": [
+    "Fallow-Idle Cropland",
+    "Almonds",
+    "Pistachios",
+    "Cotton",
+    "Winter Wheat",
+    "Grapes",
+    "Alfalfa",
+    "Walnuts"
+  ],
+  "epochs": 200,
+  "batch_size": 16,
+  "loss": "BCEWithLogitsLoss",
+  "loss_kwargs": {},
+  "optimizer": "Adam",
+  "optimizer_kwargs": {"lr":0.001}
+}

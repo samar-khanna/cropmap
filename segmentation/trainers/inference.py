@@ -129,7 +129,7 @@ class InferenceAgent:
             interest_classes=interest_classes,
             transforms=transforms,
             train_val_test=(0.8, 0.1, 0.1),
-            use_one_hot=False,
+            use_one_hot=True,
             inf_mode=True
         )
 

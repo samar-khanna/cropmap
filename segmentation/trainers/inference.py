@@ -47,6 +47,7 @@ class InferenceAgent:
         # Get model
         self.model = model
         self.model.to(self.device)
+        self.model.eval()
 
     @classmethod
     def create_inference_agent(
@@ -62,7 +63,7 @@ class InferenceAgent:
             **kwargs
     ):
         """
-        Creates a Trainer out of raw arguments
+        Creates an InferenceAgent out of raw arguments
         @param data_path: Path to directory containing all datasets
         @param data_map_path: Path to .json file containing dataset split information
         @param out_dir: Path to directory where training results will be stored

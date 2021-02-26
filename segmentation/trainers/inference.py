@@ -103,6 +103,7 @@ class InferenceAgent:
             model=model,
             dataset=dataset,
             batch_size=trainer_config.get("batch_size", 32),
+            out_dir=out_dir,
             metric_names=trainer_config.get("metrics", []),
             **kwargs
         )

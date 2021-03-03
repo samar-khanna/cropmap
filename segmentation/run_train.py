@@ -9,10 +9,12 @@ import torch.nn as nn
 from trainers.trainer import Trainer
 from trainers.default_trainer import DefaultTrainer
 from trainers.maml_trainer import MAMLTrainer
+from trainers.simclr_trainer import SimCLRTrainer
 
 TRAINER_TYPES = {
     "default": DefaultTrainer,
-    "maml": MAMLTrainer
+    "maml": MAMLTrainer,
+    "simclr":SimCLRTrainer
 }
 
 

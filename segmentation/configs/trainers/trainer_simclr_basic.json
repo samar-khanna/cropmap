@@ -1,0 +1,22 @@
+{
+  "name": "simclr_basic",
+  "trainer": "simclr",
+  "epochs": 200,
+  "batch_size": 4,
+  "loss": "BatchCriterion",
+  "double_yield":1,
+  "num_classes":32,
+  "transforms": {
+    "PixelStaticTransform": {
+      "scale": 0.05
+        }
+  },
+  "metrics": [
+                    "loss"
+                  ],
+  "loss_kwargs": {},
+  "optimizer": "Adam",
+  "optimizer_kwargs": {
+    "lr":0.001
+  }
+}

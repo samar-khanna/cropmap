@@ -30,7 +30,7 @@ LOADERS = {
     "unet": ImageDataset,
     "m2unet": TimeSeriesDataset,
     "blockunet": TimeSeriesDataset,
-    "simplenet": TimeSeriesDataset
+    "simplenet": ImageDataset
 }
 
 

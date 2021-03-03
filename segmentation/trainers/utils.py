@@ -159,5 +159,4 @@ def create_dataset(classifier_name, *args, **kwargs) -> CropDataset:
         "Please specify a valid segmenation classifier available in MODELS"
 
     dataset_type = LOADERS[classifier_name]
-
     return dataset_type(*args, **kwargs)

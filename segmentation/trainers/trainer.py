@@ -143,7 +143,8 @@ class Trainer:
         interest_classes = trainer_config.get("interest_classes", [])
         transforms = trainer_config.get("transforms", {})
         dataset = cls.create_dataset(classifier_name, data_path, data_map_path,
-                                     classes, interest_classes, use_one_hot, transforms)
+                                     classes, interest_classes, use_one_hot, transforms,
+                                      double_yield=trainer_config.get("double_yield", 0))
 
         # TODO: Find a way to break this link between model and trainer config
         # Set up model using its config file and number of classes from trainer config.
@@ -185,7 +186,8 @@ class Trainer:
 
     @staticmethod
     def create_dataset(classifier_name, data_path, data_map_path,
-                       classes, interest_classes, use_one_hot, transforms):
+                       classes, interest_classes, use_one_hot, transforms,
+                        double_yield=False):
         """
         Creates a CropDataset
         @param classifier_name: Name of model classifier, which determines which dataset to use
@@ -206,7 +208,8 @@ class Trainer:
             transforms=transforms,
             train_val_test=(0.8, 0.1, 0.1),
             use_one_hot=use_one_hot,
-            inf_mode=False
+            inf_mode=False,
+            double_yield=double_yield
         )
 
     @staticmethod

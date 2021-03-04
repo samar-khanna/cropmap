@@ -96,6 +96,7 @@ class Trainer:
             classes,
             checkpoint_path,
             freeze_backbone,
+            new_head,
             **kwargs
     ):
         """
@@ -108,6 +109,7 @@ class Trainer:
         @param classes: JSON file containing Cropmap class name --> class id
         @param checkpoint_path: Path to .bin checkpoint file containing model weights
         @param freeze_backbone: Whether to freeze model backbone while training
+        @param new_head: Whether to allow non-strict loading to retraing head (e.g. for self-sup feature extractor)
         @param kwargs: Extra keyword arguments to pass to init function.
         @return: Initialised Trainer
         """
@@ -151,7 +153,7 @@ class Trainer:
         num_classes = len(interest_classes or classes.keys())
         if type(checkpoint_path) is bool and checkpoint_path:
             checkpoint_path = save_path
-        model = load_model(model_config, num_classes, checkpoint_path, freeze_backbone)
+        model = load_model(model_config, num_classes, checkpoint_path, freeze_backbone, new_head)
 
         return cls(
             model=model,

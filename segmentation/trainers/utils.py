@@ -36,12 +36,14 @@ def create_model(model_config, num_classes):
     return seg_model
 
 
-def load_model(model_config, num_classes, from_checkpoint=None, freeze_backbone=False):
+def load_model(model_config, num_classes, from_checkpoint=None, freeze_backbone=False, new_head=False):
     """
     Loads a segmentation model based on its config dictionary.
     If specified, load's model weights from a checkpoint file.
     Else, creates a new, fresh instance of the model.
     If specified, also freezes all parameters in backbone layer.
+    Can have relaxed loading with new_head=True to allow
+    for loading feature extractor w/ random init head
     """
     model = create_model(model_config, num_classes)
 
@@ -59,14 +61,30 @@ def load_model(model_config, num_classes, from_checkpoint=None, freeze_backbone=
         device = torch.device("cuda:0" if use_cuda else "cpu")
 
         state_dict = torch.load(checkpoint_path, map_location=device)
-        model.load_state_dict(state_dict)
+        if new_head:
+            if model_config['name'] == 'simple_net':
+                # Phrasing as below allows for mjutaton in iteration
+                for k in list(state_dict.keys()):
+                    if 'final_conv' in k:
+                        del state_dict[k]
+            else:
+                raise NotImplementedError
+            model.load_state_dict(state_dict, strict=False)
+        else:
+            model.load_state_dict(state_dict)
 
     # TODO: Finetuning (freezing layers other than backbone)
     # Freeze backbone if specified
     if freeze_backbone:
         print("Freezing backbone layers...")
-        for param in model.backbone.parameters():
-            param.requires_grad = False
+        if hasattr(model, "backbone"):
+            for param in model.backbone.parameters():
+                param.requires_grad = False
+        elif hasattr(model, "conv_layers"):
+            for param in model.conv_layers.parameters():
+                param.requires_grad = False
+        else:
+            raise NotImplementedError
 
     return model
 

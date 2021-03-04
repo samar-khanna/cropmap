@@ -135,8 +135,14 @@ def load_model(model_config, num_classes, from_checkpoint=None, freeze_backbone=
     # Freeze backbone if specified
     if freeze_backbone:
         print("Freezing backbone layers...")
-        for param in model.backbone.parameters():
-            param.requires_grad = False
+        if hasattr(model, "backbone"):
+            for param in model.backbone.parameters():
+                param.requires_grad = False
+        elif hasattr(model, "conv_layers"):
+            for param in model.conv_layers.parameters():
+                param.requires_grad = False
+        else:
+            raise NotImplementedError
 
     return model
 

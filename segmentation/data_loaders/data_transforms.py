@@ -1,6 +1,39 @@
 import numpy as np
 import torch
 
+class MaskCloudyTargetsTransform:
+    def __init__(self, mask_value=-1, cloud_value=0., is_conservative=False):
+        """
+        Replaces those pixels in target to mask_value which correspond with cloudy
+        pixels in the input. If conservative, then takes the union of cloudy pixels
+        in time series input. If not conservative, takes the intersection.
+        @param mask_value: Value with which to replace target cloudy pixels.
+        @param is_conservative: Whether to use logical OR vs AND to make mask of cloudy pixels.
+        """
+        self.mask_value = mask_value
+        self.cloud_value = cloud_value
+        self.is_conservative = is_conservative
+
+    def __call__(self, sample):
+        xs, y = sample
+
+        if not isinstance(xs, list):
+            xs = [xs]
+
+        invalid_mask = np.zeros(xs[0].shape[1:], dtype=np.bool)  # shape (h, w)
+        for t, x_t in enumerate(xs):
+
+            invalid = ~np.any(x_t != self.cloud_value, axis=0)  # shape (h, w)
+            if t == 0 or self.is_conservative:
+                invalid_mask = invalid_mask | invalid
+            else:
+                invalid_mask = invalid_mask & invalid
+
+        y[..., invalid_mask] = self.mask_value  # shape (c, h, w)
+
+        return xs, y
+
+
 class MaskBandTransform:
     def __init__(self, bands_to_mask, mask_values=[]):
         """

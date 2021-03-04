@@ -230,6 +230,7 @@ class Trainer:
         if loss_name in custom_loss.__dict__:
             loss_fn = custom_loss.__dict__[loss_name](**loss_kwargs)
         elif loss_name in nn.__dict__:
+            loss_kwargs['reduction'] = 'none'
             loss_fn = nn.__dict__[loss_name](**loss_kwargs)
         else:
             raise ValueError(("Invalid PyTorch loss. The name must exactly match a loss"

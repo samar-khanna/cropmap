@@ -1,0 +1,11 @@
+{
+  "name": "r-unet",
+  "classifier": "RUNet",
+  "classifier_kwargs": {
+    "layer": 3,
+    "channel_list": [16, 16, 32, 64, 128],
+    "use_maxpool": true,
+    "use_bilinear": true
+  },
+  "input_shape": [9, 224, 224]
+}

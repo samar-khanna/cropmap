@@ -169,6 +169,24 @@ def apply_to_model_parameters(
     return new_model
 
 
+def compute_masked_loss(loss_fn, preds, targets, invalid_value=-1):
+    """
+    Computes mean loss between preds and targets, masking out the loss value for
+    invalid entries in the 'targets' tensor (i.e. the loss is set to 0 for invalid entries)
+    @param [nn.Module] loss_fn: PyTorch module computing loss with reduction='none'
+    @param [torch.Tensor] preds: Model predictions in tensor form
+    @param [torch.Tensor] targets: Ground truth targets in tensor form.
+    @param [int or float] invalid_value: Value of invalid entries in targets tensor
+    @return: Mean loss
+    """
+    valid_mask = targets != invalid_value
+    targets[~valid_mask] = 0
+    loss_t = loss_fn(preds, targets)
+
+    # Only compute loss for valid pixels
+    return (loss_t * valid_mask).mean()
+
+
 def create_dataset(classifier_name, *args, **kwargs) -> CropDataset:
     """
     Creates a new initialised CropDataset based on the type of classifier.

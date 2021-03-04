@@ -1,0 +1,10 @@
+{
+  "name": "m2unet_resnet18",
+  "classifier": "M2UNet",
+  "classifier_kwargs": {},
+  "backbone": "resnet18",
+  "backbone_kwargs": {
+    "pretrained": false
+  },
+  "input_shape": [9, 224, 224]
+}

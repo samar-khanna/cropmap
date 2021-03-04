@@ -30,6 +30,27 @@ class NConvBlock(nn.Module):
         return self.conv_block(x)
 
 
+class DownSample(nn.Module):
+    def __init__(self, in_channels, out_channels, scale=2, n=2, use_maxpool=True):
+        """
+        Downsamples input (preserving channels) and then performs an NConv operation
+        Performs: downsample (factor s) |-> (Conv, BatchNorm, ReLU) x N on result
+        @param in_channels: number of channels in input
+        @param out_channels: number of channels in output
+        @param scale: scale factor with which to downsample
+        @param n: number of conv blocks to apply after downsample
+        @param use_maxpool: Whether to downsample with 2x2 maxpool or 2x2 Conv
+        """
+        super().__init__()
+        self.down = nn.MaxPool2d(kernel_size=2, stride=scale) if use_maxpool else \
+            nn.Conv2d(in_channels, in_channels, kernel_size=2, stride=scale)
+
+        self.conv_block = NConvBlock(in_channels, out_channels, n=n, kernel_size=3)
+
+    def forward(self, x):
+        return self.conv_block(self.down(x))
+
+
 class UpSampleAndMerge(nn.Module):
     """
     Inputs: x_up, x_down
@@ -46,7 +67,7 @@ class UpSampleAndMerge(nn.Module):
 
         if use_bilinear:
             self.up = nn.Sequential(
-                nn.UpSample(scale_factor=scale, mode='bilinear', align_corners=False),
+                nn.Upsample(scale_factor=scale, mode='bilinear', align_corners=False),
                 nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1),
                 nn.BatchNorm2d(out_channels)
             )

@@ -1,0 +1,50 @@
+{
+  "name": "maml_usa_classes_mask_clouds_bce",
+  "trainer": "MAML",
+  "trainer_kwargs": {
+    "inner_loop_lr": 0.001,
+    "use_higher_order": true
+  },
+  "transforms": {
+    "MaskCloudyTargetsTransform": {
+      "mask_value": -1,
+      "cloud_value": 0.0,
+      "is_conservative": false
+    }
+  },
+  "interest_classes": [
+    "Corn",
+    "Soybeans",
+    "Rice",
+    "Alfalfa",
+    "Grapes",
+    "Almonds",
+    "Pecans",
+    "Peanuts",
+    "Pistachios",
+    "Walnuts",
+    "Potatoes",
+    "Oats",
+    "Apples",
+    "Cotton",
+    "Dry Beans",
+    "Sugarbeets",
+    "Winter Wheat",
+    "Spring Wheat",
+    "Pop or Orn Corn",
+    "Other Hay-Non Alfalfa",
+    "Grass-Pasture",
+    "Woody Wetlands",
+    "Herbaceous Wetlands",
+    "Developed-Open Space",
+    "Deciduous Forest",
+    "Fallow-Idle Cropland"
+  ],
+  "num_shots": 6,
+  "batch_size": 4,
+  "epochs": 2000,
+  "loss": "BCEWithLogitsLoss",
+  "loss_kwargs": {},
+  "optimizer": "Adam",
+  "optimizer_kwargs": {"lr":0.001}
+}

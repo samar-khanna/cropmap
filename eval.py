@@ -176,7 +176,7 @@ def classes_dist(path_to_gt, classes):
     invert_classes = {ind: name for name, ind in classes.items()}
 
     dist = {invert_classes[ind]: int(count) \
-            for ind, count in index_dist.items()}
+            for ind, count in index_dist.items() if ind > 0}
 
     return dist
 

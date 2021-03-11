@@ -1,0 +1,59 @@
+{
+  "train": [
+    ["corn_belt/corn_loc1/2017/05", "corn_belt/corn_loc1/2017/06", "corn_belt/corn_loc1/2017/07"],
+    ["corn_belt/corn_loc2/2017/05", "corn_belt/corn_loc2/2017/06", "corn_belt/corn_loc2/2017/07"],
+    ["corn_belt/corn_loc3/2017/05", "corn_belt/corn_loc3/2017/06", "corn_belt/corn_loc3/2017/07"],
+    ["corn_belt/corn_loc4/2017/05", "corn_belt/corn_loc4/2017/06", "corn_belt/corn_loc4/2017/07"],
+    ["corn_belt/corn_loc5/2017/05", "corn_belt/corn_loc5/2017/06", "corn_belt/corn_loc5/2017/07"],
+    ["corn_belt/corn_loc6/2017/05", "corn_belt/corn_loc6/2017/06", "corn_belt/corn_loc6/2017/07"],
+    ["corn_belt/corn_loc7/2017/05", "corn_belt/corn_loc7/2017/06", "corn_belt/corn_loc7/2017/07"],
+    ["corn_belt/corn_loc8/2017/05", "corn_belt/corn_loc8/2017/06", "corn_belt/corn_loc8/2017/07"],
+    ["corn_belt/corn_loc9/2017/05", "corn_belt/corn_loc9/2017/06", "corn_belt/corn_loc9/2017/07"],
+    ["corn_belt/corn_loc10/2017/05" , "corn_belt/corn_loc10/2017/06", "corn_belt/corn_loc10/2017/07"],
+
+    ["california/cali_loc1/2017/05", "california/cali_loc1/2017/06", "california/cali_loc1/2017/07"],
+    ["california/cali_loc2/2017/05", "california/cali_loc2/2017/06", "california/cali_loc2/2017/07"],
+    ["california/cali_loc3/2017/05", "california/cali_loc3/2017/06", "california/cali_loc3/2017/07"],
+    ["california/cali_loc4/2017/05", "california/cali_loc4/2017/06", "california/cali_loc4/2017/07"],
+    ["california/cali_loc5/2017/05", "california/cali_loc5/2017/06", "california/cali_loc5/2017/07"],
+    ["california/cali_loc6/2017/05", "california/cali_loc6/2017/06", "california/cali_loc6/2017/07"],
+    ["california/cali_loc7/2017/05", "california/cali_loc7/2017/06", "california/cali_loc7/2017/07"],
+    ["california/cali_loc8/2017/05", "california/cali_loc8/2017/06", "california/cali_loc8/2017/07"],
+    ["california/cali_loc9/2017/05", "california/cali_loc9/2017/06", "california/cali_loc9/2017/07"],
+    ["california/cali_loc10/2017/05", "california/cali_loc10/2017/06", "california/cali_loc10/2017/07"],
+    ["california/cali_loc11/2017/05", "california/cali_loc11/2017/06", "california/cali_loc11/2017/07"],
+    ["california/cali_loc12/2017/05", "california/cali_loc12/2017/06", "california/cali_loc12/2017/07"],
+
+    ["washington/wash_loc1/2017/05", "washington/wash_loc1/2017/06", "washington/wash_loc1/2017/07"],
+    ["washington/wash_loc2/2017/05", "washington/wash_loc2/2017/06", "washington/wash_loc2/2017/07"],
+    ["washington/wash_loc3/2017/05", "washington/wash_loc3/2017/06", "washington/wash_loc3/2017/07"],
+    ["washington/wash_loc4/2017/05", "washington/wash_loc4/2017/06", "washington/wash_loc4/2017/07"],
+    ["washington/wash_loc5/2017/05", "washington/wash_loc5/2017/06", "washington/wash_loc5/2017/07"],
+    ["washington/wash_loc6/2017/05", "washington/wash_loc6/2017/06", "washington/wash_loc6/2017/07"],
+    ["washington/wash_loc7/2017/05", "washington/wash_loc7/2017/06", "washington/wash_loc7/2017/07"],
+    ["washington/wash_loc8/2017/05", "washington/wash_loc8/2017/06", "washington/wash_loc8/2017/07"],
+    ["washington/wash_loc9/2017/05", "washington/wash_loc9/2017/06", "washington/wash_loc9/2017/07"]
+  ],
+
+  "val": [
+    ["new_york/ny_loc1/2017/05", "new_york/ny_loc1/2017/06", "new_york/ny_loc1/2017/07"],
+    ["new_york/ny_loc2/2017/05", "new_york/ny_loc2/2017/06", "new_york/ny_loc2/2017/07"],
+    ["new_york/ny_loc3/2017/05", "new_york/ny_loc3/2017/06", "new_york/ny_loc3/2017/07"],
+    ["new_york/ny_loc4/2017/05", "new_york/ny_loc4/2017/06", "new_york/ny_loc4/2017/07"],
+    ["new_york/ny_loc5/2017/05", "new_york/ny_loc5/2017/06", "new_york/ny_loc5/2017/07"],
+    ["new_york/ny_loc6/2017/05", "new_york/ny_loc6/2017/06", "new_york/ny_loc6/2017/07"],
+
+    ["us_south/south_loc1/2017/05", "us_south/south_loc1/2017/06", "us_south/south_loc1/2017/07"],
+    ["us_south/south_loc2/2017/05", "us_south/south_loc2/2017/06", "us_south/south_loc2/2017/07"],
+    ["us_south/south_loc3/2017/05", "us_south/south_loc3/2017/06", "us_south/south_loc3/2017/07"],
+    ["us_south/south_loc4/2017/05", "us_south/south_loc4/2017/06", "us_south/south_loc4/2017/07"],
+    ["us_south/south_loc5/2017/05", "us_south/south_loc5/2017/06", "us_south/south_loc5/2017/07"],
+    ["us_south/south_loc6/2017/05", "us_south/south_loc6/2017/06", "us_south/south_loc6/2017/07"],
+    ["us_south/south_loc7/2017/05", "us_south/south_loc7/2017/06", "us_south/south_loc7/2017/07"],
+    ["us_south/south_loc8/2017/05", "us_south/south_loc8/2017/06", "us_south/south_loc8/2017/07"],
+    ["us_south/south_loc9/2017/05", "us_south/south_loc9/2017/06", "us_south/south_loc9/2017/07"],
+    ["us_south/south_loc10/2017/05", "us_south/south_loc10/2017/06", "us_south/south_loc10/2017/07"]
+  ],
+  
+  "test": []
+}

@@ -31,6 +31,8 @@ class MaskCloudyTargetsTransform:
 
         y[..., invalid_mask] = self.mask_value  # shape (c, h, w)
 
+        if len(xs)==1:
+            xs = xs[0]
         return xs, y
 
 
@@ -146,9 +148,15 @@ class PixelStaticTransform:
     def __call__(self, sample):
         if isinstance(sample, tuple): raise NotImplementedError # Just need to add xy parsing logic
         # TODO: parallelize this instead of iterating in for loop
-        for channel_i in range(sample.shape[1]):
-            channel_std = sample[:,channel_i].std()
-            sample[:, channel_i] += self.scale * channel_std * np.random.randn(*sample[:,channel_i].shape)
+
+        if isinstance(sample, list):
+            # timeseries
+            for i, s in enumerate(sample):
+                sample[i] = self(sample[i])
+        else:
+            for channel_i in range(sample.shape[1]):
+                channel_std = sample[:,channel_i].std()
+                sample[:, channel_i] += self.scale * channel_std * np.random.randn(*sample[:,channel_i].shape)
         return sample
 
 

@@ -61,6 +61,7 @@ class SimCLRTrainer(Trainer):
             train_writer=train_writer,
             val_writer=val_writer
         )
+
         self.hflip = data_transforms.HorizontalFlipSimCLRTransform()
         self.vflip = data_transforms.VerticalFlipSimCLRTransform()
         self.rot = data_transforms.RotationSimCLRTransform()
@@ -114,7 +115,15 @@ class SimCLRTrainer(Trainer):
         self.optimizer.zero_grad()
 
         # Feed model
+        # Doing concatentation of lists samples in timeseries here b/c transforms are written for block images
+        # images_1 is a list and the concatentation is as in the forward function of simplenet
+        # images_2 is already a tensor
+        if isinstance(images_1, list):
+            images_1 = torch.cat(images_1, dim=1)
+            images_2 = torch.cat(images_2, dim=1)
+            # images_2 = torch.cat(list(images_2), dim=1)
         n = images_1.shape[0]
+
         do_hflips = [[ (random()>0.5) for _ in range(n)] for _ in range(2)]
         do_vflips = [[ (random()>0.5) for _ in range(n)] for _ in range(2)]
         do_rots = [[randint(0,3) for _ in range(n)] for _ in range(2)]
@@ -160,6 +169,10 @@ class SimCLRTrainer(Trainer):
         @return: loss value
         """
         # Feed model
+        if isinstance(images_1, list):
+            images_1 = torch.cat(images_1, dim=1)
+            images_2 = torch.cat(images_2, dim=1)
+            # images_2 = torch.cat(list(images_2), dim=1)
         n = images_1.shape[0]
         do_hflips = [[ (random()>0.5) for _ in range(n)] for _ in range(2)]
         do_vflips = [[ (random()>0.5) for _ in range(n)] for _ in range(2)]
@@ -257,6 +270,10 @@ class SimCLRTrainer(Trainer):
         # Get the data loaders
         train_loaders, val_loaders, _ = \
             self.dataset.create_data_loaders(batch_size=self.batch_size)
+        
+        print(val_loaders, len(val_loaders))
+        if len(val_loaders)==0:
+            train_only = True
 
         # Variables to keep track of when to checkpoint
         best_loss = np.inf
@@ -267,12 +284,17 @@ class SimCLRTrainer(Trainer):
             train_metrics = self.train_one_epoch(train_loaders)
             self.log_metrics(train_metrics, epoch=epoch, phase="train")
 
-            val_metrics = self.validate_one_epoch(val_loaders)
-            self.log_metrics(val_metrics, epoch=epoch, phase="val")
+            if not train_only:
+                val_metrics = self.validate_one_epoch(val_loaders)
+                self.log_metrics(val_metrics, epoch=epoch, phase="val")
 
-            # Save model checkpoint if val iou better than best recorded so far.
-            loss = val_metrics['mean/loss']
-            diff = best_loss - loss
+                # Save model checkpoint if val iou better than best recorded so far.
+                loss = val_metrics['mean/loss']
+                diff = best_loss - loss
+            else:
+                print("Skipping val because in train_only mode")
+                diff = 1
+                loss = None
             if diff > 0 or (epochs_since_last_save > 10 and abs(diff / best_loss) < 0.05):
                 best_loss = loss if diff > 0 else best_loss
                 epochs_since_last_save = 0

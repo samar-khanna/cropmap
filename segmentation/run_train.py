@@ -95,7 +95,7 @@ if __name__ == "__main__":
         classes,
         args.checkpoint,
         args.freeze_backbone,
-        args.new_head
+        args.new_head,
     )
 
     # Run training

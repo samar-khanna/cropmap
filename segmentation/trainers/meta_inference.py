@@ -7,13 +7,13 @@ import torch.nn as nn
 from copy import deepcopy
 from collections import Counter
 
-from utils.colors import get_color_choice
 from data_loaders.dataset import CropDataset
+from data_loaders.task_loader import TaskDataset
 from metrics import create_metrics_dict, confusion_matrix
 
 from trainers.trainer import Trainer
 from trainers.inference import InferenceAgent
-from trainers.utils import create_dirs, load_model, create_dataset, compute_masked_loss
+from trainers.utils import create_dirs, load_model, compute_masked_loss
 
 
 class MetaInferenceAgent:
@@ -115,10 +115,9 @@ class MetaInferenceAgent:
         optimizer_class = Trainer.create_optimizer(optim_name)
 
         # Set up dataset
-        classifier_name = model_config["classifier"].lower()
         interest_classes = trainer_config.get("interest_classes", [])
         transforms = trainer_config.get("transforms", {})
-        dataset = cls.create_dataset(classifier_name, data_path, data_map_path,
+        dataset = cls.create_dataset(data_path, data_map_path,
                                      classes, interest_classes, transforms)
 
         # TODO: Find a way to break this link between model and trainer config
@@ -139,11 +138,10 @@ class MetaInferenceAgent:
         )
 
     @staticmethod
-    def create_dataset(classifier_name, data_path, data_map_path,
+    def create_dataset(data_path, data_map_path,
                        classes, interest_classes, transforms):
         """
         Creates a CropDataset
-        @param classifier_name: Name of model classifier, which determines which dataset to use
         @param data_path: Path to directory containing datasets
         @param data_map_path: Path to .json file containing dataset split information
         @param classes: JSON file containing class name --> class id
@@ -151,16 +149,15 @@ class MetaInferenceAgent:
         @param transforms: Dictionary of transform names to use for data augmentation
         @return: CropDataset
         """
-        return create_dataset(
-            classifier_name,
+        return TaskDataset(
             data_path=data_path,
-            data_map_path=data_map_path,
             classes=classes,
             interest_classes=interest_classes,
+            data_map_path=data_map_path,
             transforms=transforms,
             train_val_test=(0.8, 0.1, 0.1),
             use_one_hot=True,
-            inf_mode=True
+            inf_mode=False
         )
 
     def format_and_compute_loss(self, preds, targets):

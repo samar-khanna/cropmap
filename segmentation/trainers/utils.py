@@ -58,8 +58,8 @@ def load_model(model_config, num_classes, from_checkpoint=None, freeze_backbone=
         use_cuda = torch.cuda.is_available()
         device = torch.device("cuda:0" if use_cuda else "cpu")
 
-        state_dict = torch.load(checkpoint_path, map_location=device, strict=False)
-        model.load_state_dict(state_dict)
+        state_dict = torch.load(checkpoint_path, map_location=device)
+        model.load_state_dict(state_dict, strict=False)
 
     # TODO: Finetuning (freezing layers other than backbone)
     # Freeze backbone if specified

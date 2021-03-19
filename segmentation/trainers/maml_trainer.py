@@ -223,13 +223,13 @@ class MAMLTrainer(Trainer):
         self.model.eval()
 
         epoch_metrics = {}
-        for task_name, val_loader in val_loaders.items():
+        for task_name, (support_loader, query_loader) in val_loaders.items():
 
             # Set up metrics
             task_metrics = {name: MeanMetric() for name in self.metric_names}
             task_metrics["loss"] = MeanMetric()
 
-            for batch_index, (input_t, y) in enumerate(val_loader):
+            for batch_index, (input_t, y) in enumerate(query_loader):
                 input_t, y = self.dataset.shift_sample_to_device((input_t, y), self.device)
 
                 # Just evaluate model

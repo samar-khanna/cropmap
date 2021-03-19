@@ -3,6 +3,13 @@ import json
 import argparse
 
 from trainers.inference import InferenceAgent
+from trainers.meta_inference import MetaInferenceAgent
+
+
+AGENTS = {
+    "inference": InferenceAgent,
+    "meta_inference": MetaInferenceAgent
+}
 
 
 def passed_arguments():
@@ -66,7 +73,9 @@ if __name__ == "__main__":
     with open(args.trainer, 'r') as f:
         trainer_config = json.load(f)
 
-    inference_agent = InferenceAgent.create_inference_agent(
+    agent_name = trainer_config.get("inference_agent", "inference")
+    agent = AGENTS[agent_name]
+    inference_agent = agent.create_inference_agent(
         args.data_path,
         args.data_map,
         args.out_dir,

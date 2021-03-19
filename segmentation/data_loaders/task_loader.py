@@ -257,7 +257,7 @@ class TaskDataset(CropDataset):
 
                 curr_split = int(pct * len(inds)) + prev_split
                 set_inds = inds[prev_split: curr_split]
-                support_split = int(support_pct * len(set_inds)) if set_type == "train" else 0
+                support_split = int(support_pct * len(set_inds))
 
                 tasks_for_set = indices.get(set_type, {})
                 tasks_for_set[task_name] = {
@@ -280,6 +280,7 @@ class TaskDataset(CropDataset):
         # Generates indices if not present
         indices = self.gen_indices(regen_indices=regen_indices)
 
+        # ASSUME: Python Dicts are ordered, so support comes before query
         # Sample train data randomly, and validation, test data sequentially
         train_loaders = {
             task_name: [
@@ -291,23 +292,21 @@ class TaskDataset(CropDataset):
         }
 
         val_loaders = {
-            task_name: DataLoader(self, batch_size=batch_size, num_workers=num_workers,
-                                  sampler=SubsetSequentialSampler(task_inds['query']),
-                                  collate_fn=self.collate_fn)
+            task_name: [
+                DataLoader(self, batch_size=batch_size, num_workers=num_workers,
+                           sampler=SubsetSequentialSampler(inds), collate_fn=self.collate_fn)
+                for task_type, inds in task_inds.items()  # task_type is support/query
+            ]
             for task_name, task_inds in indices['val'].items()
         }
 
         test_loaders = {
-            task_name: DataLoader(self, batch_size=batch_size, num_workers=num_workers,
-                                  sampler=SubsetSequentialSampler(task_inds['query']),
-                                  collate_fn=self.collate_fn)
+            task_name: [
+                DataLoader(self, batch_size=batch_size, num_workers=num_workers,
+                           sampler=SubsetSequentialSampler(inds), collate_fn=self.collate_fn)
+                for task_type, inds in task_inds.items()  # task_type is support/query
+            ]
             for task_name, task_inds in indices['test'].items()
         }
 
         return train_loaders, val_loaders, test_loaders
-
-
-
-
-
-

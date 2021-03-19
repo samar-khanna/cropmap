@@ -101,7 +101,7 @@ class MetaInferenceAgent:
         create_dirs(out_dir)
 
         # SAVE config file in output directory at beginning of inference
-        InferenceAgent.save_config(trainer_config, out_dir, 'trainer_config')
+        InferenceAgent.save_config(trainer_config, out_dir, 'meta_inference_config')
         InferenceAgent.save_config(model_config, out_dir, 'model_config')
 
         # Set up loss

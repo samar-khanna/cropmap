@@ -11,7 +11,7 @@ from data_loaders.dataset import CropDataset
 from data_loaders.task_loader import TaskDataset
 from metrics import create_metrics_dict, confusion_matrix
 
-from trainers.trainer import Trainer
+from trainers.base_trainer import Trainer
 from trainers.inference import InferenceAgent
 from trainers.utils import create_dirs, load_model, compute_masked_loss
 
@@ -27,6 +27,7 @@ class MetaInferenceAgent:
             optim_kwargs,
             batch_size: int = 1,
             max_shots: int = 25,
+            reps_per_shot: int = 15,
             metric_names=(),
     ):
         """
@@ -36,10 +37,13 @@ class MetaInferenceAgent:
         @param out_dir: Output directory where inference results will be saved
         @param batch_size: Batch size of input images for inference (default 1)
         @param max_shots: Max number of input shots before inference is performed
+        @param reps_per_shot: Number of gradient updates made per shot
         @param metric_names: Names of metrics that will measure inference performance
         """
         self.batch_size = batch_size
         self.max_shots = max_shots
+        self.reps_per_shot = reps_per_shot
+
         self.out_dir = out_dir
 
         # Get list of metrics to use for training
@@ -128,11 +132,13 @@ class MetaInferenceAgent:
         return cls(
             model=model,
             dataset=dataset,
-            batch_size=trainer_config.get("batch_size", 1),
             out_dir=out_dir,
             loss_fn=loss_fn,
             optim_class=optimizer_class,
             optim_kwargs=optim_kwargs,
+            batch_size=trainer_config.get("batch_size", 1),
+            max_shots=trainer_config.get("batch_size", 25),
+            reps_per_shot=trainer_config.get("reps_per_shot", 15),
             metric_names=trainer_config.get("metrics", []),
             **kwargs
         )
@@ -205,11 +211,15 @@ class MetaInferenceAgent:
                         # Shift to correct device
                         input_t, y = self.dataset.shift_sample_to_device((input_t, y), self.device)
 
-                        # Input into the model
-                        preds = self.model(input_t)
+                        # Input into the model r times, r = num updates per shot
+                        for rep in range(self.reps_per_shot):
+                            preds = self.model(input_t)
 
-                        loss = self.format_and_compute_loss(preds, y)
-                        total_loss += loss
+                            loss = self.format_and_compute_loss(preds, y)
+                            loss.backward()
+                            optimizer.step()
+
+                            total_loss += loss
 
                         i += 1
                         if i == shots:
@@ -220,10 +230,8 @@ class MetaInferenceAgent:
 
                     break  # Did break out of inner loop, so shots are done
 
-            loss = total_loss / i
+            loss = total_loss / (i * self.reps_per_shot)
             print(f"Loss after {i} shots: {loss.item()}")
-            loss.backward()
-            optimizer.step()
 
             # Now do inference on all of query data
             copy_model.eval()

@@ -109,13 +109,13 @@ class MetaInferenceAgent:
         InferenceAgent.save_config(model_config, out_dir, 'model_config')
 
         # Set up loss
-        loss_name = trainer_config.get("loss", "CrossEntropyLoss")
+        loss_name = trainer_config.get("loss", "BCEWithLogitsLoss")
         loss_kwargs = trainer_config.get("loss_kwargs", {})
         loss_fn = Trainer.create_loss(loss_name, loss_kwargs)
 
         # Set up optim class but don't initialise
-        optim_name = trainer_config.get("optimizer", "Adam")
-        optim_kwargs = trainer_config.get("optimizer_kwargs", {"lr": 0.001})
+        optim_name = trainer_config.get("optimizer", "SGD")
+        optim_kwargs = trainer_config.get("optimizer_kwargs", {"lr": 0.01})
         optimizer_class = Trainer.create_optimizer(optim_name)
 
         # Set up dataset
@@ -137,7 +137,7 @@ class MetaInferenceAgent:
             optim_class=optimizer_class,
             optim_kwargs=optim_kwargs,
             batch_size=trainer_config.get("batch_size", 1),
-            max_shots=trainer_config.get("batch_size", 25),
+            max_shots=trainer_config.get("max_shots", 25),
             reps_per_shot=trainer_config.get("reps_per_shot", 15),
             metric_names=trainer_config.get("metrics", []),
             **kwargs
@@ -213,7 +213,7 @@ class MetaInferenceAgent:
 
                         # Input into the model r times, r = num updates per shot
                         for rep in range(self.reps_per_shot):
-                            preds = self.model(input_t)
+                            preds = copy_model(input_t)
 
                             loss = self.format_and_compute_loss(preds, y)
                             loss.backward()
@@ -242,7 +242,7 @@ class MetaInferenceAgent:
                     input_t, y = self.dataset.shift_sample_to_device((input_t, y), self.device)
 
                     # Input into the model
-                    preds = self.model(input_t)
+                    preds = copy_model(input_t)
 
                     # TODO: Fix inference for time series
                     # Convert from tensor to numpy array

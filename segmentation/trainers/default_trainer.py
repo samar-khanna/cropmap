@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.optim as optim
 from typing import Optional
 
-from trainers.trainer import Trainer
+from trainers.base_trainer import Trainer
 from data_loaders.dataset import CropDataset
 from trainers.utils import compute_masked_loss
 from metrics import calculate_metrics, MeanMetric

@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from trainers.trainer import Trainer
+from trainers.base_trainer import Trainer
 from trainers.default_trainer import DefaultTrainer
 from trainers.maml_trainer import MAMLTrainer
 

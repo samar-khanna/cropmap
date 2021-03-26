@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.optim as optim
 from typing import Optional
 
-from trainers.trainer import Trainer
+from trainers.base_trainer import Trainer
 from trainers.utils import apply_to_model_parameters, compute_masked_loss
 
 from data_loaders.task_loader import TaskDataset

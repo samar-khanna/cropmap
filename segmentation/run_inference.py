@@ -2,12 +2,12 @@ import os
 import json
 import argparse
 
-from trainers.inference import InferenceAgent
-from trainers.meta_inference import MetaInferenceAgent
+from inference.default_inference import DefaultInferenceAgent
+from inference.meta_inference import MetaInferenceAgent
 
 
 AGENTS = {
-    "inference": InferenceAgent,
+    "inference": DefaultInferenceAgent,
     "meta_inference": MetaInferenceAgent
 }
 

@@ -8,15 +8,20 @@ from copy import deepcopy
 from collections import Counter
 
 from data_loaders.dataset import CropDataset
+from inference.base_inference import InferenceAgent
 from data_loaders.task_loader import TaskDataset
 from metrics import create_metrics_dict, confusion_matrix
 
 from trainers.base_trainer import Trainer
-from trainers.inference import InferenceAgent
+from inference.default_inference import DefaultInferenceAgent
 from trainers.utils import create_dirs, load_model, compute_masked_loss
 
 
-class MetaInferenceAgent:
+class MetaInferenceAgent(InferenceAgent):
+
+    _SAVED_TRAINER_CONFIG_NAME = "meta_inference_config"
+    _DEFAULT_BATCH_SIZE = 1
+
     def __init__(
             self,
             model: nn.Module,
@@ -28,6 +33,7 @@ class MetaInferenceAgent:
             batch_size: int = 1,
             max_shots: int = 25,
             reps_per_shot: int = 15,
+            num_trials: int = 10,
             metric_names=(),
     ):
         """
@@ -40,27 +46,10 @@ class MetaInferenceAgent:
         @param reps_per_shot: Number of gradient updates made per shot
         @param metric_names: Names of metrics that will measure inference performance
         """
-        self.batch_size = batch_size
+        super().__init__(model, dataset, batch_size, out_dir, metric_names)
         self.max_shots = max_shots
         self.reps_per_shot = reps_per_shot
-
-        self.out_dir = out_dir
-
-        # Get list of metrics to use for training
-        self.metric_names = metric_names
-        if len(self.metric_names) == 0:
-            self.metric_names = ["iou", "prec", "recall"]
-
-        # Set up dataset
-        self.dataset = dataset
-
-        # Set up available device
-        use_cuda = torch.cuda.is_available()
-        self.device = torch.device("cuda:0" if use_cuda else "cpu")
-
-        # Get model
-        self.model = model
-        self.model.to(self.device)
+        self.num_trials = num_trials
 
         # Set up loss
         self.loss_fn = loss_fn
@@ -96,18 +85,6 @@ class MetaInferenceAgent:
         @param kwargs: Extra keyword arguments to pass to init function.
         @return: Initialised Inference Agent
         """
-        # Create output directory, save directory and metrics directories.
-        out_dir = os.path.join(
-            out_dir if out_dir is not None else os.path.join(data_path, 'inference'),
-            exp_name if exp_name is not None else
-            "_".join((model_config["name"], trainer_config["name"]))
-        )
-        create_dirs(out_dir)
-
-        # SAVE config file in output directory at beginning of inference
-        InferenceAgent.save_config(trainer_config, out_dir, 'meta_inference_config')
-        InferenceAgent.save_config(model_config, out_dir, 'model_config')
-
         # Set up loss
         loss_name = trainer_config.get("loss", "BCEWithLogitsLoss")
         loss_kwargs = trainer_config.get("loss_kwargs", {})
@@ -118,33 +95,26 @@ class MetaInferenceAgent:
         optim_kwargs = trainer_config.get("optimizer_kwargs", {"lr": 0.01})
         optimizer_class = Trainer.create_optimizer(optim_name)
 
-        # Set up dataset
-        interest_classes = trainer_config.get("interest_classes", [])
-        transforms = trainer_config.get("transforms", {})
-        dataset = cls.create_dataset(data_path, data_map_path,
-                                     classes, interest_classes, transforms)
-
-        # TODO: Find a way to break this link between model and trainer config
-        # Set up model using its config file and number of classes from trainer config.
-        num_classes = len(interest_classes or classes.keys())
-        model = load_model(model_config, num_classes, checkpoint_path)
-
-        return cls(
-            model=model,
-            dataset=dataset,
+        return super().create_inference_agent(
+            data_path=data_path,
+            data_map_path=data_map_path,
             out_dir=out_dir,
+            exp_name=exp_name,
+            trainer_config=trainer_config,
+            model_config=model_config,
+            classes=classes,
+            checkpoint_path=checkpoint_path,
+
             loss_fn=loss_fn,
             optim_class=optimizer_class,
             optim_kwargs=optim_kwargs,
-            batch_size=trainer_config.get("batch_size", 1),
             max_shots=trainer_config.get("max_shots", 25),
-            reps_per_shot=trainer_config.get("reps_per_shot", 15),
-            metric_names=trainer_config.get("metrics", []),
-            **kwargs
+            reps_per_shot=trainer_config.get("reps_per_shot", 10),
+            num_trials=trainer_config.get("num_trials", 10),
         )
 
     @staticmethod
-    def create_dataset(data_path, data_map_path,
+    def create_dataset(classifier_name, data_path, data_map_path,
                        classes, interest_classes, transforms):
         """
         Creates a CropDataset
@@ -163,7 +133,7 @@ class MetaInferenceAgent:
             transforms=transforms,
             train_val_test=(0.8, 0.1, 0.1),
             use_one_hot=True,
-            inf_mode=False
+            inf_mode=True
         )
 
     def format_and_compute_loss(self, preds, targets):
@@ -190,93 +160,98 @@ class MetaInferenceAgent:
         # Begin meta inference
         metric_results_per_shot = {}
         for shots in range(1, self.max_shots+1):
-            copy_model = deepcopy(self.model)
+            for trial_num in range(1, self.num_trials+1):
+                copy_model = deepcopy(self.model)
 
-            # Set up optimizer for each run
-            weights = filter(lambda w: w.requires_grad, copy_model.parameters())
-            optim_kwargs = {} if self.optim_kwargs is None else self.optim_kwargs
-            optimizer = self.optim_class(weights, **optim_kwargs)
+                # Set up optimizer for each run
+                weights = filter(lambda w: w.requires_grad, copy_model.parameters())
+                optim_kwargs = {} if self.optim_kwargs is None else self.optim_kwargs
+                optimizer = self.optim_class(weights, **optim_kwargs)
 
-            # Randomly pick a task
-            task_names = random.sample(data_loaders.keys(), len(data_loaders))
+                # Randomly pick a task
+                task_names = random.sample(data_loaders.keys(), len(data_loaders))
 
-            # Keep track of how many shots consumed
-            i = 0
-            total_loss = 0.
-            copy_model.train()
-            while i < shots:
-                for task_name in task_names:
-                    support_loader, _ = data_loaders[task_name]
-                    for batch_index, (input_t, y) in enumerate(support_loader):
+                # Keep track of how many shots consumed
+                i = 0
+                total_loss = 0.
+                copy_model.train()
+                while i < shots:
+                    for task_name in task_names:
+                        support_loader, _ = data_loaders[task_name]
+                        for batch_index, (input_t, y) in enumerate(support_loader):
+                            # Shift to correct device
+                            input_t, y = self.dataset.shift_sample_to_device((input_t, y), self.device)
+
+                            # Input into the model r times, r = num updates per shot
+                            for rep in range(self.reps_per_shot):
+                                preds = copy_model(input_t)
+
+                                loss = self.format_and_compute_loss(preds, y)
+                                loss.backward()
+                                optimizer.step()
+
+                                total_loss += loss
+
+                            i += 1
+                            if i == shots:
+                                break
+                        else:
+                            # Didn't break out of inner loop, still shots to go
+                            continue
+
+                        break  # Did break out of inner loop, so shots are done
+
+                loss = total_loss / (i * self.reps_per_shot)
+                print(f"Loss after {i} shots: {loss.item()}")
+
+                # Now do inference on all of query data
+                copy_model.eval()
+                total_metrics = Counter()
+                for task_name, (support_loader, query_loader) in data_loaders.items():
+                    for batch_index, (input_t, y) in enumerate(query_loader):
                         # Shift to correct device
                         input_t, y = self.dataset.shift_sample_to_device((input_t, y), self.device)
 
-                        # Input into the model r times, r = num updates per shot
-                        for rep in range(self.reps_per_shot):
-                            preds = copy_model(input_t)
+                        # Input into the model
+                        preds = copy_model(input_t)
 
-                            loss = self.format_and_compute_loss(preds, y)
-                            loss.backward()
-                            optimizer.step()
+                        # TODO: Fix inference for time series
+                        # Convert from tensor to numpy array
+                        # imgs = input_t.detach().cpu().numpy()
+                        preds = preds.detach().cpu().numpy()
+                        label_masks = y.detach().cpu().numpy()
 
-                            total_loss += loss
+                        # TODO: Add back images to this loop later
+                        # Iterate over each image in batch.
+                        for ind, (pred, label_mask) in enumerate(zip(preds, label_masks)):
+                            _pred = pred[np.newaxis, ...]  # shape (b, #c, h, w)
+                            _label_mask = label_mask[np.newaxis, ...]  # shape (b, #c, h, w)
 
-                        i += 1
-                        if i == shots:
-                            break
-                    else:
-                        # Didn't break out of inner loop, still shots to go
-                        continue
+                            # Get raw confusion matrix
+                            CM = confusion_matrix(_pred, _label_mask, pred_threshold=0)
 
-                    break  # Did break out of inner loop, so shots are done
+                            # Find the count of each class in ground truth,
+                            # record in metrics dict as whole num
+                            n = self.dataset.num_classes
+                            label_class_counts = np.count_nonzero(label_mask.reshape(n, -1), axis=-1)
 
-            loss = total_loss / (i * self.reps_per_shot)
-            print(f"Loss after {i} shots: {loss.item()}")
+                            # Create metrics dict
+                            metrics_dict = create_metrics_dict(
+                                self.dataset.remapped_classes,
+                                tn=CM[:, 0, 0], fp=CM[:, 0, 1],
+                                fn=CM[:, 1, 0], tp=CM[:, 1, 1],
+                                gt_class_count=label_class_counts.tolist()
+                            )
 
-            # Now do inference on all of query data
-            copy_model.eval()
-            total_metrics = Counter()
-            for task_name, (support_loader, query_loader) in data_loaders.items():
-                for batch_index, (input_t, y) in enumerate(query_loader):
-                    # Shift to correct device
-                    input_t, y = self.dataset.shift_sample_to_device((input_t, y), self.device)
+                            # Update metrics across all tasks' query sets
+                            total_metrics.update(metrics_dict)
 
-                    # Input into the model
-                    preds = copy_model(input_t)
+                metric_results_per_shot[i] += total_metrics
 
-                    # TODO: Fix inference for time series
-                    # Convert from tensor to numpy array
-                    # imgs = input_t.detach().cpu().numpy()
-                    preds = preds.detach().cpu().numpy()
-                    label_masks = y.detach().cpu().numpy()
-
-                    # TODO: Add back images to this loop later
-                    # Iterate over each image in batch.
-                    for ind, (pred, label_mask) in enumerate(zip(preds, label_masks)):
-                        _pred = pred[np.newaxis, ...]  # shape (b, #c, h, w)
-                        _label_mask = label_mask[np.newaxis, ...]  # shape (b, #c, h, w)
-
-                        # Get raw confusion matrix
-                        CM = confusion_matrix(_pred, _label_mask, pred_threshold=0)
-
-                        # Find the count of each class in ground truth,
-                        # record in metrics dict as whole num
-                        n = self.dataset.num_classes
-                        label_class_counts = np.count_nonzero(label_mask.reshape(n, -1), axis=-1)
-
-                        # Create metrics dict
-                        metrics_dict = create_metrics_dict(
-                            self.dataset.remapped_classes,
-                            tn=CM[:, 0, 0], fp=CM[:, 0, 1],
-                            fn=CM[:, 1, 0], tp=CM[:, 1, 1],
-                            gt_class_count=label_class_counts.tolist()
-                        )
-
-                        # Update metrics across all tasks' query sets
-                        total_metrics.update(metrics_dict)
-
-            metric_results_per_shot[i] = total_metrics
-
-            # Save eval results
-            with open(os.path.join(self.out_dir, f"meta_inference_shot_curve.json"), 'w') as f:
-                json.dump(metric_results_per_shot, f, indent=2)
+            # Save eval results by averaging
+            avg_results_per_shot = {
+                i: {m_name: m_val/self.num_trials for m_name, m_val in metric_counts.items()}
+                for i, metric_counts in metric_results_per_shot.items()
+            }
+            with open(os.path.join(self.out_dir, f"shot_curve.json"), 'w') as f:
+                json.dump(avg_results_per_shot, f, indent=2)

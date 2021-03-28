@@ -246,7 +246,10 @@ class MetaInferenceAgent(InferenceAgent):
                             # Update metrics across all tasks' query sets
                             total_metrics.update(metrics_dict)
 
-                metric_results_per_shot[i] += total_metrics
+                if i not in metric_results_per_shot:
+                    metric_results_per_shot[i] = total_metrics
+                else:
+                    metric_results_per_shot[i] += total_metrics
 
             # Save eval results by averaging
             avg_results_per_shot = {

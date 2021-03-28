@@ -127,6 +127,7 @@ class TaskDataset(CropDataset):
 
         # If in inference mode and mask doesn't exist, then create dummy label.
         if self.inf_mode and not mask_path:
+            print(f"Warning: No ground truth labels available from {mask_path}")
             y = np.ones((self.num_classes, th, tw))
         else:
             assert mask_path, "Ground truth mask must exist for training."

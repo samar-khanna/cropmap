@@ -205,6 +205,26 @@ class MAMLTrainer(Trainer):
         # Merge
         return {**metrics_dict, **{k: v.item() for k, v in aggregate_metrics.items()}}
 
+    def init_checkpoint_metric(self):
+        """
+        Initialises the MAML checkpoint metric to 1 (arbitrary)
+        @return:
+        """
+        return 1
+
+    def check_checkpoint_metric(self, val_metrics, epochs_since_last_save, prev_best):
+        """
+        Checks if epochs since last save is greater than 10 + noise
+        @param val_metrics:
+        @param epochs_since_last_save:
+        @param prev_best:
+        @return:
+        """
+        # TODO: Update this to include a better method for checkpointing
+        if epochs_since_last_save > 10 + np.random.randint(-2, 3):
+            return 1
+        return None
+
     def format_and_compute_loss(self, preds, targets):
         """
         Wrapper function for formatting preds and targets for loss.

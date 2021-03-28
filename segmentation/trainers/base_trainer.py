@@ -283,6 +283,25 @@ class Trainer:
             if not metric_name.startswith('class'):
                 print(f"{metric_name}: {metric_value}")
 
+    def init_checkpoint_metric(self):
+        """
+        Returns an initial value for the metric used to determine when to save
+        model weights (i.e. when to checkpoint)
+        @return:
+        """
+        raise NotImplementedError("This should be overwritten")
+
+    def check_checkpoint_metric(self, val_metrics, epochs_since_last_save, prev_best):
+        """
+        Returns a new value for the metric used to keep track of when to save/checkpoint
+        model weights, or None if weights should not be saved
+        @param val_metrics: Dictionary of validation metrics for the current epoch
+        @param epochs_since_last_save: The number of epochs passed since the last checkpoint
+        @param prev_best: The previous best value of the checkpoint metric
+        @return:
+        """
+        raise NotImplementedError("This should be overwritten")
+
     def validate_one_epoch(self, val_loaders):
         """
         Runs validation for one epoch, involving a full pass over validation data
@@ -313,7 +332,7 @@ class Trainer:
             self.dataset.create_data_loaders(batch_size=self.batch_size)
 
         # Variables to keep track of when to checkpoint
-        best_val_iou = -np.inf
+        best_val_metric = self.init_checkpoint_metric()
         epochs_since_last_save = 0
         for epoch in range(start_epoch, start_epoch + self.num_epochs):
             print(f"Starting epoch {epoch + 1}:")
@@ -324,11 +343,12 @@ class Trainer:
             val_metrics = self.validate_one_epoch(val_loaders)
             self.log_metrics(val_metrics, epoch=epoch, phase="val")
 
-            # Save model checkpoint if val iou better than best recorded so far.
-            val_iou = val_metrics['mean/iou']
-            diff = val_iou - best_val_iou
-            if diff > 0 or (epochs_since_last_save > 10 and abs(diff / best_val_iou) < 0.05):
-                best_val_iou = val_iou if diff > 0 else best_val_iou
+            # Save model checkpoint if checkpointing condition is satisfied
+            new_best_val_metric = self.check_checkpoint_metric(
+                val_metrics, epochs_since_last_save, best_val_metric
+            )
+            if new_best_val_metric is not None:
+                best_val_metric = new_best_val_metric
                 epochs_since_last_save = 0
 
                 save_model(self.model, self.save_path)

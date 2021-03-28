@@ -6,7 +6,8 @@ import argparse
 import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
-from collections import OrderedDict
+from collections import Counter, OrderedDict
+
 from segmentation.metrics import MeanMetric
 from segmentation.utils.colors import plot_color_legend
 
@@ -73,6 +74,16 @@ def get_inference_out_paths(inf_path):
     return im_paths, gt_paths, gt_raw_paths, pred_paths, pred_raw_paths, metric_paths
 
 
+def json_dict_generator(paths):
+    """
+    Returns a generator over json objects using the paths to the .json files
+    """
+    for path in paths:
+        with open(path, 'r') as f:
+            dict_obj = json.load(f)
+        yield dict_obj
+
+
 def parse_class_name_metric_type(string):
     """
     Parses key in input metrics dictionary into class name and metric type for that class.
@@ -109,36 +120,46 @@ def calculate_metrics_from_confusion_matrix(cm, metric_types=("iou", "prec", "re
     return metrics
 
 
-def calculate_mean_results(metric_paths):
+def get_per_class_confusion_matrix(metric_dict):
+    class_confusion_matrices = {}
+    for metric_name, val in metric_dict.items():
+        class_name, metric_type = parse_class_name_metric_type(metric_name)
+
+        if metric_type.lower() in {"tn", "fp", "fn", "tp"}:
+            cm = class_confusion_matrices.get(class_name, np.zeros((2, 2)))
+            if metric_type.lower() == "tn":
+                cm[0, 0] += val
+            elif metric_type.lower() == "fp":
+                cm[0, 1] += val
+            elif metric_type.lower() == "fn":
+                cm[1, 0] += val
+            elif metric_type.lower() == "tp":
+                cm[1, 1] += val
+            class_confusion_matrices[class_name] = cm
+
+    return class_confusion_matrices
+
+
+def calculate_mean_results(metric_dicts):
     """
     Calculates mean metrics across all images in inference out.
     """
     # Calculate mean metrics across all images in inference out.
     mean_results = {}
-    class_confusion_matrices = {}
-    for i, metric_path in enumerate(metric_paths):
-        with open(metric_path, 'r') as f:
-            metrics = json.load(f)
+    class_confusion_matrices = Counter()
+    for i, metrics in enumerate(metric_dicts):
+
+        class_cm = get_per_class_confusion_matrix(metrics)
+        class_confusion_matrices.update(class_cm)
 
         for metric_name, val in metrics.items():
             class_name, metric_type = parse_class_name_metric_type(metric_name)
 
-            if metric_type.lower() in {"tn", "fp", "fn", "tp"}:
-                cm = class_confusion_matrices.get(class_name, np.zeros((2, 2)))
-                if metric_type.lower() == "tn":
-                    cm[0, 0] += val
-                elif metric_type.lower() == "fp":
-                    cm[0, 1] += val
-                elif metric_type.lower() == "fn":
-                    cm[1, 0] += val
-                elif metric_type.lower() == "tp":
-                    cm[1, 1] += val
-                class_confusion_matrices[class_name] = cm
-            
-            elif metric_name not in mean_results:
-                mean_results[metric_name] = MeanMetric(val)
-            else:
-                mean_results[metric_name].update(val)
+            if metric_type.lower() not in {"tn", "fp", "fn", "tp"}:
+                if metric_name not in mean_results:
+                    mean_results[metric_name] = MeanMetric(val)
+                else:
+                    mean_results[metric_name].update(val)
 
     # Get rid of MeanMetrics
     mean_results = {n: metric.item() for n, metric in mean_results.items()}
@@ -400,9 +421,11 @@ if __name__ == "__main__":
 
         im_paths, gt_paths, gt_raw_paths, pred_paths, pred_raw_paths, metric_paths = \
             get_inference_out_paths(inf_path)
+        
+        metric_dicts = json_dict_generator(metric_paths)
 
         # Get rid of MeanMetrics
-        mean_results = calculate_mean_results(metric_paths)
+        mean_results = calculate_mean_results(metric_dicts)
 
         print("Evaluation results for non-zero metrics:")
         for metric_name, metric_val in mean_results.items():
@@ -445,9 +468,11 @@ if __name__ == "__main__":
         for inf_path in inf_paths:
             im_paths, gt_paths, gt_raw_paths, pred_paths, pred_raw_paths, metric_paths = \
                 get_inference_out_paths(inf_path)
+            
+            metric_dicts = json_dict_generator(metric_paths)
 
             # Get rid of MeanMetrics
-            mean_results = calculate_mean_results(metric_paths)
+            mean_results = calculate_mean_results(metric_dicts)
 
             # Inference tag is descriptive name of expeirment
             inf_tag = inf_path.strip(os.path.sep).split(os.path.sep)[-1]

@@ -47,9 +47,10 @@ def load_model(model_config, num_classes, from_checkpoint=None, freeze_backbone=
 
         replace_head_name = model_config.get('new_head', None)
         if replace_head_name:
-            print(f"Replacing model head with {replace_head_name}")
-            for k in state_dict.keys():
+            print(f"Replacing model head with {replace_head_name}...")
+            for k in list(state_dict.keys()):
                 if replace_head_name in k:
+                    print(f"Deleting layer {k}")
                     del state_dict[k]
 
         model.load_state_dict(state_dict, strict=False)

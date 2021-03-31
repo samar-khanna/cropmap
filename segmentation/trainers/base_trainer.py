@@ -11,7 +11,8 @@ from torch.utils.tensorboard import SummaryWriter
 
 import models.loss as custom_loss
 from data_loaders.dataset import CropDataset
-from trainers.utils import create_dirs, load_model, save_model, create_dataset
+from utils.loading import load_model, save_model, create_dataset
+from utils.utils import create_dirs
 
 
 class Trainer:

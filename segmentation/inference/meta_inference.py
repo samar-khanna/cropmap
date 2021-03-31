@@ -210,7 +210,7 @@ class MetaInferenceAgent(InferenceAgent):
 
                     total_loss += loss
 
-                loss = total_loss / (i * self.reps_per_shot)
+                loss = total_loss / self.reps_per_shot
                 print(f"Loss after {i} shots: {loss.item()}")
 
                 # Now do inference on all of query data

@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from typing import Optional
 
-from trainers.utils import create_dataset
+from utils.loading import create_dataset
 from data_loaders.dataset import CropDataset
 from .utils import bytescale, draw_mask_on_im
 from inference.base_inference import InferenceAgent

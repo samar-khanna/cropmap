@@ -14,7 +14,9 @@ from metrics import create_metrics_dict, confusion_matrix
 
 from trainers.base_trainer import Trainer
 from inference.default_inference import DefaultInferenceAgent
-from trainers.utils import create_dirs, load_model, compute_masked_loss
+from trainers.utils import compute_masked_loss
+from utils.loading import load_model
+from utils.utils import create_dirs
 
 
 class MetaInferenceAgent(InferenceAgent):

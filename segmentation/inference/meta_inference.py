@@ -195,7 +195,8 @@ class MetaInferenceAgent(InferenceAgent):
                         break  # Did break out of inner loop, so shots are done
 
                 # Concatenate input_shots along batch dimension
-                input_shots = torch.cat(input_shots, dim=0)
+                input_shots = tuple(zip(*input_shots))  # transposes the time and batch dimensions
+                input_shots = [torch.cat(x_t, dim=0) for x_t in input_shots]
                 labels = torch.cat(labels, dim=0)
 
                 # Input into the model r times, r = num updates per shot

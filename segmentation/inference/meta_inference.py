@@ -159,8 +159,11 @@ class MetaInferenceAgent(InferenceAgent):
 
         # Begin meta inference
         metric_results_per_shot = {}
-        for shots in range(1, self.max_shots+1):
-            for trial_num in range(1, self.num_trials+1):
+        for trial_num in range(1, self.num_trials + 1):
+            # Shuffle tasks for each trial, but not across shots
+            task_names = random.sample(data_loaders.keys(), len(data_loaders))
+
+            for shots in range(1, self.max_shots+1):
                 copy_model = deepcopy(self.model)
 
                 # Set up optimizer for each run
@@ -168,13 +171,10 @@ class MetaInferenceAgent(InferenceAgent):
                 optim_kwargs = {} if self.optim_kwargs is None else self.optim_kwargs
                 optimizer = self.optim_class(weights, **optim_kwargs)
 
-                # Randomly pick a task
-                task_names = random.sample(data_loaders.keys(), len(data_loaders))
-
-                # Keep track of how many shots consumed
+                # Accumulate the shots and keep track of how many shots consumed
                 i = 0
                 total_loss = 0.
-                copy_model.train()
+                input_shots, labels = [], []
                 while i < shots:
                     for task_name in task_names:
                         support_loader, _ = data_loaders[task_name]
@@ -182,15 +182,8 @@ class MetaInferenceAgent(InferenceAgent):
                             # Shift to correct device
                             input_t, y = self.dataset.shift_sample_to_device((input_t, y), self.device)
 
-                            # Input into the model r times, r = num updates per shot
-                            for rep in range(self.reps_per_shot):
-                                preds = copy_model(input_t)
-
-                                loss = self.format_and_compute_loss(preds, y)
-                                loss.backward()
-                                optimizer.step()
-
-                                total_loss += loss
+                            input_shots.append(input_t)  # shape (1, c, h, w)
+                            labels.append(y)
 
                             i += 1
                             if i == shots:
@@ -200,6 +193,21 @@ class MetaInferenceAgent(InferenceAgent):
                             continue
 
                         break  # Did break out of inner loop, so shots are done
+
+                # Concatenate input_shots along batch dimension
+                input_shots = torch.cat(input_shots, dim=0)
+                labels = torch.cat(labels, dim=0)
+
+                # Input into the model r times, r = num updates per shot
+                copy_model.train()
+                for rep in range(self.reps_per_shot):
+                    preds = copy_model(input_shots)
+
+                    loss = self.format_and_compute_loss(preds, labels)
+                    loss.backward()
+                    optimizer.step()
+
+                    total_loss += loss
 
                 loss = total_loss / (i * self.reps_per_shot)
                 print(f"Loss after {i} shots: {loss.item()}")
@@ -247,14 +255,16 @@ class MetaInferenceAgent(InferenceAgent):
                             total_metrics.update(metrics_dict)
 
                 if i not in metric_results_per_shot:
-                    metric_results_per_shot[i] = total_metrics
+                    metric_results_per_shot[i] = [total_metrics]
                 else:
-                    metric_results_per_shot[i] += total_metrics
+                    metric_results_per_shot[i].append(total_metrics)
 
             # Save eval results by averaging
-            avg_results_per_shot = {
-                i: {m_name: m_val/self.num_trials for m_name, m_val in metric_counts.items()}
-                for i, metric_counts in metric_results_per_shot.items()
-            }
+            # avg_results_per_shot = {
+            #     i: {m_name: m_val/self.num_trials for m_name, m_val in metric_counts.items()}
+            #     for i, metric_counts in metric_results_per_shot.items()
+            # }
+
+            # Save results every trial
             with open(os.path.join(self.out_dir, f"shot_curve.json"), 'w') as f:
-                json.dump(avg_results_per_shot, f, indent=2)
+                json.dump(metric_results_per_shot, f, indent=2)

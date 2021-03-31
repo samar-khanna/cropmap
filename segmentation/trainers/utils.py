@@ -59,6 +59,12 @@ def load_model(model_config, num_classes, from_checkpoint=None, freeze_backbone=
         device = torch.device("cuda:0" if use_cuda else "cpu")
 
         state_dict = torch.load(checkpoint_path, map_location=device)
+        
+        # TODO: Generalize this through arguments
+        if 'new_head' in model_config:
+            for k in list(state_dict.keys()):
+                if model_config['new_head'] in k:
+                    del state_dict[k]
         model.load_state_dict(state_dict, strict=False)
 
     # TODO: Finetuning (freezing layers other than backbone)

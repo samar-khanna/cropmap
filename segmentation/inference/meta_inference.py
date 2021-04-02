@@ -180,9 +180,6 @@ class MetaInferenceAgent(InferenceAgent):
                     for task_name in task_names:
                         support_loader, _ = data_loaders[task_name]
                         for batch_index, (input_t, y) in enumerate(support_loader):
-                            # Shift to correct device
-                            input_t, y = self.dataset.shift_sample_to_device((input_t, y), self.device)
-
                             input_shots.append(input_t)  # shape (1, c, h, w)
                             labels.append(y)
 
@@ -203,6 +200,10 @@ class MetaInferenceAgent(InferenceAgent):
                 # Input into the model r times, r = num updates per shot
                 copy_model.train()
                 for rep in range(self.reps_per_shot):
+                    # Shift to correct device
+                    input_shots, labels = \
+                        self.dataset.shift_sample_to_device((input_shots, labels), self.device)
+
                     preds = copy_model(input_shots)
 
                     loss = self.format_and_compute_loss(preds, labels)

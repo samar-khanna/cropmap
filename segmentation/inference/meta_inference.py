@@ -10,7 +10,7 @@ from collections import Counter
 from data_loaders.dataset import CropDataset
 from inference.base_inference import InferenceAgent
 from data_loaders.task_loader import TaskDataset
-from metrics import create_metrics_dict, confusion_matrix
+from metrics import create_metrics_dict, confusion_matrix, MeanMetric
 
 from trainers.base_trainer import Trainer
 from inference.default_inference import DefaultInferenceAgent
@@ -175,7 +175,6 @@ class MetaInferenceAgent(InferenceAgent):
 
                 # Accumulate the shots and keep track of how many shots consumed
                 i = 0
-                total_loss = 0.
                 input_shots, labels = [], []
                 while i < shots:
                     for task_name in task_names:
@@ -210,14 +209,10 @@ class MetaInferenceAgent(InferenceAgent):
                     loss.backward()
                     optimizer.step()
 
-                    total_loss += loss
-
-                loss = total_loss / self.reps_per_shot
-                print(f"Loss after {i} shots: {loss.item()}")
-
                 # Now do inference on all of query data
                 copy_model.eval()
                 total_metrics = Counter()
+                avg_loss = MeanMetric()
                 for task_name, (support_loader, query_loader) in data_loaders.items():
                     for batch_index, (input_t, y) in enumerate(query_loader):
                         # Shift to correct device
@@ -225,6 +220,9 @@ class MetaInferenceAgent(InferenceAgent):
 
                         # Input into the model
                         preds = copy_model(input_t)
+
+                        loss = self.format_and_compute_loss(preds, y)
+                        avg_loss.update(loss.item())
 
                         # TODO: Fix inference for time series
                         # Convert from tensor to numpy array
@@ -261,6 +259,8 @@ class MetaInferenceAgent(InferenceAgent):
                     metric_results_per_shot[i] = [total_metrics]
                 else:
                     metric_results_per_shot[i].append(total_metrics)
+
+                print(f"Query loss after {i} shots: {avg_loss.item()}")
 
             # Save eval results by averaging
             # avg_results_per_shot = {

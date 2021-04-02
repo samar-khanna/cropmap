@@ -218,11 +218,12 @@ class MetaInferenceAgent(InferenceAgent):
                         # Shift to correct device
                         input_t, y = self.dataset.shift_sample_to_device((input_t, y), self.device)
 
-                        # Input into the model
-                        preds = copy_model(input_t)
+                        with torch.no_grad():
+                            # Input into the model and get loss
+                            preds = copy_model(input_t)
 
-                        loss = self.format_and_compute_loss(preds, y)
-                        avg_loss.update(loss.item())
+                            loss = self.format_and_compute_loss(preds, y)
+                            avg_loss.update(loss.item())
 
                         # TODO: Fix inference for time series
                         # Convert from tensor to numpy array

@@ -31,7 +31,7 @@ class MetaInferenceAgent(InferenceAgent):
             optim_class,
             optim_kwargs,
             batch_size: int = 1,
-            shot_list: tuple = (1, 5, 10, 15, 20, 25),
+            shot_list: tuple = (1, 4, 8, 12, 16, 20, 24),
             reps_per_shot: int = 50,
             num_trials: int = 10,
             metric_names=(),
@@ -109,7 +109,7 @@ class MetaInferenceAgent(InferenceAgent):
             loss_fn=loss_fn,
             optim_class=optimizer_class,
             optim_kwargs=optim_kwargs,
-            shot_list=trainer_config.get("shot_list", (1, 5, 10, 15, 20, 25)),
+            shot_list=trainer_config.get("shot_list", (1, 4, 8, 12, 16, 20, 24)),
             reps_per_shot=trainer_config.get("reps_per_shot", 50),
             num_trials=trainer_config.get("num_trials", 10),
         )

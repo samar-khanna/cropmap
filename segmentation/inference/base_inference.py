@@ -22,6 +22,7 @@ class InferenceAgent:
             dataset: CropDataset,
             batch_size: int,
             out_dir: str,
+            exp_name: str,
             metric_names=(),
     ):
         """
@@ -30,10 +31,12 @@ class InferenceAgent:
         @param dataset: CropDataset instance
         @param batch_size: Batch size of input images for inference
         @param out_dir: Output directory where inference results will be saved
+        @param exp_name: Unique name for inference experiment
         @param metric_names: Names of metrics that will measure inference performance
         """
         self.batch_size = batch_size
         self.out_dir = out_dir
+        self.exp_name = exp_name
 
         # Get list of metrics to use for training
         self.metric_names = metric_names
@@ -70,7 +73,7 @@ class InferenceAgent:
         @param data_path: Path to directory containing all datasets
         @param data_map_path: Path to .json file containing dataset split information
         @param out_dir: Path to directory where training results will be stored
-        @param exp_name: Unique name for inference experiment as directory for storing results
+        @param exp_name: Unique name for inference experiment
         @param trainer_config: JSON config file containing InferenceAgent parameters
         @param model_config: JSON config file containing Model parameters
         @param classes: JSON file containing Cropmap class name --> class id
@@ -79,11 +82,8 @@ class InferenceAgent:
         @return: Initialised Inference Agent
         """
         # Create output directory, save directory and metrics directories.
-        out_dir = os.path.join(
-            out_dir if out_dir is not None else os.path.join(data_path, 'inference'),
-            exp_name if exp_name is not None else
-            "_".join((model_config["name"], trainer_config["name"]))
-        )
+        out_dir = out_dir if out_dir is not None else \
+            os.path.join(data_path, 'inference', "_".join((model_config["name"], trainer_config["name"])))
         create_dirs(out_dir)
 
         # SAVE config file in output directory at beginning of inference
@@ -107,6 +107,7 @@ class InferenceAgent:
             dataset=dataset,
             batch_size=trainer_config.get("batch_size", cls._DEFAULT_BATCH_SIZE),
             out_dir=out_dir,
+            exp_name=exp_name,
             metric_names=trainer_config.get("metrics", []),
             **kwargs
         )

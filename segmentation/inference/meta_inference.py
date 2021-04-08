@@ -26,6 +26,7 @@ class MetaInferenceAgent(InferenceAgent):
             model: nn.Module,
             dataset: CropDataset,
             out_dir: str,
+            exp_name: str,
             loss_fn,
             optim_class,
             optim_kwargs,
@@ -40,12 +41,13 @@ class MetaInferenceAgent(InferenceAgent):
         @param model: Segmentation model to evaluate
         @param dataset: CropDataset instance
         @param out_dir: Output directory where inference results will be saved
+        @param exp_name: Unique name for experiment (used for saving metrics file)
         @param batch_size: Batch size of input images for inference (default 1)
         @param shot_list: Max number of input shots before inference is performed
         @param reps_per_shot: Number of gradient updates made per shot
         @param metric_names: Names of metrics that will measure inference performance
         """
-        super().__init__(model, dataset, batch_size, out_dir, metric_names)
+        super().__init__(model, dataset, batch_size, out_dir, exp_name, metric_names)
         self.shot_list = shot_list
         self.reps_per_shot = reps_per_shot
         self.num_trials = num_trials
@@ -281,5 +283,5 @@ class MetaInferenceAgent(InferenceAgent):
             # }
 
             # Save results every trial
-            with open(os.path.join(self.out_dir, f"shot_curve.json"), 'w') as f:
+            with open(os.path.join(self.out_dir, f"{self.exp_name}_shot_curve.json"), 'w') as f:
                 json.dump(metric_results_per_shot, f, indent=2)

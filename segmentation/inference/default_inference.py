@@ -1,13 +1,10 @@
 import os
 import json
 import numpy as np
-import torch
 import torch.nn as nn
 from typing import Optional
 
-from utils.loading import create_dataset
 from data_loaders.dataset import CropDataset
-from .utils import bytescale, draw_mask_on_im
 from inference.base_inference import InferenceAgent
 from metrics import create_metrics_dict, confusion_matrix
 
@@ -19,6 +16,7 @@ class DefaultInferenceAgent(InferenceAgent):
             dataset: CropDataset,
             batch_size: int,
             out_dir: str,
+            exp_name: str,
             metric_names=(),
     ):
         """
@@ -27,9 +25,10 @@ class DefaultInferenceAgent(InferenceAgent):
         @param dataset: CropDataset instance
         @param batch_size: Batch size of input images for inference
         @param out_dir: Output directory where inference results will be saved
+        @param exp_name: Unique name for inference experiment
         @param metric_names: Names of metrics that will measure inference performance
         """
-        super().__init__(model, dataset, batch_size, out_dir, metric_names)
+        super().__init__(model, dataset, batch_size, out_dir, exp_name, metric_names)
 
     def infer(self, set_type):
         """

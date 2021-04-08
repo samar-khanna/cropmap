@@ -109,7 +109,7 @@ class MetaInferenceAgent(InferenceAgent):
             loss_fn=loss_fn,
             optim_class=optimizer_class,
             optim_kwargs=optim_kwargs,
-            max_shots=trainer_config.get("shot_list", (1, 5, 10, 15, 20, 25)),
+            shot_list=trainer_config.get("shot_list", (1, 5, 10, 15, 20, 25)),
             reps_per_shot=trainer_config.get("reps_per_shot", 50),
             num_trials=trainer_config.get("num_trials", 10),
         )

@@ -13,10 +13,7 @@ from data_loaders.task_loader import TaskDataset
 from metrics import create_metrics_dict, confusion_matrix, MeanMetric
 
 from trainers.base_trainer import Trainer
-from inference.default_inference import DefaultInferenceAgent
 from trainers.utils import compute_masked_loss
-from utils.loading import load_model
-from utils.utils import create_dirs
 
 
 class MetaInferenceAgent(InferenceAgent):
@@ -33,8 +30,8 @@ class MetaInferenceAgent(InferenceAgent):
             optim_class,
             optim_kwargs,
             batch_size: int = 1,
-            max_shots: int = 25,
-            reps_per_shot: int = 15,
+            shot_list: tuple = (1, 5, 10, 15, 20, 25),
+            reps_per_shot: int = 50,
             num_trials: int = 10,
             metric_names=(),
     ):
@@ -44,12 +41,12 @@ class MetaInferenceAgent(InferenceAgent):
         @param dataset: CropDataset instance
         @param out_dir: Output directory where inference results will be saved
         @param batch_size: Batch size of input images for inference (default 1)
-        @param max_shots: Max number of input shots before inference is performed
+        @param shot_list: Max number of input shots before inference is performed
         @param reps_per_shot: Number of gradient updates made per shot
         @param metric_names: Names of metrics that will measure inference performance
         """
         super().__init__(model, dataset, batch_size, out_dir, metric_names)
-        self.max_shots = max_shots
+        self.shot_list = shot_list
         self.reps_per_shot = reps_per_shot
         self.num_trials = num_trials
 
@@ -110,8 +107,8 @@ class MetaInferenceAgent(InferenceAgent):
             loss_fn=loss_fn,
             optim_class=optimizer_class,
             optim_kwargs=optim_kwargs,
-            max_shots=trainer_config.get("max_shots", 25),
-            reps_per_shot=trainer_config.get("reps_per_shot", 10),
+            max_shots=trainer_config.get("shot_list", (1, 5, 10, 15, 20, 25)),
+            reps_per_shot=trainer_config.get("reps_per_shot", 50),
             num_trials=trainer_config.get("num_trials", 10),
         )
 
@@ -148,6 +145,45 @@ class MetaInferenceAgent(InferenceAgent):
         """
         return compute_masked_loss(self.loss_fn, preds, targets, invalid_value=-1)
 
+    def evaluate_batch(self, preds, labels):
+        """
+        Returns confusion matrix for each class across batch
+        @param preds: (b, #classes, h, w) Tensor of model predictions
+        @param labels: (b, #classes, h, w) Tensor of labels
+        @return: Confusion matrix metrics totalled across batch
+        """
+        # TODO: Fix inference for time series
+        # Convert from tensor to numpy array
+        # imgs = input_t.detach().cpu().numpy()
+        preds = preds.detach().cpu().numpy()
+        label_masks = labels.detach().cpu().numpy()
+
+        batch_total_metrics = Counter()
+        # TODO: Add back images to this loop later
+        # Iterate over each image in batch.
+        for ind, (pred, label_mask) in enumerate(zip(preds, label_masks)):
+            _pred = pred[np.newaxis, ...]  # shape (b, #c, h, w)
+            _label_mask = label_mask[np.newaxis, ...]  # shape (b, #c, h, w)
+
+            # Get raw confusion matrix
+            CM = confusion_matrix(_pred, _label_mask, pred_threshold=0)
+
+            # Find the count of each class in ground truth,
+            # record in metrics dict as whole num
+            n = self.dataset.num_classes
+            label_class_counts = np.count_nonzero(label_mask.reshape(n, -1), axis=-1)
+
+            # Create metrics dict
+            metrics_dict = create_metrics_dict(
+                self.dataset.remapped_classes,
+                tn=CM[:, 0, 0], fp=CM[:, 0, 1],
+                fn=CM[:, 1, 0], tp=CM[:, 1, 1],
+                gt_class_count=label_class_counts.tolist()
+            )
+            batch_total_metrics.update(metrics_dict)
+
+        return batch_total_metrics
+
     def infer(self, set_type):
         """
         Runs inference for the model on the given set_type for the dataset.
@@ -165,12 +201,13 @@ class MetaInferenceAgent(InferenceAgent):
             # Shuffle tasks for each trial, but not across shots
             task_names = random.sample(data_loaders.keys(), len(data_loaders))
 
-            for shots in range(1, self.max_shots+1):
+            for shots in self.shot_list:
                 copy_model = deepcopy(self.model)
 
                 # Set up optimizer for each run
                 weights = filter(lambda w: w.requires_grad, copy_model.parameters())
                 optim_kwargs = {} if self.optim_kwargs is None else self.optim_kwargs
+                optim_kwargs["lr"] = optim_kwargs.get("lr", 0.01) * np.sqrt(shots)
                 optimizer = self.optim_class(weights, **optim_kwargs)
 
                 # Accumulate the shots and keep track of how many shots consumed
@@ -226,36 +263,9 @@ class MetaInferenceAgent(InferenceAgent):
                             loss = self.format_and_compute_loss(preds, y)
                             avg_loss.update(loss.item())
 
-                        # TODO: Fix inference for time series
-                        # Convert from tensor to numpy array
-                        # imgs = input_t.detach().cpu().numpy()
-                        preds = preds.detach().cpu().numpy()
-                        label_masks = y.detach().cpu().numpy()
-
-                        # TODO: Add back images to this loop later
-                        # Iterate over each image in batch.
-                        for ind, (pred, label_mask) in enumerate(zip(preds, label_masks)):
-                            _pred = pred[np.newaxis, ...]  # shape (b, #c, h, w)
-                            _label_mask = label_mask[np.newaxis, ...]  # shape (b, #c, h, w)
-
-                            # Get raw confusion matrix
-                            CM = confusion_matrix(_pred, _label_mask, pred_threshold=0)
-
-                            # Find the count of each class in ground truth,
-                            # record in metrics dict as whole num
-                            n = self.dataset.num_classes
-                            label_class_counts = np.count_nonzero(label_mask.reshape(n, -1), axis=-1)
-
-                            # Create metrics dict
-                            metrics_dict = create_metrics_dict(
-                                self.dataset.remapped_classes,
-                                tn=CM[:, 0, 0], fp=CM[:, 0, 1],
-                                fn=CM[:, 1, 0], tp=CM[:, 1, 1],
-                                gt_class_count=label_class_counts.tolist()
-                            )
-
-                            # Update metrics across all tasks' query sets
-                            total_metrics.update(metrics_dict)
+                        # Update metrics across all tasks' query sets
+                        batch_metrics_dict = self.evaluate_batch(preds, y)
+                        total_metrics.update(batch_metrics_dict)
 
                 if i not in metric_results_per_shot:
                     metric_results_per_shot[i] = [total_metrics]

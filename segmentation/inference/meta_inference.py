@@ -209,7 +209,7 @@ class MetaInferenceAgent(InferenceAgent):
                 # Set up optimizer for each run
                 weights = filter(lambda w: w.requires_grad, copy_model.parameters())
                 optim_kwargs = self.optim_kwargs if self.optim_kwargs is not None else {}
-                optim_kwargs["lr"] = optim_kwargs.get("lr", 0.001) * np.sqrt(shots)
+                optim_kwargs["lr"] = optim_kwargs.get("lr", 0.001)  # * np.sqrt(shots)
                 optimizer = self.optim_class(weights, **optim_kwargs)
 
                 # Accumulate the shots and keep track of how many shots consumed

@@ -61,6 +61,10 @@ if __name__ == "__main__":
     set_type = args.set_type.lower()
     assert set_type in {"train", "val", "test"}, "Only train/val/test sets permitted."
 
+    print(f"Data path: {args.data_path}")
+    if args.data_map is not None:
+        print(f"Running on data map: {args.data_map}")
+
     # Classes is dict of {class_name --> class_id}
     with open(args.classes, 'r') as f:
         classes = json.load(f)

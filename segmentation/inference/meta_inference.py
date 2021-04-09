@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from copy import deepcopy
-from collections import Counter
+from collections import defaultdict, Counter
 
 from data_loaders.dataset import CropDataset
 from inference.base_inference import InferenceAgent
@@ -198,7 +198,8 @@ class MetaInferenceAgent(InferenceAgent):
         data_loaders = loaders[set_type]
 
         # Begin meta inference
-        metric_results_per_shot = {}
+        train_metric_results_per_shot = defaultdict(list)
+        query_metric_results_per_shot = defaultdict(list)
         for trial_num in range(1, self.num_trials + 1):
             # Shuffle tasks for each trial, but not across shots
             task_names = random.sample(data_loaders.keys(), len(data_loaders))
@@ -254,9 +255,19 @@ class MetaInferenceAgent(InferenceAgent):
 
                 print(f"Shots batch loss after {i} shots: {avg_loss.item()}")
 
+                # Get preds for evaluating training performance
+                with torch.no_grad():
+                    preds = copy_model(input_shots)
+
+                train_batch_metrics = self.evaluate_batch(preds, labels)
+                train_metric_results_per_shot[i].append(train_batch_metrics)
+
+                with open(os.path.join(self.out_dir, f"{self.exp_name}_train_shot_curve.json"), 'w') as f:
+                    json.dump(train_metric_results_per_shot, f, indent=2)
+
                 # Now do inference on all of query data
                 copy_model.eval()
-                total_metrics = Counter()
+                query_total_metrics = Counter()
                 avg_loss = MeanMetric()
                 for task_name, (support_loader, query_loader) in data_loaders.items():
                     for batch_index, (input_t, y) in enumerate(query_loader):
@@ -272,21 +283,12 @@ class MetaInferenceAgent(InferenceAgent):
 
                         # Update metrics across all tasks' query sets
                         batch_metrics_dict = self.evaluate_batch(preds, y)
-                        total_metrics.update(batch_metrics_dict)
+                        query_total_metrics.update(batch_metrics_dict)
 
-                if i not in metric_results_per_shot:
-                    metric_results_per_shot[i] = [total_metrics]
-                else:
-                    metric_results_per_shot[i].append(total_metrics)
+                query_metric_results_per_shot[i].append(query_total_metrics)
 
                 print(f"Query loss after {i} shots: {avg_loss.item()}\n")
 
-            # Save eval results by averaging
-            # avg_results_per_shot = {
-            #     i: {m_name: m_val/self.num_trials for m_name, m_val in metric_counts.items()}
-            #     for i, metric_counts in metric_results_per_shot.items()
-            # }
-
             # Save results every trial
-            with open(os.path.join(self.out_dir, f"{self.exp_name}_shot_curve.json"), 'w') as f:
-                json.dump(metric_results_per_shot, f, indent=2)
+            with open(os.path.join(self.out_dir, f"{self.exp_name}_query_shot_curve.json"), 'w') as f:
+                json.dump(query_metric_results_per_shot, f, indent=2)

@@ -93,7 +93,7 @@ class MetaInferenceAgent(InferenceAgent):
 
         # Set up optim class but don't initialise
         optim_name = trainer_config.get("optimizer", "SGD")
-        optim_kwargs = trainer_config.get("optimizer_kwargs", {"lr": 0.01})
+        optim_kwargs = trainer_config.get("optimizer_kwargs", {"lr": 0.001})
         optimizer_class = Trainer.create_optimizer(optim_name)
 
         return super().create_inference_agent(
@@ -208,8 +208,8 @@ class MetaInferenceAgent(InferenceAgent):
 
                 # Set up optimizer for each run
                 weights = filter(lambda w: w.requires_grad, copy_model.parameters())
-                optim_kwargs = {} if self.optim_kwargs is None else self.optim_kwargs
-                optim_kwargs["lr"] = optim_kwargs.get("lr", 0.01) * np.sqrt(shots)
+                optim_kwargs = self.optim_kwargs if self.optim_kwargs is not None else {}
+                optim_kwargs["lr"] = optim_kwargs.get("lr", 0.001) * np.sqrt(shots)
                 optimizer = self.optim_class(weights, **optim_kwargs)
 
                 # Accumulate the shots and keep track of how many shots consumed
@@ -238,6 +238,7 @@ class MetaInferenceAgent(InferenceAgent):
 
                 # Input into the model r times, r = num updates per shot
                 copy_model.train()
+                avg_loss = MeanMetric()
                 for rep in range(self.reps_per_shot):
                     # Shift to correct device
                     input_shots, labels = \
@@ -246,8 +247,12 @@ class MetaInferenceAgent(InferenceAgent):
                     preds = copy_model(input_shots)
 
                     loss = self.format_and_compute_loss(preds, labels)
+                    avg_loss.update(loss.item())
+
                     loss.backward()
                     optimizer.step()
+
+                print(f"Shots batch loss after {i} shots: {avg_loss.item()}")
 
                 # Now do inference on all of query data
                 copy_model.eval()

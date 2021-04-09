@@ -219,6 +219,8 @@ class MetaInferenceAgent(InferenceAgent):
                 while i < shots:
                     for task_name in task_names:
                         support_loader, _ = data_loaders[task_name]
+                        assert len(support_loader) > 0, f"{task_name} has no input shots to train"
+
                         for batch_index, (input_t, y) in enumerate(support_loader):
                             input_shots.append(input_t)  # shape (1, c, h, w)
                             labels.append(y)

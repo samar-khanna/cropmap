@@ -279,7 +279,7 @@ class MetaInferenceAgent(InferenceAgent):
                 else:
                     metric_results_per_shot[i].append(total_metrics)
 
-                print(f"Query loss after {i} shots: {avg_loss.item()}")
+                print(f"Query loss after {i} shots: {avg_loss.item()}\n")
 
             # Save eval results by averaging
             # avg_results_per_shot = {

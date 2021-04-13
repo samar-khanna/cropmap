@@ -4,7 +4,7 @@ from torch.nn import functional as F
 import torchvision
 from torchvision.models.segmentation.fcn import FCNHead
 from torchvision.models._utils import IntermediateLayerGetter
-from models.utils import create_resnet_backbone
+from models.model_utils import create_resnet_backbone
 
 
 class FCN(nn.Module):

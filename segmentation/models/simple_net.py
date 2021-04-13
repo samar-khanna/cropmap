@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from models.utils import NConvBlock
+from models.model_utils import NConvBlock
 
 
 class SimpleNet(nn.Module):

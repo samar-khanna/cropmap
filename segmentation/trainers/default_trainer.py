@@ -6,7 +6,7 @@ from typing import Optional
 
 from trainers.base_trainer import Trainer
 from data_loaders.dataset import CropDataset
-from trainers.utils import compute_masked_loss
+from trainers.trainer_utils import compute_masked_loss
 from metrics import calculate_metrics, MeanMetric
 
 

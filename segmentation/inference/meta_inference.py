@@ -13,7 +13,7 @@ from data_loaders.task_loader import TaskDataset
 from metrics import create_metrics_dict, confusion_matrix, MeanMetric
 
 from trainers.base_trainer import Trainer
-from trainers.utils import compute_masked_loss
+from trainers.trainer_utils import compute_masked_loss
 
 
 class MetaInferenceAgent(InferenceAgent):

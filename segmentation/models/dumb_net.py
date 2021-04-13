@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from models.utils import NConvBlock
+from models.model_utils import NConvBlock
 
 class DumbNet(nn.Module):
     def __init__(self, in_channels, num_classes, num_conv=4, intermediate_channels=128):

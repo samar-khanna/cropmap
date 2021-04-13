@@ -5,7 +5,7 @@ import torchvision
 from torchvision.models.resnet import BasicBlock
 from torchvision.models.segmentation.fcn import FCNHead
 from torchvision.models._utils import IntermediateLayerGetter
-from models.utils import UpSampleAndMerge, create_resnet_backbone
+from models.model_utils import UpSampleAndMerge, create_resnet_backbone
 
 
 class UNet(nn.Module):

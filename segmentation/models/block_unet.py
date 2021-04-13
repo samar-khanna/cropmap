@@ -1,6 +1,6 @@
 import torch
 from models.unet import UNet
-from models.utils import create_resnet_backbone
+from models.model_utils import create_resnet_backbone
 
 
 class BlockUNet(UNet):

@@ -154,7 +154,7 @@ class Trainer:
         num_classes = len(interest_classes or classes.keys())
         if type(checkpoint_path) is bool and checkpoint_path:
             checkpoint_path = save_path
-        model = load_model(model_config, num_classes, checkpoint_path, freeze_backbone, new_head)
+        model = load_model(model_config, num_classes, checkpoint_path, freeze_backbone)
 
         return cls(
             model=model,

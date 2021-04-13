@@ -6,12 +6,12 @@ from typing import Optional
 from random import random, randint
 from copy import copy
 
-from trainers.trainer import Trainer
+from trainers.base_trainer import Trainer
 from data_loaders.dataset import CropDataset
 from data_loaders import data_transforms
 from metrics import calculate_metrics, MeanMetric
 from models.loss import BatchCriterion
-from trainers.utils import save_model
+from utils.loading import save_model # load_model, save_model, create_dataset
 
 class SimCLRTrainer(Trainer):
     def __init__(

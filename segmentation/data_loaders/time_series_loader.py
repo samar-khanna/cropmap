@@ -72,7 +72,9 @@ class TimeSeriesDataset(CropDataset):
                 rel_path = os.path.relpath(time_sequence[0])
                 mask_path = os.path.join(self.data_path, rel_path, MASK_NAME)
                 if not os.path.isfile(mask_path):
-                    mask_path = None
+                    mask_path = os.path.join(self.data_path, rel_path, '..', MASK_NAME)
+                    if not os.path.isfile(mask_path):
+                        mask_path = None
 
                 sample = TimeSeriesSample(
                     inputs=[os.path.join(self.data_path, os.path.relpath(data_dir), MOSAIC_NAME)

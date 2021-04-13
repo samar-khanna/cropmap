@@ -1,0 +1,12 @@
+{
+  "name": "all_classes_bce_logits",
+  "trainer": "default",
+  "epochs": 200,
+  "batch_size": 16,
+  "loss": "BCEWithLogitsLoss",
+  "loss_kwargs": {},
+  "optimizer": "Adam",
+  "optimizer_kwargs": {
+    "lr":1e-3
+  }
+}

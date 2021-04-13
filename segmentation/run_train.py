@@ -9,10 +9,12 @@ import torch.nn as nn
 from trainers.base_trainer import Trainer
 from trainers.default_trainer import DefaultTrainer
 from trainers.maml_trainer import MAMLTrainer
+from trainers.simclr_trainer import SimCLRTrainer
 
 TRAINER_TYPES = {
     "default": DefaultTrainer,
-    "maml": MAMLTrainer
+    "maml": MAMLTrainer,
+    "simclr":SimCLRTrainer
 }
 
 
@@ -54,6 +56,9 @@ def passed_arguments():
     parser.add_argument("--freeze_backbone",
                         action="store_true",
                         help="Whether to freeze backbone layers while training.")
+    parser.add_argument("--new_head",
+                        action="store_true",
+                        help="Whether to allow non-strict loading with a new head")
     parser.add_argument("--start_epoch",
                         type=int,
                         default=0,
@@ -89,7 +94,8 @@ if __name__ == "__main__":
         model_config,
         classes,
         args.checkpoint,
-        args.freeze_backbone
+        args.freeze_backbone,
+        args.new_head,
     )
 
     # Run training

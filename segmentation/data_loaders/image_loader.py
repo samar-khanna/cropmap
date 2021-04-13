@@ -24,7 +24,7 @@ class ImageDataset(CropDataset):
     def __init__(self,
                  data_path, classes, interest_classes=(), data_map_path=None, transforms=None,
                  tile_size=(224, 224), overlap=0, train_val_test=(0.8, 0.1, 0.1),
-                 use_one_hot=True, inf_mode=False, **kwargs):
+                 use_one_hot=True, inf_mode=False, double_yield=False, **kwargs):
         """
         Initialises a dataset that loads single images (not time-series)
         @param data_path: Path to directory containing dataset
@@ -37,6 +37,7 @@ class ImageDataset(CropDataset):
         @param train_val_test: Split percentage for train, val, and test (for a given mosaic)
         @param use_one_hot: Whether the mask will use one-hot encoding or class id per pixel.
         @param inf_mode: Whether data is being loaded in inference mode
+        @param double_yield: If true yields pairs of different augs of same image instead of image-target pair
         @param kwargs: Any external kwargs
         """
         super().__init__(data_path, classes, interest_classes, data_map_path, transforms)
@@ -49,6 +50,7 @@ class ImageDataset(CropDataset):
         self.use_one_hot = use_one_hot
         self.train_val_test = train_val_test
         self.inf_mode = inf_mode
+        self.double_yield = double_yield
 
         # Dict of files containing each (path_to_mosaic.tif, path_to_mask.tif)
         self.data_split = {"train": [], "val": [], "test": []}
@@ -116,12 +118,16 @@ class ImageDataset(CropDataset):
             mask = self.map_class_to_idx[mask]
             y = self.one_hot_mask(mask, self.num_classes) if self.use_one_hot else mask
 
-        # Sample is (x, y) pair of image and mask.
-        sample = x, y
+        if self.double_yield:
+            if self.transform:
+                sample = [self.transform(x.copy()), self.transform(x.copy())]
+        else: # normal behavior
+            # Sample is (x, y) pair of image and mask.
+            sample = x, y
 
-        # Apply any augmentation.
-        if self.transform:
-            sample = self.transform(sample)
+            # Apply any augmentation.
+            if self.transform:
+                sample = self.transform(sample)
 
         # Return the sample as tensors.
         to_tensor = lambda t: torch.tensor(t, dtype=torch.float32)

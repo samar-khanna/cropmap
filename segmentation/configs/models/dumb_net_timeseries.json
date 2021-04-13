@@ -1,0 +1,11 @@
+{
+  "name": "dumb_net",
+  "classifier": "DumbNet",
+  "classifier_kwargs": {
+    "num_conv": 4,
+    "intermediate_channels": 128
+  },
+  "backbone": "",
+  "backbone_kwargs": {},
+  "input_shape": [27, 224, 224]
+}

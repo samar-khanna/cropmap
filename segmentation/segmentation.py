@@ -4,6 +4,7 @@ from models.runet import RUNet
 from models.m2unet import M2UNet
 from models.block_unet import BlockUNet
 from models.simple_net import SimpleNet
+from models.dumb_net import DumbNet
 
 from data_loaders.image_loader import ImageDataset
 from data_loaders.time_series_loader import TimeSeriesDataset
@@ -16,6 +17,7 @@ MODELS = {
     "m2unet": M2UNet,
     "blockunet": BlockUNet,
     "simplenet": SimpleNet,
+    "dumbnet": DumbNet,
 }
 
 
@@ -25,5 +27,6 @@ LOADERS = {
     "runet": TimeSeriesDataset,
     "m2unet": TimeSeriesDataset,
     "blockunet": TimeSeriesDataset,
-    "simplenet": TimeSeriesDataset
+    "simplenet": TimeSeriesDataset,
+    "dumbnet": TimeSeriesDataset
 }

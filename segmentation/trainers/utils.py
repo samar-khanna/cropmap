@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 from typing import Callable, Any, Optional
 
-
 def apply_to_model_parameters(
         model: nn.Module,
         param_func: Callable[[Any], Any],
@@ -87,5 +86,3 @@ def compute_masked_loss(loss_fn, preds, targets, invalid_value=-1):
 
     # Only compute loss for valid pixels
     return (loss_t * valid_mask).mean()
-
-

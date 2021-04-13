@@ -26,7 +26,7 @@ class TimeSeriesDataset(CropDataset):
 
     def __init__(self,
                  data_path, classes, interest_classes=(), data_map_path=None, transforms=None,
-                 tile_size=(224, 224), overlap=0, use_one_hot=True,
+                 tile_size=(224, 224), overlap=0, use_one_hot=True, double_yield=False,
                  inf_mode=False, **kwargs):
         """
         Initialises an instance of a TimeSeriesDataset for sequences of images.
@@ -43,6 +43,7 @@ class TimeSeriesDataset(CropDataset):
         @param overlap: Number of pixels that each tile overlaps with others
         @param use_one_hot: Whether the mask will use one-hot encoding or class id per pixel.
         @param inf_mode: Whether data is being loaded in inference mode
+        @param double_yield: If true yields pairs of different augs of same image instead of image-target pair
         @param kwargs: Any external kwargs
         """
         super().__init__(data_path, classes, interest_classes, data_map_path, transforms)
@@ -51,6 +52,7 @@ class TimeSeriesDataset(CropDataset):
         self.overlap = overlap
         self.use_one_hot = use_one_hot
         self.inf_mode = inf_mode
+        self.double_yield = double_yield
 
         # Dict of files containing TimeSeriesSample objects
         # ([path_to_mosaic1.tif, path_to_mosaic2.tif, ...], path_to_label_mask.tif)
@@ -70,7 +72,9 @@ class TimeSeriesDataset(CropDataset):
                 rel_path = os.path.relpath(time_sequence[0])
                 mask_path = os.path.join(self.data_path, rel_path, MASK_NAME)
                 if not os.path.isfile(mask_path):
-                    mask_path = None
+                    mask_path = os.path.join(self.data_path, rel_path, '..', MASK_NAME)
+                    if not os.path.isfile(mask_path):
+                        mask_path = None
 
                 sample = TimeSeriesSample(
                     inputs=[os.path.join(self.data_path, os.path.relpath(data_dir), MOSAIC_NAME)
@@ -136,24 +140,39 @@ class TimeSeriesDataset(CropDataset):
             mask = self.map_class_to_idx[mask]
             y = self.one_hot_mask(mask, self.num_classes) if self.use_one_hot else mask
 
-        # Sample is ([x1, ..., xt], y) pair of image sequence and mask.
-        sample = x_series, y
 
         # Apply any augmentation.
-        if self.transform:
-            sample = self.transform(sample)
 
-        # Return the sample as tensors.
-        to_tensor = lambda t: torch.as_tensor(t, dtype=torch.float32)
+        if self.double_yield:
+            if self.transform:
+                sample = [self.transform(x_series.copy()), self.transform(x_series.copy())]
+            else:
+                sample = [x_series.copy(), x_series.copy()]
+            # Return the sample as tensors.
+            to_tensor = lambda t: torch.as_tensor(t, dtype=torch.float32)
+            return [to_tensor(x) for x in sample[0]], [to_tensor(x) for x in sample[1]]
+        else: # normal behavior
+            # Sample is (x, y) pair of image and mask.
+            # Sample is ([x1, ..., xt], y) pair of image sequence and mask.
+            sample = x_series, y
 
-        return [to_tensor(x) for x in sample[0]], to_tensor(sample[1])
+            # Apply any augmentation.
+            if self.transform:
+                sample = self.transform(sample)
+
+            # Return the sample as tensors.
+            to_tensor = lambda t: torch.as_tensor(t, dtype=torch.float32)
+            return [to_tensor(x) for x in sample[0]], to_tensor(sample[1])
 
     def shift_sample_to_device(self, sample, device):
         """
         Shifts tensors in sample to device.
         """
         x_list, y = sample
-        return [x.to(device) for x in x_list], y.to(device)
+        if self.double_yield:
+            return [x.to(device) for x in x_list], [z.to(device) for z in y]
+        else:
+            return [x.to(device) for x in x_list], y.to(device)
 
     @staticmethod
     def collate_fn(batch):

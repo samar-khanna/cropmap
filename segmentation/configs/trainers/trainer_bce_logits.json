@@ -1,8 +1,18 @@
 {
-  "name": "all_classes_bce_logits",
+  "name": "cali_interest_classes_bce_logits",
   "trainer": "default",
+  "interest_classes": [
+    "Fallow-Idle Cropland",
+    "Almonds",
+    "Pistachios",
+    "Cotton",
+    "Winter Wheat",
+    "Grapes",
+    "Alfalfa",
+    "Walnuts"
+  ],
   "epochs": 200,
-  "batch_size": 16,
+  "batch_size": 8,
   "loss": "BCEWithLogitsLoss",
   "loss_kwargs": {},
   "optimizer": "Adam",

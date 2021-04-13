@@ -2,19 +2,19 @@
     "train": [
       {
         "task_name": "corn_june",
-        "task_path": "corn_belt/2016/06",
+        "task_paths": ["corn_belt/2016/06"],
         "support_pct": 0.5
       },
       {
         "task_name": "ny_june",
-        "task_path": "central_ny/2016/06",
+        "task_paths": ["central_ny/2016/06"],
         "support_pct": 0.5
       }
     ],
     "val": [
       {
         "task_name": "cali_june",
-        "task_path": "california/2016/06",
+        "task_paths": ["california/2016/06"],
         "support_pct": 0.0
       }
     ],

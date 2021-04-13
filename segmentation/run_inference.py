@@ -2,7 +2,14 @@ import os
 import json
 import argparse
 
-from trainers.inference import InferenceAgent
+from inference.default_inference import DefaultInferenceAgent
+from inference.meta_inference import MetaInferenceAgent
+
+
+AGENTS = {
+    "inference": DefaultInferenceAgent,
+    "meta_inference": MetaInferenceAgent
+}
 
 
 def passed_arguments():
@@ -54,6 +61,10 @@ if __name__ == "__main__":
     set_type = args.set_type.lower()
     assert set_type in {"train", "val", "test"}, "Only train/val/test sets permitted."
 
+    print(f"Data path: {args.data_path}")
+    if args.data_map is not None:
+        print(f"Running on data map: {args.data_map}")
+
     # Classes is dict of {class_name --> class_id}
     with open(args.classes, 'r') as f:
         classes = json.load(f)
@@ -66,7 +77,9 @@ if __name__ == "__main__":
     with open(args.trainer, 'r') as f:
         trainer_config = json.load(f)
 
-    inference_agent = InferenceAgent.create_inference_agent(
+    agent_name = trainer_config.get("inference_agent", "inference")
+    agent = AGENTS[agent_name]
+    inference_agent = agent.create_inference_agent(
         args.data_path,
         args.data_map,
         args.out_dir,

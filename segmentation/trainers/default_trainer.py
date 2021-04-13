@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.optim as optim
 from typing import Optional
 
-from trainers.trainer import Trainer
+from trainers.base_trainer import Trainer
 from data_loaders.dataset import CropDataset
 from trainers.utils import compute_masked_loss
 from metrics import calculate_metrics, MeanMetric
@@ -85,6 +85,30 @@ class DefaultTrainer(Trainer):
                     metrics_dict[class_metric_name] = class_metric
 
         return metrics_dict
+
+    def init_checkpoint_metric(self):
+        """
+        Returns -∞ value for initial best validation IoU
+        @return:
+        """
+        return -np.inf
+
+    def check_checkpoint_metric(self, val_metrics, epochs_since_last_save, prev_best):
+        """
+        Checks if class mean validation IoU for current epoch is better than previous high.
+        Returns updated IoU if epoch val IoU is better, or if >10 epochs have passed and
+        current epoch val IoU is less than 5% smaller than previous best.
+        @param val_metrics:
+        @param epochs_since_last_save:
+        @param prev_best:
+        @return: Updated best validation IoU, or None if shouldn't checkpoint weights.
+        """
+        val_iou = val_metrics['mean/iou']
+        diff = val_iou - prev_best
+        if diff > 0 or (epochs_since_last_save > 10 and abs(diff / prev_best) < 0.05):
+            return val_iou if diff > 0 else prev_best
+
+        return None
 
     def format_and_compute_loss(self, preds, targets):
         """

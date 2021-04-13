@@ -87,10 +87,14 @@ class TimeSeriesDataset(CropDataset):
         self.mosaic_shapes = {}
         for set_type, samples in self.data_split.items():
             for sample in samples:
-                for mosaic_path in sample.inputs:
-                    if mosaic_path not in self.mosaic_shapes:
+                if tuple(sample.inputs) not in self.mosaic_shapes:
+                    seq_h, seq_w = float('inf'), float('inf')
+                    for mosaic_path in sample.inputs:
                         with rasterio.open(mosaic_path, 'r') as mosaic:
-                            self.mosaic_shapes[mosaic_path] = mosaic.shape
+                            h, w = mosaic.shape
+                            seq_h, seq_w = min(seq_h, h), min(seq_w, w)
+
+                    self.mosaic_shapes[tuple(sample.inputs)] = (seq_h, seq_w)
 
     def __len__(self):
         # WARNING: This is full possible length of dataset, not cleaned.
@@ -223,11 +227,7 @@ class TimeSeriesDataset(CropDataset):
         for set_type, time_samples in self.data_split.items():
             for sample_index, time_sample in enumerate(time_samples):
                 # Require same shape for all mosaics in a time series
-                sample_shape = self.mosaic_shapes[time_sample.inputs[0]]
-                for mosaic_path in time_sample.inputs:
-                    mosaic_shape = self.mosaic_shapes[mosaic_path]
-                    assert mosaic_shape == sample_shape, \
-                        f"Shape {mosaic_shape} of {mosaic_path} doesn't match with {sample_shape}"
+                sample_shape = self.mosaic_shapes[tuple(time_sample.inputs)]
 
                 h, w = sample_shape
                 th, tw = self.tile_size

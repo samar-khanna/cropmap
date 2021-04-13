@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.optim as optim
 from typing import Optional
 
-from trainers.trainer import Trainer
+from trainers.base_trainer import Trainer
 from trainers.utils import apply_to_model_parameters, compute_masked_loss
 
 from data_loaders.task_loader import TaskDataset
@@ -205,6 +205,26 @@ class MAMLTrainer(Trainer):
         # Merge
         return {**metrics_dict, **{k: v.item() for k, v in aggregate_metrics.items()}}
 
+    def init_checkpoint_metric(self):
+        """
+        Initialises the MAML checkpoint metric to 1 (arbitrary)
+        @return:
+        """
+        return 1
+
+    def check_checkpoint_metric(self, val_metrics, epochs_since_last_save, prev_best):
+        """
+        Checks if epochs since last save is greater than 10 + noise
+        @param val_metrics:
+        @param epochs_since_last_save:
+        @param prev_best:
+        @return:
+        """
+        # TODO: Update this to include a better method for checkpointing
+        if epochs_since_last_save > 10 + np.random.randint(-2, 3):
+            return 1
+        return None
+
     def format_and_compute_loss(self, preds, targets):
         """
         Wrapper function for formatting preds and targets for loss.
@@ -223,13 +243,13 @@ class MAMLTrainer(Trainer):
         self.model.eval()
 
         epoch_metrics = {}
-        for task_name, val_loader in val_loaders.items():
+        for task_name, (support_loader, query_loader) in val_loaders.items():
 
             # Set up metrics
             task_metrics = {name: MeanMetric() for name in self.metric_names}
             task_metrics["loss"] = MeanMetric()
 
-            for batch_index, (input_t, y) in enumerate(val_loader):
+            for batch_index, (input_t, y) in enumerate(query_loader):
                 input_t, y = self.dataset.shift_sample_to_device((input_t, y), self.device)
 
                 # Just evaluate model

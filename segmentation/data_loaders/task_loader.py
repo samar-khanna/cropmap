@@ -68,8 +68,10 @@ class TaskDataset(CropDataset):
 
                 rel_mask_path = os.path.relpath(task['task_paths'][0])
                 mask_path = os.path.join(self.data_path, rel_mask_path, MASK_NAME)
-                if not os.path.isfile(mask_path) and self.inf_mode:
-                    mask_path = None
+                if not os.path.isfile(mask_path):
+                    mask_path = os.path.join(self.data_path, rel_mask_path, '..', MASK_NAME)
+                    if not os.path.isfile(mask_path) and self.inf_mode:
+                        mask_path = None
 
                 mosaic_paths = []
                 for task_path_dir in task['task_paths']:

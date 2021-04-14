@@ -90,38 +90,39 @@ class Trainer:
     def create_trainer(
             cls,
             data_path,
-            out_dir,
             data_map_path,
+            out_dir,
+            exp_name,
             trainer_config,
             model_config,
             classes,
             checkpoint_path,
             freeze_backbone,
-            new_head,
             **kwargs
     ):
         """
         Creates a Trainer out of raw arguments
         @param data_path: Path to directory containing all datasets
-        @param out_dir: Path to directory where training results will be stored
         @param data_map_path: Path to .json file containing dataset split information
+        @param out_dir: Path to directory where training results will be stored
+        @param exp_name: Name of experiment to create results directory (if None, uses configs)
         @param trainer_config: JSON config file containing Trainer parameters
         @param model_config: JSON config file containing Model parameters
         @param classes: JSON file containing Cropmap class name --> class id
         @param checkpoint_path: Path to .bin checkpoint file containing model weights
         @param freeze_backbone: Whether to freeze model backbone while training
-        @param new_head: Whether to allow non-strict loading to retraing head (e.g. for self-sup feature extractor)
         @param kwargs: Extra keyword arguments to pass to init function.
         @return: Initialised Trainer
         """
         # Create output directory, save directory and metrics directories.
-        exp_name = "_".join((model_config["name"], trainer_config["name"]))
+        exp_name = exp_name if exp_name is not None else\
+            "_".join((model_config["name"], trainer_config["name"]))
         out_dir = os.path.join(out_dir if out_dir is not None else data_path, exp_name)
         save_dir = os.path.join(out_dir, "checkpoints")
         metrics_dir = os.path.join(out_dir, "metrics")
         create_dirs(out_dir, save_dir, metrics_dir)
 
-        save_path = os.path.join(save_dir, f"{exp_name}.bin")
+        save_path = os.path.join(save_dir, f"checkpoint.bin")
 
         # SAVE config file in output directory at beginning of training
         cls.save_config(trainer_config, out_dir, 'trainer_config')
@@ -146,8 +147,7 @@ class Trainer:
         interest_classes = trainer_config.get("interest_classes", [])
         transforms = trainer_config.get("transforms", {})
         dataset = cls.create_dataset(classifier_name, data_path, data_map_path,
-                                     classes, interest_classes, use_one_hot, transforms,
-                                      double_yield=trainer_config.get("double_yield", 0))
+                                     classes, interest_classes, use_one_hot, transforms)
 
         # TODO: Find a way to break this link between model and trainer config
         # Set up model using its config file and number of classes from trainer config.
@@ -189,8 +189,7 @@ class Trainer:
 
     @staticmethod
     def create_dataset(classifier_name, data_path, data_map_path,
-                       classes, interest_classes, use_one_hot, transforms,
-                        double_yield=False):
+                       classes, interest_classes, use_one_hot, transforms):
         """
         Creates a CropDataset
         @param classifier_name: Name of model classifier, which determines which dataset to use
@@ -212,7 +211,6 @@ class Trainer:
             train_val_test=(0.8, 0.1, 0.1),
             use_one_hot=use_one_hot,
             inf_mode=False,
-            double_yield=double_yield
         )
 
     @staticmethod

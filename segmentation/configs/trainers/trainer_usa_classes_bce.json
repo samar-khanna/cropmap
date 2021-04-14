@@ -36,10 +36,10 @@
     "Deciduous Forest",
     "Fallow-Idle Cropland"
   ],
-  "batch_size": 8,
+  "batch_size": 16,
   "epochs": 400,
   "loss": "BCEWithLogitsLoss",
   "loss_kwargs": {},
   "optimizer": "Adam",
-  "optimizer_kwargs": {"lr":0.0005}
+  "optimizer_kwargs": {"lr":0.001}
 }

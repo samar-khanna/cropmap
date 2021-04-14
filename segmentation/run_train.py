@@ -40,6 +40,10 @@ def passed_arguments():
                         type=str,
                         default=None,
                         help="Path to directory where model outputs will be stored.")
+    parser.add_argument('-n', '--name',
+                        type=str,
+                        default=None,
+                        help='Experiment name, used as directory name in out_dir')
     parser.add_argument("--split",
                         nargs="+",
                         type=float,
@@ -56,9 +60,6 @@ def passed_arguments():
     parser.add_argument("--freeze_backbone",
                         action="store_true",
                         help="Whether to freeze backbone layers while training.")
-    parser.add_argument("--new_head",
-                        action="store_true",
-                        help="Whether to allow non-strict loading with a new head")
     parser.add_argument("--start_epoch",
                         type=int,
                         default=0,
@@ -88,14 +89,14 @@ if __name__ == "__main__":
     # Instantiate trainer
     trainer = TRAINER_TYPES[trainer_type].create_trainer(
         args.data_path,
-        args.out_dir,
         args.data_map,
+        args.out_dir,
+        args.name,
         trainer_config,
         model_config,
         classes,
         args.checkpoint,
         args.freeze_backbone,
-        args.new_head,
     )
 
     # Run training

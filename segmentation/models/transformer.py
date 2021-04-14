@@ -12,15 +12,13 @@ import math
 #   dim feedforward 256
 
 class Transformer(nn.Module):
-    def __init__(self, feature_extractor, num_classes, dim_feature, num_layers, dim_feedforward=256, nhead=4, dropout=0):
-        """
-        TODO
-        """
+    def __init__(self, feature_extractor, num_classes, dim_feature, num_layers, dim_feedforward=256, nhead=4,
+                 dropout=0):
         super().__init__()
         self.dim_feature = dim_feature
         self.feature_extractor = feature_extractor
         encoder_layer = nn.TransformerEncoderLayer(dim_feature, nhead, dim_feedforward=dim_feedforward,
-                                                    dropout=dropout, activation='gelu')
+                                                    dropout=dropout, activation='relu')
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers)
         self.linear = nn.Linear(dim_feature, num_classes)
         self.pos_enc = PositionalEncoding(dim_feature)
@@ -31,7 +29,8 @@ class Transformer(nn.Module):
         TODO: Creates SimpleNet given model config and number of classes.
         """
         from utils.loading import create_model
-        feature_extractor = create_model(config['feature_extractor'], num_classes=1)  # create_model(model_config, num_classes)
+        feature_extractor = create_model(config['feature_extractor'],
+                                         num_classes=1)  # create_model(model_config, num_classes)
         if config['feature_extractor']['classifier'] in ['SimpleNet', 'DumbNet']:
             feature_extractor.final_conv = nn.Identity()
         else:

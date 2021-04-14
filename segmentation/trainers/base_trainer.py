@@ -97,7 +97,6 @@ class Trainer:
             classes,
             checkpoint_path,
             freeze_backbone,
-            new_head,
             **kwargs
     ):
         """
@@ -110,7 +109,6 @@ class Trainer:
         @param classes: JSON file containing Cropmap class name --> class id
         @param checkpoint_path: Path to .bin checkpoint file containing model weights
         @param freeze_backbone: Whether to freeze model backbone while training
-        @param new_head: Whether to allow non-strict loading to retraing head (e.g. for self-sup feature extractor)
         @param kwargs: Extra keyword arguments to pass to init function.
         @return: Initialised Trainer
         """
@@ -146,8 +144,7 @@ class Trainer:
         interest_classes = trainer_config.get("interest_classes", [])
         transforms = trainer_config.get("transforms", {})
         dataset = cls.create_dataset(classifier_name, data_path, data_map_path,
-                                     classes, interest_classes, use_one_hot, transforms,
-                                      double_yield=trainer_config.get("double_yield", 0))
+                                     classes, interest_classes, use_one_hot, transforms)
 
         # TODO: Find a way to break this link between model and trainer config
         # Set up model using its config file and number of classes from trainer config.
@@ -189,8 +186,7 @@ class Trainer:
 
     @staticmethod
     def create_dataset(classifier_name, data_path, data_map_path,
-                       classes, interest_classes, use_one_hot, transforms,
-                        double_yield=False):
+                       classes, interest_classes, use_one_hot, transforms):
         """
         Creates a CropDataset
         @param classifier_name: Name of model classifier, which determines which dataset to use
@@ -212,7 +208,6 @@ class Trainer:
             train_val_test=(0.8, 0.1, 0.1),
             use_one_hot=use_one_hot,
             inf_mode=False,
-            double_yield=double_yield
         )
 
     @staticmethod

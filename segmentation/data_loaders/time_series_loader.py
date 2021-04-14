@@ -11,17 +11,14 @@ from torch.utils.data import DataLoader, SubsetRandomSampler
 
 from data_loaders.dataset import CropDataset, SubsetSequentialSampler
 
-
 MOSAIC_NAME = "mosaic.tif"
 MASK_NAME = "ground_truth.tif"
 DATA_MAP_NAME = "time_series_map"
-
 
 TimeSeriesSample = namedtuple("TimeSeriesSample", ["inputs", "label"])
 
 
 class TimeSeriesDataset(CropDataset):
-
     _DATA_MAP_NAME = DATA_MAP_NAME
 
     def __init__(self,
@@ -43,7 +40,7 @@ class TimeSeriesDataset(CropDataset):
         @param overlap: Number of pixels that each tile overlaps with others
         @param use_one_hot: Whether the mask will use one-hot encoding or class id per pixel.
         @param inf_mode: Whether data is being loaded in inference mode
-        @param double_yield: If true yields pairs of different augs of same image instead of image-target pair
+        @param double_yield: If true yields pairs of different augs of same image instead of img-target pair
         @param kwargs: Any external kwargs
         """
         super().__init__(data_path, classes, interest_classes, data_map_path, transforms)
@@ -103,8 +100,8 @@ class TimeSeriesDataset(CropDataset):
             h, w = mosaic_shape
             th, tw = self.tile_size
             o = self.overlap
-            n_rows = h//(th - o)
-            n_cols = w//(tw - o)
+            n_rows = h // (th - o)
+            n_cols = w // (tw - o)
             total_len += n_rows * n_cols
         return total_len
 
@@ -140,10 +137,9 @@ class TimeSeriesDataset(CropDataset):
             mask = self.map_class_to_idx[mask]
             y = self.one_hot_mask(mask, self.num_classes) if self.use_one_hot else mask
 
-
         # Apply any augmentation.
 
-        if self.double_yield:
+        if self.double_yield:  # for SimClr
             if self.transform:
                 sample = [self.transform(x_series.copy()), self.transform(x_series.copy())]
             else:
@@ -151,7 +147,7 @@ class TimeSeriesDataset(CropDataset):
             # Return the sample as tensors.
             to_tensor = lambda t: torch.as_tensor(t, dtype=torch.float32)
             return [to_tensor(x) for x in sample[0]], [to_tensor(x) for x in sample[1]]
-        else: # normal behavior
+        else:  # normal behavior
             # Sample is (x, y) pair of image and mask.
             # Sample is ([x1, ..., xt], y) pair of image sequence and mask.
             sample = x_series, y
@@ -186,7 +182,7 @@ class TimeSeriesDataset(CropDataset):
         # to [(x_series0, ..., x_seriest), (y0, ..., y_t)]
         x_series, y = tuple(zip(*batch))
         max_len = max(map(lambda series: len(series), x_series))
-        x_series = [series + [-1 * torch.ones_like(x_series[0][0])]*(max_len - len(series))
+        x_series = [series + [-1 * torch.ones_like(x_series[0][0])] * (max_len - len(series))
                     for series in x_series]
 
         super_class = super(TimeSeriesDataset, TimeSeriesDataset)
@@ -235,7 +231,7 @@ class TimeSeriesDataset(CropDataset):
                 step_w = tw - self.overlap
 
                 # Get (r, c) start position of each tile in area
-                inds = [(r, c) for r in range(0, h-step_h, step_h) for c in range(0, w-step_w, step_w)]
+                inds = [(r, c) for r in range(0, h - step_h, step_h) for c in range(0, w - step_w, step_w)]
 
                 # Clean by rejecting indices of any x in time sample that contain NaN
                 if clean_indices:
@@ -245,6 +241,7 @@ class TimeSeriesDataset(CropDataset):
                             if torch.isnan(x).any():
                                 return False
                         return True
+
                     inds = list(filter(is_not_nan, inds))
 
                 # Shuffle em up

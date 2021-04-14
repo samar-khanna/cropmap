@@ -39,15 +39,13 @@ class FocalLoss(nn.Module):
 
 
 class BatchCriterion(nn.Module):
-    ''' Compute the loss within each batch
-    '''
     def __init__(self, negM=1, T=0.1, num_sample_points=1024):
         super(BatchCriterion, self).__init__()
         self.negM = negM
         self.T = T
         self.num_sample_points = num_sample_points
         self.diag_mat = 1 - torch.eye(2 * num_sample_points).cuda()
-        
+
     def forward(self, x1, x2):
         """
         x and targets are both feature maps
@@ -57,7 +55,8 @@ class BatchCriterion(nn.Module):
         And then select indices to operate on
 
 
-        In original version: https://github.com/mangye16/Unsupervised_Embedding_Learning/blob/master/BatchAverage.py
+        In original version:
+        https://github.com/mangye16/Unsupervised_Embedding_Learning/blob/master/BatchAverage.py
         the features are concatenated along dim=0 when fed in
         so first half of them corresponds with order in second half
         I can just do the same then let original code handle things
@@ -74,27 +73,27 @@ class BatchCriterion(nn.Module):
         selected_indices = torch.randperm(x1.size(0))[:self.num_sample_points]
         x1 = x1[selected_indices]
         x2 = x2[selected_indices]
-        x = torch.cat( (x1,x2), dim=0)
+        x = torch.cat((x1, x2), dim=0)
         batchSize = x.size(0)
-        norm = x.pow(2).sum(1, keepdim=True).pow(1./2)
+        norm = x.pow(2).sum(1, keepdim=True).pow(1. / 2)
         x = x.div(norm)
-        #get positive innerproduct
-        reordered_x = torch.cat((x.narrow(0,batchSize//2,batchSize//2),\
-                x.narrow(0,0,batchSize//2)), 0)
-        #reordered_x = reordered_x.data
-        pos = (x*reordered_x.data).sum(1).div_(self.T).exp_()
+        # get positive innerproduct
+        reordered_x = torch.cat((x.narrow(0, batchSize // 2, batchSize // 2),
+                                 x.narrow(0, 0, batchSize // 2)), 0)
+        # reordered_x = reordered_x.data
+        pos = (x * reordered_x.data).sum(1).div_(self.T).exp_()
 
-        #get all innerproduct, remove diag
-        all_prob = torch.mm(x,x.t().data).div_(self.T).exp_()*self.diag_mat
-        if self.negM==1:
+        # get all innerproduct, remove diag
+        all_prob = torch.mm(x, x.t().data).div_(self.T).exp_() * self.diag_mat
+        if self.negM == 1:
             all_div = all_prob.sum(1)
         else:
-            #remove pos for neg
-            all_div = (all_prob.sum(1) - pos)*self.negM + pos
+            # remove pos for neg
+            all_div = (all_prob.sum(1) - pos) * self.negM + pos
 
         lnPmt = torch.div(pos, all_div)
         # negative probability
-        Pon_div = all_div.repeat(batchSize,1)
+        Pon_div = all_div.repeat(batchSize, 1)
         lnPon = torch.div(all_prob, Pon_div.t())
         lnPon = -lnPon.add(-1)
 
@@ -109,5 +108,5 @@ class BatchCriterion(nn.Module):
 
         # negative multiply m
         lnPonsum = lnPonsum * self.negM
-        loss = - (lnPmtsum + lnPonsum)/batchSize
+        loss = - (lnPmtsum + lnPonsum) / batchSize
         return loss

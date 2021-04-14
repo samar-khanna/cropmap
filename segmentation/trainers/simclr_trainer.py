@@ -8,10 +8,12 @@ from copy import copy
 
 from trainers.base_trainer import Trainer
 from data_loaders.dataset import CropDataset
+from data_loaders.time_series_loader import TimeSeriesDataset
 from data_loaders import data_transforms
 from metrics import calculate_metrics, MeanMetric
 from models.loss import BatchCriterion
-from utils.loading import save_model # load_model, save_model, create_dataset
+from utils.loading import save_model  # load_model, save_model, create_dataset
+
 
 class SimCLRTrainer(Trainer):
     def __init__(
@@ -66,6 +68,19 @@ class SimCLRTrainer(Trainer):
         self.vflip = data_transforms.VerticalFlipSimCLRTransform()
         self.rot = data_transforms.RotationSimCLRTransform()
         self.crop = data_transforms.RandomResizedCropSimCLRTransform()
+
+    @classmethod
+    def create_dataset(cls, classifier_name, data_path, data_map_path,
+                       classes, interest_classes, use_one_hot, transforms):
+        return TimeSeriesDataset(
+            data_path=data_path,
+            classes=classes,
+            interest_classes=interest_classes,
+            data_map_path=data_map_path,
+            transforms=transforms,
+            inf_mode=False,
+            double_yield=1
+        )
 
     def create_metrics_dict(self, **metrics):
         """
@@ -124,19 +139,19 @@ class SimCLRTrainer(Trainer):
             # images_2 = torch.cat(list(images_2), dim=1)
         n = images_1.shape[0]
 
-        do_hflips = [[ (random()>0.5) for _ in range(n)] for _ in range(2)]
-        do_vflips = [[ (random()>0.5) for _ in range(n)] for _ in range(2)]
-        do_rots = [[randint(0,3) for _ in range(n)] for _ in range(2)]
+        do_hflips = [[(random() > 0.5) for _ in range(n)] for _ in range(2)]
+        do_vflips = [[(random() > 0.5) for _ in range(n)] for _ in range(2)]
+        do_rots = [[randint(0, 3) for _ in range(n)] for _ in range(2)]
         crop_seeds = np.random.uniform(size=(n, 3))
 
         for i, images in enumerate([images_1, images_2]):
-            if i==0: images = self.crop(images, crop_seeds)
+            if i == 0: images = self.crop(images, crop_seeds)
             images = self.hflip(images, do_hflips[i])
             images = self.vflip(images, do_hflips[i])
             images = self.rot(images, do_rots[i])
-            if i==0:
+            if i == 0:
                 images_1 = images
-            elif i==1:
+            elif i == 1:
                 images_2 = images
 
         features_1 = self.model(images_1)
@@ -146,9 +161,9 @@ class SimCLRTrainer(Trainer):
             features = self.rot(features, do_rots[i], inverse=True)
             features = self.vflip(features, do_hflips[i])
             features = self.hflip(features, do_hflips[i])
-            if i==0:
+            if i == 0:
                 features_1 = features
-            elif i==1:
+            elif i == 1:
                 features_2 = features
         features_2 = self.crop(features_2, crop_seeds)
 
@@ -174,31 +189,31 @@ class SimCLRTrainer(Trainer):
             images_2 = torch.cat(images_2, dim=1)
             # images_2 = torch.cat(list(images_2), dim=1)
         n = images_1.shape[0]
-        do_hflips = [[ (random()>0.5) for _ in range(n)] for _ in range(2)]
-        do_vflips = [[ (random()>0.5) for _ in range(n)] for _ in range(2)]
-        do_rots = [[randint(0,3) for _ in range(n)] for _ in range(2)]
+        do_hflips = [[(random() > 0.5) for _ in range(n)] for _ in range(2)]
+        do_vflips = [[(random() > 0.5) for _ in range(n)] for _ in range(2)]
+        do_rots = [[randint(0, 3) for _ in range(n)] for _ in range(2)]
         crop_seeds = np.random.uniform(size=(n, 3))
 
         for i, images in enumerate([images_1, images_2]):
-            if i==0: images = self.crop(images, crop_seeds)
+            if i == 0: images = self.crop(images, crop_seeds)
             images = self.hflip(images, do_hflips[i])
             images = self.vflip(images, do_vflips[i])
             images = self.rot(images, do_rots[i])
-            if i==0:
+            if i == 0:
                 images_1 = images
-            elif i==1:
+            elif i == 1:
                 images_2 = images
 
         features_1 = self.model(images_1)
         features_2 = self.model(images_2)
-        
+
         for i, features in enumerate([features_1, features_2]):
             features = self.rot(features, do_rots[i], inverse=True)
             features = self.vflip(features, do_vflips[i])
             features = self.hflip(features, do_hflips[i])
-            if i==0:
+            if i == 0:
                 features_1 = features
-            elif i==1:
+            elif i == 1:
                 features_2 = features
         features_2 = self.crop(features_2, crop_seeds)
         loss = self.format_and_compute_loss(features_1, features_2)
@@ -240,7 +255,7 @@ class SimCLRTrainer(Trainer):
             for metric_name, current_val in epoch_metrics.items():
                 current_val.update(_metrics[metric_name])
 
-            if self.num_shots is not None and (batch_index+1) == self.num_shots:
+            if self.num_shots is not None and (batch_index + 1) == self.num_shots:
                 break
 
         # Get rid of the mean metrics
@@ -270,9 +285,9 @@ class SimCLRTrainer(Trainer):
         # Get the data loaders
         train_loaders, val_loaders, _ = \
             self.dataset.create_data_loaders(batch_size=self.batch_size)
-        
+
         print(val_loaders, len(val_loaders))
-        if len(val_loaders)==0:
+        if len(val_loaders) == 0:
             train_only = True
 
         # Variables to keep track of when to checkpoint
@@ -304,4 +319,3 @@ class SimCLRTrainer(Trainer):
                 epochs_since_last_save += 1
 
             print(f"Finished epoch {epoch + 1}.\n")
-

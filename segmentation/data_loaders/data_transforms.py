@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 
+
 class MaskCloudyTargetsTransform:
     def __init__(self, mask_value=-1, cloud_value=0., is_conservative=False):
         """
@@ -31,8 +32,6 @@ class MaskCloudyTargetsTransform:
 
         y[..., invalid_mask] = self.mask_value  # shape (c, h, w)
 
-        if len(xs)==1:
-            xs = xs[0]
         return xs, y
 
 
@@ -133,7 +132,7 @@ class DropChannelTransform:
         if len(self.channels_to_drop) > 0:
             num_to_drop = len(self.channels_to_drop)
             assert num_to_drop == C - c, \
-                f"Number of channels to drop {num_to_drop} not equal to expected - actual {C-c}"
+                f"Number of channels to drop {num_to_drop} not equal to expected - actual {C - c}"
 
             return x[self.channels_to_drop], y
 
@@ -146,7 +145,7 @@ class PixelStaticTransform:
         self.scale = scale
 
     def __call__(self, sample):
-        if isinstance(sample, tuple): raise NotImplementedError # Just need to add xy parsing logic
+        if isinstance(sample, tuple): raise NotImplementedError  # Just need to add xy parsing logic
         # TODO: parallelize this instead of iterating in for loop
 
         if isinstance(sample, list):
@@ -155,8 +154,8 @@ class PixelStaticTransform:
                 sample[i] = self(sample[i])
         else:
             for channel_i in range(sample.shape[1]):
-                channel_std = sample[:,channel_i].std()
-                sample[:, channel_i] += self.scale * channel_std * np.random.randn(*sample[:,channel_i].shape)
+                channel_std = sample[:, channel_i].std()
+                sample[:, channel_i] += self.scale * channel_std * np.random.randn(*sample[:, channel_i].shape)
         return sample
 
 
@@ -168,8 +167,8 @@ class HorizontalFlipSimCLRTransform:
         """
         do_flips is boolean list of length of images
         """
-        assert len(images)==len(do_flips)
-        for i,do_flip in enumerate(do_flips):
+        assert len(images) == len(do_flips)
+        for i, do_flip in enumerate(do_flips):
             if do_flip: images[i] = images[i].flip([-2])
         return images
 
@@ -182,18 +181,19 @@ class VerticalFlipSimCLRTransform:
         """
         do_flips is boolean list of length of images
         """
-        assert len(images)==len(do_flips)
-        for i,do_flip in enumerate(do_flips):
+        assert len(images) == len(do_flips)
+        for i, do_flip in enumerate(do_flips):
             if do_flip: images[i] = images[i].flip([-1])
         return images
+
 
 class RotationSimCLRTransform:
     def __init__(self):
         super().__init__()
 
     def __call__(self, images, rotations, inverse=False):
-        assert len(images)==len(rotations)
-        for i,rot in enumerate(rotations):
+        assert len(images) == len(rotations)
+        for i, rot in enumerate(rotations):
             rot = 4 - rot if inverse else rot
             images[i] = images[i].rot90(rot, dims=[-2, -1])
         return images
@@ -221,7 +221,9 @@ class RandomResizedCropSimCLRTransform:
             corner_range = orig_resolution - new_crop_resolution
             top = int(seed_triple[1] * corner_range)
             left = int(seed_triple[2] * corner_range)
-            raw_crop = image[:, top:top+new_crop_resolution, left:left+new_crop_resolution]
-            resized_crop = torch.nn.functional.interpolate(raw_crop.unsqueeze(0), size=(orig_resolution, orig_resolution), mode='bilinear').squeeze()
+            raw_crop = image[:, top:top + new_crop_resolution, left:left + new_crop_resolution]
+            resized_crop = torch.nn.functional.interpolate(raw_crop.unsqueeze(0),
+                                                           size=(orig_resolution, orig_resolution),
+                                                           mode='bilinear').squeeze()
             images[i] = resized_crop
         return images

@@ -1,0 +1,19 @@
+{
+  "name":"transformer",
+  "classifier":"Transformer",
+  "classifier_kwargs": {
+     "dim_feature": 64,
+     "num_layers": 3,
+     "dim_feedforward": 256,
+     "nhead":4,
+     "dropout":0.0
+  },
+  "feature_extractor": {
+    "classifier": "SimpleNet",
+    "classifier_kwargs": {
+      "num_conv": 4,
+      "intermediate_channels": 64
+    },
+    "input_shape": [9, 224, 224]
+    }
+}

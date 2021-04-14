@@ -20,7 +20,7 @@ class Transformer(nn.Module):
         encoder_layer = nn.TransformerEncoderLayer(dim_feature, nhead, dim_feedforward=dim_feedforward,
                                                     dropout=dropout, activation='relu')
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers)
-        self.linear = nn.Linear(dim_feature, num_classes)
+        self.linear = nn.Conv2d(dim_feature, num_classes, kernel_size=1)
         self.pos_enc = PositionalEncoding(dim_feature)
 
     @classmethod
@@ -30,7 +30,7 @@ class Transformer(nn.Module):
         """
         from utils.loading import create_model
         feature_extractor = create_model(config['feature_extractor'],
-                                         num_classes=1)  # create_model(model_config, num_classes)
+                                         num_classes=1)
         if config['feature_extractor']['classifier'] in ['SimpleNet', 'DumbNet']:
             feature_extractor.final_conv = nn.Identity()
         else:
@@ -46,22 +46,15 @@ class Transformer(nn.Module):
         # split back out into n x (b,c,h,w)
         # Transformer wants (n, b * h * w, c)
         n = len(x)
-        # print("Item shape:", x[0].shape)
         b, c, h, w = x[0].shape
         x = torch.cat(x, dim=0)
-        # print("Catted shape", x.shape)
         x = self.feature_extractor(x)
         x = x.view(n, -1, self.dim_feature) # (n, bhw, c)
         x = self.pos_enc(x)
         x = self.transformer_encoder(x)
-        # print("Trans encoded shape", x.shape)
         final_features = torch.mean(x, dim=0) # (bhw, c)
-        # print("Final feature shape", final_features.shape)
+        final_features = final_features.view(b, self.dim_feature, h, w)
         out = self.linear(final_features) # (bhw, num_classes)
-        out = out.view(b, out.shape[1], h, w)
-        # print("Out shape", out.shape)
-        #  asdf
-        #print(self.linear.state_dict())
         return out
 
 class PositionalEncoding(nn.Module):

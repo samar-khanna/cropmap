@@ -40,6 +40,10 @@ def passed_arguments():
                         type=str,
                         default=None,
                         help="Path to directory where model outputs will be stored.")
+    parser.add_argument('-n', '--name',
+                        type=str,
+                        default=None,
+                        help='Experiment name, used as directory name in out_dir')
     parser.add_argument("--split",
                         nargs="+",
                         type=float,
@@ -85,8 +89,9 @@ if __name__ == "__main__":
     # Instantiate trainer
     trainer = TRAINER_TYPES[trainer_type].create_trainer(
         args.data_path,
-        args.out_dir,
         args.data_map,
+        args.out_dir,
+        args.name,
         trainer_config,
         model_config,
         classes,

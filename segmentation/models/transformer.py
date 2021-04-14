@@ -12,18 +12,15 @@ import torch.nn as nn
 #   dim feedforward 256
 
 class Transformer(nn.Module):
-    def __init__(self, feature_extractor, num_classes, dim_feature, num_layers, dim_feedforward=256, nhead=4, dropout=0):
-        """
-        TODO
-        """
+    def __init__(self, feature_extractor, num_classes, dim_feature, num_layers, dim_feedforward=256, nhead=4,
+                 dropout=0):
         super().__init__()
         self.dim_feature = dim_feature
         self.feature_extractor = feature_extractor
         encoder_layer = nn.TransformerEncoderLayer(dim_feature, nhead, dim_feedforward=dim_feedforward,
-                                                    dropout=dropout)
+                                                   dropout=dropout)
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers)
         self.linear = nn.Linear(dim_feature, num_classes)
-
 
     @classmethod
     def create(cls, config, num_classes):
@@ -31,7 +28,8 @@ class Transformer(nn.Module):
         TODO: Creates SimpleNet given model config and number of classes.
         """
         from utils.loading import create_model
-        feature_extractor = create_model(config['feature_extractor'], num_classes=1)  # create_model(model_config, num_classes)
+        feature_extractor = create_model(config['feature_extractor'],
+                                         num_classes=1)  # create_model(model_config, num_classes)
         if config['feature_extractor']['classifier'] in ['SimpleNet', 'DumbNet']:
             feature_extractor.final_conv = nn.Identity()
         else:
@@ -50,9 +48,9 @@ class Transformer(nn.Module):
         b, c, h, w = x[0].shape
         x = torch.cat(x, dim=0)
         x = self.feature_extractor(x)
-        x = x.view(n, -1, self.dim_feature) # (n, bhw, c)
+        x = x.view(n, -1, self.dim_feature)  # (n, bhw, c)
         x = self.transformer_encoder(x)
-        final_features = torch.mean(x, dim=0) # (bhw, c)
-        out = self.linear(final_features) # (bhw, num_classes)
+        final_features = torch.mean(x, dim=0)  # (bhw, c)
+        out = self.linear(final_features)  # (bhw, num_classes)
         out = out.view(b, out.shape[1], h, w)
         return out

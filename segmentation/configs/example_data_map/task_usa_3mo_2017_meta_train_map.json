@@ -1,0 +1,141 @@
+{
+    "train": [
+      {
+        "task_name": "corn_loc2", "support_pct": 0.5,
+        "task_paths": ["corn_belt/corn_loc2/2017/05", "corn_belt/corn_loc2/2017/06", "corn_belt/corn_loc2/2017/07"]
+      },
+      {
+        "task_name": "corn_loc3", "support_pct": 0.5,
+        "task_paths": ["corn_belt/corn_loc3/2017/05", "corn_belt/corn_loc3/2017/06", "corn_belt/corn_loc3/2017/07"]
+      },
+      {
+        "task_name": "corn_loc4", "support_pct": 0.5,
+        "task_paths": ["corn_belt/corn_loc4/2017/05", "corn_belt/corn_loc4/2017/06", "corn_belt/corn_loc4/2017/07"]
+      },
+      {
+        "task_name": "corn_loc5", "support_pct": 0.5,
+        "task_paths": ["corn_belt/corn_loc5/2017/05", "corn_belt/corn_loc5/2017/06", "corn_belt/corn_loc5/2017/07"]
+      },
+      {
+        "task_name": "corn_loc7", "support_pct": 0.5,
+        "task_paths": ["corn_belt/corn_loc7/2017/05", "corn_belt/corn_loc7/2017/06", "corn_belt/corn_loc7/2017/07"]
+      },
+      {
+        "task_name": "corn_loc8", "support_pct": 0.5,
+        "task_paths": ["corn_belt/corn_loc8/2017/05", "corn_belt/corn_loc8/2017/06", "corn_belt/corn_loc8/2017/07"]
+      },
+      {
+        "task_name": "corn_loc9", "support_pct": 0.5,
+        "task_paths": ["corn_belt/corn_loc9/2017/05", "corn_belt/corn_loc9/2017/06", "corn_belt/corn_loc9/2017/07"]
+      },
+      {
+        "task_name": "corn_loc10", "support_pct": 0.5,
+        "task_paths": ["corn_belt/corn_loc10/2017/05", "corn_belt/corn_loc10/2017/06", "corn_belt/corn_loc10/2017/07"]
+      },
+
+
+      {
+        "task_name": "cali_loc2", "support_pct": 0.5,
+        "task_paths": ["california/cali_loc2/2017/05", "california/cali_loc2/2017/06", "california/cali_loc2/2017/07"]
+      },
+      {
+        "task_name": "cali_loc3", "support_pct": 0.5,
+        "task_paths": ["california/cali_loc3/2017/05", "california/cali_loc3/2017/06", "california/cali_loc3/2017/07"]
+      },
+      {
+        "task_name": "cali_loc4", "support_pct": 0.5,
+        "task_paths": ["california/cali_loc4/2017/05", "california/cali_loc4/2017/06", "california/cali_loc4/2017/07"]
+      },
+      {
+        "task_name": "cali_loc5", "support_pct": 0.5,
+        "task_paths": ["california/cali_loc5/2017/05", "california/cali_loc5/2017/06", "california/cali_loc5/2017/07"]
+      },
+      {
+        "task_name": "cali_loc7", "support_pct": 0.5,
+        "task_paths": ["california/cali_loc7/2017/05", "california/cali_loc7/2017/06", "california/cali_loc7/2017/07"]
+      },
+      {
+        "task_name": "cali_loc8", "support_pct": 0.5,
+        "task_paths": ["california/cali_loc8/2017/05", "california/cali_loc8/2017/06", "california/cali_loc8/2017/07"]
+      },
+      {
+        "task_name": "cali_loc9", "support_pct": 0.5,
+        "task_paths": ["california/cali_loc9/2017/05", "california/cali_loc9/2017/06", "california/cali_loc9/2017/07"]
+      },
+      {
+        "task_name": "cali_loc10", "support_pct": 0.5,
+        "task_paths": ["california/cali_loc10/2017/05", "california/cali_loc10/2017/06", "california/cali_loc10/2017/07"]
+      },
+      {
+        "task_name": "cali_loc12", "support_pct": 0.5,
+        "task_paths": ["california/cali_loc12/2017/05", "california/cali_loc12/2017/06", "california/cali_loc12/2017/07"]
+      },
+
+
+      {
+        "task_name": "wash_loc2", "support_pct": 0.5,
+        "task_paths": ["washington/wash_loc2/2017/05", "washington/wash_loc2/2017/06", "washington/wash_loc2/2017/07"]
+      },
+      {
+        "task_name": "wash_loc3", "support_pct": 0.5,
+        "task_paths": ["washington/wash_loc3/2017/05", "washington/wash_loc3/2017/06", "washington/wash_loc3/2017/07"]
+      },
+      {
+        "task_name": "wash_loc4", "support_pct": 0.5,
+        "task_paths": ["washington/wash_loc4/2017/05", "washington/wash_loc4/2017/06", "washington/wash_loc4/2017/07"]
+      },
+      {
+        "task_name": "wash_loc5", "support_pct": 0.5,
+        "task_paths": ["washington/wash_loc5/2017/05", "washington/wash_loc5/2017/06", "washington/wash_loc5/2017/07"]
+      },
+      {
+        "task_name": "wash_loc7", "support_pct": 0.5,
+        "task_paths": ["washington/wash_loc7/2017/05", "washington/wash_loc7/2017/06", "washington/wash_loc7/2017/07"]
+      },
+      {
+        "task_name": "wash_loc8", "support_pct": 0.5,
+        "task_paths": ["washington/wash_loc8/2017/05", "washington/wash_loc8/2017/06", "washington/wash_loc8/2017/07"]
+      },
+      {
+        "task_name": "wash_loc9", "support_pct": 0.5,
+        "task_paths": ["washington/wash_loc9/2017/05", "washington/wash_loc9/2017/06", "washington/wash_loc9/2017/07"]
+      }
+    ],
+    "val": [
+      {
+        "task_name": "corn_loc1", "support_pct": 0.5,
+        "task_paths": ["corn_belt/corn_loc1/2017/05", "corn_belt/corn_loc1/2017/06", "corn_belt/corn_loc1/2017/07"]
+      },
+      {
+        "task_name": "corn_loc6", "support_pct": 0.5,
+        "task_paths": ["corn_belt/corn_loc6/2017/05", "corn_belt/corn_loc6/2017/06", "corn_belt/corn_loc6/2017/07"]
+      },
+
+
+      {
+        "task_name": "cali_loc1", "support_pct": 0.5,
+        "task_paths": ["california/cali_loc1/2017/05", "california/cali_loc1/2017/06", "california/cali_loc1/2017/07"]
+      },
+      {
+        "task_name": "cali_loc6", "support_pct": 0.5,
+        "task_paths": ["california/cali_loc6/2017/05", "california/cali_loc6/2017/06", "california/cali_loc6/2017/07"]
+      },
+      {
+        "task_name": "cali_loc11", "support_pct": 0.5,
+        "task_paths": ["california/cali_loc11/2017/05", "california/cali_loc11/2017/06", "california/cali_loc11/2017/07"]
+      },
+
+
+      {
+        "task_name": "wash_loc1", "support_pct": 0.5,
+        "task_paths": ["washington/wash_loc1/2017/05", "washington/wash_loc1/2017/06", "washington/wash_loc1/2017/07"]
+      },
+      {
+        "task_name": "wash_loc6", "support_pct": 0.5,
+        "task_paths": ["washington/wash_loc6/2017/05", "washington/wash_loc6/2017/06", "washington/wash_loc6/2017/07"]
+      }
+    ],
+    "test": [ 
+        
+    ]
+  }

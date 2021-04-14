@@ -70,8 +70,9 @@ class MAMLTrainer(Trainer):
     def create_trainer(
             cls,
             data_path,
-            out_dir,
             data_map_path,
+            out_dir,
+            exp_name,
             trainer_config,
             model_config,
             classes,
@@ -82,8 +83,9 @@ class MAMLTrainer(Trainer):
         maml_kwargs = trainer_config.get("trainer_kwargs", {})
         return super().create_trainer(
             data_path=data_path,
-            out_dir=out_dir,
             data_map_path=data_map_path,
+            out_dir=out_dir,
+            exp_name=exp_name,
             trainer_config=trainer_config,
             model_config=model_config,
             classes=classes,

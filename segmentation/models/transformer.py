@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-
+import math
 
 # Feature extractor
 #   num_conv, intermediate channels
@@ -20,10 +20,10 @@ class Transformer(nn.Module):
         self.dim_feature = dim_feature
         self.feature_extractor = feature_extractor
         encoder_layer = nn.TransformerEncoderLayer(dim_feature, nhead, dim_feedforward=dim_feedforward,
-                                                    dropout=dropout)
+                                                    dropout=dropout, activation='gelu')
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers)
         self.linear = nn.Linear(dim_feature, num_classes)
-
+        self.pos_enc = PositionalEncoding(dim_feature)
 
     @classmethod
     def create(cls, config, num_classes):
@@ -47,12 +47,38 @@ class Transformer(nn.Module):
         # split back out into n x (b,c,h,w)
         # Transformer wants (n, b * h * w, c)
         n = len(x)
+        # print("Item shape:", x[0].shape)
         b, c, h, w = x[0].shape
         x = torch.cat(x, dim=0)
+        # print("Catted shape", x.shape)
         x = self.feature_extractor(x)
         x = x.view(n, -1, self.dim_feature) # (n, bhw, c)
+        x = self.pos_enc(x)
         x = self.transformer_encoder(x)
+        # print("Trans encoded shape", x.shape)
         final_features = torch.mean(x, dim=0) # (bhw, c)
+        # print("Final feature shape", final_features.shape)
         out = self.linear(final_features) # (bhw, num_classes)
         out = out.view(b, out.shape[1], h, w)
+        # print("Out shape", out.shape)
+        #  asdf
+        #print(self.linear.state_dict())
         return out
+
+class PositionalEncoding(nn.Module):
+
+    def __init__(self, d_model, dropout=0.0, max_len=5000):
+        super(PositionalEncoding, self).__init__()
+        self.dropout = nn.Dropout(p=dropout)
+
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0).transpose(0, 1)
+        self.register_buffer('pe', pe)
+
+    def forward(self, x):
+        x = x + self.pe[:x.size(0), :]
+        return self.dropout(x)

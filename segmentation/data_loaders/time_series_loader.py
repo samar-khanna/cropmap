@@ -70,7 +70,7 @@ class TimeSeriesDataset(CropDataset):
                 mask_path = os.path.join(self.data_path, rel_path, MASK_NAME)
                 if not os.path.isfile(mask_path):
                     mask_path = os.path.join(self.data_path, rel_path, '..', MASK_NAME)
-                    if not os.path.isfile(mask_path):
+                    if not os.path.isfile(mask_path) and self.inf_mode:
                         mask_path = None
 
                 sample = TimeSeriesSample(

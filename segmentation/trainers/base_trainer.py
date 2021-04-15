@@ -151,7 +151,7 @@ class Trainer:
 
         # TODO: Find a way to break this link between model and trainer config
         # Set up model using its config file and number of classes from trainer config.
-        num_classes = len(interest_classes or classes.keys())
+        num_classes = trainer_config.get("num_classes", len(interest_classes or classes.keys()))
         if type(checkpoint_path) is bool and checkpoint_path:
             checkpoint_path = save_path
         model = load_model(model_config, num_classes, checkpoint_path, freeze_backbone)

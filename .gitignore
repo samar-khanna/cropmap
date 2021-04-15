@@ -148,3 +148,7 @@ cython_debug/
 
 **/data_*/
 !**/data_loaders/
+
+*tmp*
+*OUT
+*out

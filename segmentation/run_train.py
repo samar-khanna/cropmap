@@ -10,11 +10,13 @@ from trainers.base_trainer import Trainer
 from trainers.default_trainer import DefaultTrainer
 from trainers.maml_trainer import MAMLTrainer
 from trainers.simclr_trainer import SimCLRTrainer
+from trainers.month_pred_trainer import MonthPredTrainer
 
 TRAINER_TYPES = {
     "default": DefaultTrainer,
     "maml": MAMLTrainer,
-    "simclr":SimCLRTrainer
+    "simclr":SimCLRTrainer,
+    "month_pred":MonthPredTrainer
 }
 
 

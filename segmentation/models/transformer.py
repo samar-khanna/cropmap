@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import math
 
+
 # Feature extractor
 #   num_conv, intermediate channels
 #   id out the classifier layer
@@ -18,7 +19,7 @@ class Transformer(nn.Module):
         self.dim_feature = dim_feature
         self.feature_extractor = feature_extractor
         encoder_layer = nn.TransformerEncoderLayer(dim_feature, nhead, dim_feedforward=dim_feedforward,
-                                                    dropout=dropout, activation='relu')
+                                                   dropout=dropout, activation='relu')
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers)
         self.linear = nn.Conv2d(dim_feature, num_classes, kernel_size=1)
         self.pos_enc = PositionalEncoding(dim_feature)
@@ -49,13 +50,14 @@ class Transformer(nn.Module):
         b, c, h, w = x[0].shape
         x = torch.cat(x, dim=0)
         x = self.feature_extractor(x)
-        x = x.view(n, -1, self.dim_feature) # (n, bhw, c)
+        x = x.view(n, -1, self.dim_feature)  # (n, bhw, c)
         x = self.pos_enc(x)
         x = self.transformer_encoder(x)
-        final_features = torch.mean(x, dim=0) # (bhw, c)
+        final_features = torch.mean(x, dim=0)  # (bhw, c)
         final_features = final_features.view(b, self.dim_feature, h, w)
-        out = self.linear(final_features) # (bhw, num_classes)
+        out = self.linear(final_features)  # (b, num_classes, h, w)
         return out
+
 
 class PositionalEncoding(nn.Module):
 

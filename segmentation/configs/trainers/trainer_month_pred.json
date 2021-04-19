@@ -10,7 +10,7 @@
   },
   "num_classes":12,
   "epochs": 200,
-  "batch_size": 4,
+  "batch_size": 2,
   "loss": "BCEWithLogitsLoss",
   "loss_kwargs": {},
   "optimizer": "Adam",

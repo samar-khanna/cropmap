@@ -31,7 +31,7 @@ class MetaInferenceAgent(InferenceAgent):
             optim_class,
             optim_kwargs,
             batch_size: int = 1,
-            shot_list: tuple = (1, 4, 8, 12, 16, 20, 24),
+            shot_list: tuple = (0, 1, 4, 8, 12, 16, 20, 24),
             reps_per_shot: int = 50,
             num_trials: int = 10,
             metric_names=(),
@@ -109,7 +109,7 @@ class MetaInferenceAgent(InferenceAgent):
             loss_fn=loss_fn,
             optim_class=optimizer_class,
             optim_kwargs=optim_kwargs,
-            shot_list=trainer_config.get("shot_list", (1, 4, 8, 12, 16, 20, 24)),
+            shot_list=trainer_config.get("shot_list", (0, 1, 4, 8, 12, 16, 20, 24)),
             reps_per_shot=trainer_config.get("reps_per_shot", 50),
             num_trials=trainer_config.get("num_trials", 10),
         )
@@ -235,37 +235,39 @@ class MetaInferenceAgent(InferenceAgent):
                         break  # Did break out of inner loop, so shots are done
 
                 # Concatenate input_shots along batch dimension
-                input_shots = tuple(zip(*input_shots))  # transposes the time and batch dimensions
-                input_shots = [torch.cat(x_t, dim=0) for x_t in input_shots]
-                labels = torch.cat(labels, dim=0)
+                if shots > 0:
+                    input_shots = tuple(zip(*input_shots))  # transposes the time and batch dimensions
+                    input_shots = [torch.cat(x_t, dim=0) for x_t in input_shots]
+                    labels = torch.cat(labels, dim=0)
 
-                # Input into the model r times, r = num updates per shot
-                copy_model.train()
-                avg_loss = MeanMetric()
-                for rep in range(self.reps_per_shot):
-                    # Shift to correct device
-                    input_shots, labels = \
-                        self.dataset.shift_sample_to_device((input_shots, labels), self.device)
+                    # Input into the model r times, r = num updates per shot
+                    copy_model.train()
+                    avg_loss = MeanMetric()
+                    for rep in range(self.reps_per_shot):
+                        # Shift to correct device
+                        input_shots, labels = \
+                            self.dataset.shift_sample_to_device((input_shots, labels), self.device)
 
-                    preds = copy_model(input_shots)
+                        preds = copy_model(input_shots)
 
-                    loss = self.format_and_compute_loss(preds, labels)
-                    avg_loss.update(loss.item())
+                        loss = self.format_and_compute_loss(preds, labels)
+                        avg_loss.update(loss.item())
 
-                    loss.backward()
-                    optimizer.step()
+                        loss.backward()
+                        optimizer.step()
 
-                print(f"Shots batch loss after {i} shots: {avg_loss.item()}")
+                    print(f"Shots batch loss after {i} shots: {avg_loss.item()}")
 
-                # Get preds for evaluating training performance
-                with torch.no_grad():
-                    preds = copy_model(input_shots)
+                    # Get preds for evaluating training performance
+                    with torch.no_grad():
+                        preds = copy_model(input_shots)
 
-                train_batch_metrics = self.evaluate_batch(preds, labels)
-                train_metric_results_per_shot[i].append(train_batch_metrics)
+                    train_batch_metrics = self.evaluate_batch(preds, labels)
+                    train_metric_results_per_shot[i].append(train_batch_metrics)
 
-                with open(os.path.join(self.out_dir, f"{self.exp_name}_train_shot_curve.json"), 'w') as f:
-                    json.dump(train_metric_results_per_shot, f, indent=2)
+                    with open(os.path.join(self.out_dir,
+                                           f"{self.exp_name}_train_shot_curve.json"), 'w') as f:
+                        json.dump(train_metric_results_per_shot, f, indent=2)
 
                 # Now do inference on all of query data
                 copy_model.eval()

@@ -296,8 +296,8 @@ class MetaInferenceAgent(InferenceAgent):
 
                     # Get preds for evaluating training performance
                     with torch.no_grad():
-                        preds = self.feed_to_model(
-                            copy_model, input_shots, labels.to(self.device), compute_grad=False
+                        preds, _ = self.feed_to_model(
+                            copy_model, input_shots, labels, compute_grad=False
                         )
 
                     train_batch_metrics = self.evaluate_batch(preds, labels)

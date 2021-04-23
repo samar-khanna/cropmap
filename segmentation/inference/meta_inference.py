@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 from copy import deepcopy
 from collections import defaultdict, Counter
+from torch.utils.data import Dataset, DataLoader
 
 from data_loaders.dataset import CropDataset
 from inference.base_inference import InferenceAgent
@@ -31,7 +32,8 @@ class MetaInferenceAgent(InferenceAgent):
             optim_class,
             optim_kwargs,
             batch_size: int = 1,
-            shot_list: tuple = (1, 4, 8, 12, 16, 20, 24),
+            shot_batch_limit: int = None,
+            shot_list: tuple = (0, 1, 4, 8, 12, 16, 20, 24),
             reps_per_shot: int = 50,
             num_trials: int = 10,
             metric_names=(),
@@ -43,11 +45,13 @@ class MetaInferenceAgent(InferenceAgent):
         @param out_dir: Output directory where inference results will be saved
         @param exp_name: Unique name for experiment (used for saving metrics file)
         @param batch_size: Batch size of input images for inference (default 1)
+        @param shot_batch_limit: Max batch size of batch of shots
         @param shot_list: Max number of input shots before inference is performed
         @param reps_per_shot: Number of gradient updates made per shot
         @param metric_names: Names of metrics that will measure inference performance
         """
         super().__init__(model, dataset, batch_size, out_dir, exp_name, metric_names)
+        self.shot_batch_limit = shot_batch_limit
         self.shot_list = shot_list
         self.reps_per_shot = reps_per_shot
         self.num_trials = num_trials
@@ -109,7 +113,8 @@ class MetaInferenceAgent(InferenceAgent):
             loss_fn=loss_fn,
             optim_class=optimizer_class,
             optim_kwargs=optim_kwargs,
-            shot_list=trainer_config.get("shot_list", (1, 4, 8, 12, 16, 20, 24)),
+            shot_batch_limit=trainer_config.get("shot_batch_limit", None),
+            shot_list=trainer_config.get("shot_list", (0, 1, 4, 8, 12, 16, 20, 24)),
             reps_per_shot=trainer_config.get("reps_per_shot", 50),
             num_trials=trainer_config.get("num_trials", 10),
         )
@@ -146,6 +151,40 @@ class MetaInferenceAgent(InferenceAgent):
         @return: loss value
         """
         return compute_masked_loss(self.loss_fn, preds, targets, invalid_value=-1)
+
+    def feed_to_model(self, model, input_shots, labels, compute_grad=True):
+        """
+        Feeds input_shots to the model, accumulate gradients, returns the predictions, loss
+        @param model: Model to which shots are fed
+        @param input_shots: [x1, ..., xt], each xi : (shots, c, h, w)
+        @param labels: (shots, #classes, h, w)
+        @param compute_grad: Whether to calculate gradients for shot batch
+        @return: preds (shots, #classes, h, w), batch_loss
+        """
+        shots = labels.shape[0]
+        batch_limit = shots if self.shot_batch_limit is None else self.shot_batch_limit
+
+        batch_loss = 0.
+        batch_preds = []
+        for b in range(0, shots, batch_limit):
+            if self.shot_batch_limit is None:
+                x_ts, ys = input_shots, labels
+            else:
+                x_ts = [x[b:b + batch_limit].clone() for x in input_shots]
+                ys = labels[b:b + batch_limit].clone()
+
+            # Shift to correct device
+            x_ts, ys = self.dataset.shift_sample_to_device((x_ts, ys), self.device)
+
+            preds = model(x_ts)
+            loss = self.format_and_compute_loss(preds, ys)
+            if compute_grad:
+                loss.backward()
+
+            batch_loss += loss.item()
+            batch_preds.append(preds)
+
+        return torch.cat(batch_preds, dim=0), batch_loss
 
     def evaluate_batch(self, preds, labels):
         """
@@ -225,7 +264,7 @@ class MetaInferenceAgent(InferenceAgent):
                             input_shots.append(input_t)  # shape (1, c, h, w)
                             labels.append(y)
 
-                            i += 1
+                            i += y.shape[0]
                             if i == shots:
                                 break
                         else:
@@ -235,37 +274,38 @@ class MetaInferenceAgent(InferenceAgent):
                         break  # Did break out of inner loop, so shots are done
 
                 # Concatenate input_shots along batch dimension
-                input_shots = tuple(zip(*input_shots))  # transposes the time and batch dimensions
-                input_shots = [torch.cat(x_t, dim=0) for x_t in input_shots]
-                labels = torch.cat(labels, dim=0)
+                if shots > 0:
+                    input_shots = tuple(zip(*input_shots))  # from (b, t, ...) -> (t, b, ...)
+                    input_shots = [torch.cat(x_t, dim=0) for x_t in input_shots]  # now (t, b, ...)
+                    labels = torch.cat(labels, dim=0)  # shape (shots, classes, h, w)
 
-                # Input into the model r times, r = num updates per shot
-                copy_model.train()
-                avg_loss = MeanMetric()
-                for rep in range(self.reps_per_shot):
-                    # Shift to correct device
-                    input_shots, labels = \
-                        self.dataset.shift_sample_to_device((input_shots, labels), self.device)
+                    # Input into the model r times, r = num updates per shot
+                    copy_model.train()
+                    avg_loss = MeanMetric()
+                    # batch_limit = shots if self.shot_batch_limit is None else self.shot_batch_limit
+                    for rep in range(self.reps_per_shot):
+                        optimizer.zero_grad()
 
-                    preds = copy_model(input_shots)
+                        preds, batch_loss = self.feed_to_model(copy_model, input_shots, labels)
 
-                    loss = self.format_and_compute_loss(preds, labels)
-                    avg_loss.update(loss.item())
+                        avg_loss.update(batch_loss)
 
-                    loss.backward()
-                    optimizer.step()
+                        optimizer.step()
 
-                print(f"Shots batch loss after {i} shots: {avg_loss.item()}")
+                    print(f"Shots batch loss after {i} shots: {avg_loss.item()}")
 
-                # Get preds for evaluating training performance
-                with torch.no_grad():
-                    preds = copy_model(input_shots)
+                    # Get preds for evaluating training performance
+                    with torch.no_grad():
+                        preds, _ = self.feed_to_model(
+                            copy_model, input_shots, labels, compute_grad=False
+                        )
 
-                train_batch_metrics = self.evaluate_batch(preds, labels)
-                train_metric_results_per_shot[i].append(train_batch_metrics)
+                    train_batch_metrics = self.evaluate_batch(preds, labels)
+                    train_metric_results_per_shot[i].append(train_batch_metrics)
 
-                with open(os.path.join(self.out_dir, f"{self.exp_name}_train_shot_curve.json"), 'w') as f:
-                    json.dump(train_metric_results_per_shot, f, indent=2)
+                    with open(os.path.join(self.out_dir,
+                                           f"{self.exp_name}_train_shot_curve.json"), 'w') as f:
+                        json.dump(train_metric_results_per_shot, f, indent=2)
 
                 # Now do inference on all of query data
                 copy_model.eval()
@@ -291,6 +331,7 @@ class MetaInferenceAgent(InferenceAgent):
 
                 print(f"Query loss after {i} shots: {avg_loss.item()}\n")
 
-            # Save results every trial
-            with open(os.path.join(self.out_dir, f"{self.exp_name}_query_shot_curve.json"), 'w') as f:
-                json.dump(query_metric_results_per_shot, f, indent=2)
+                # Save results every shot
+                with open(os.path.join(self.out_dir,
+                                       f"{self.exp_name}_query_shot_curve.json"), 'w') as f:
+                    json.dump(query_metric_results_per_shot, f, indent=2)

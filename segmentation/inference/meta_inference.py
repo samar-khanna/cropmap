@@ -253,13 +253,15 @@ class MetaInferenceAgent(InferenceAgent):
                         batch_limit = shots if self.shot_batch_limit is None else self.shot_batch_limit
                         for b in range(0, shots, batch_limit):
                             if self.shot_batch_limit is None:
-                                x_ts, y_s = input_shots, labels
+                                x_ts, ys = input_shots, labels
                             else:
                                 x_ts = [x[b:b+batch_limit].clone() for x in input_shots]
+                                print([x.device for x in x_ts])
                                 ys = labels[b:b+batch_limit].clone()
 
                             # Shift to correct device
                             x_ts, ys = self.dataset.shift_sample_to_device((x_ts, ys), self.device)
+                            print([x.device for x in x_ts])
 
                             # x_ts, ys = self.dataset.shift_sample_to_device((x_ts, ys), self.device)
 

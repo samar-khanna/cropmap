@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 from copy import deepcopy
 from collections import defaultdict, Counter
+from torch.utils.data import Dataset, DataLoader
 
 from data_loaders.dataset import CropDataset
 from inference.base_inference import InferenceAgent
@@ -151,6 +152,25 @@ class MetaInferenceAgent(InferenceAgent):
         """
         return compute_masked_loss(self.loss_fn, preds, targets, invalid_value=-1)
 
+    def feed_to_model(self, model, input_shots, labels):
+        shots = labels.shape[0]
+        batch_limit = shots if self.shot_batch_limit is None else self.shot_batch_limit
+
+        preds = []
+        for b in range(0, shots, batch_limit):
+            if self.shot_batch_limit is None:
+                x_ts, ys = input_shots, labels
+            else:
+                x_ts = [x[b:b + batch_limit].clone() for x in input_shots]
+                ys = labels[b:b + batch_limit].clone()
+
+            # Shift to correct device
+            x_ts, ys = self.dataset.shift_sample_to_device((x_ts, ys), self.device)
+
+            preds.append(model(x_ts))
+
+        return torch.cat(preds, dim=0)
+
     def evaluate_batch(self, preds, labels):
         """
         Returns confusion matrix for each class across batch
@@ -247,29 +267,14 @@ class MetaInferenceAgent(InferenceAgent):
                     # Input into the model r times, r = num updates per shot
                     copy_model.train()
                     avg_loss = MeanMetric()
+                    # batch_limit = shots if self.shot_batch_limit is None else self.shot_batch_limit
                     for rep in range(self.reps_per_shot):
 
                         batch_loss = 0.
-                        batch_limit = shots if self.shot_batch_limit is None else self.shot_batch_limit
-                        for b in range(0, shots, batch_limit):
-                            if self.shot_batch_limit is None:
-                                x_ts, ys = input_shots, labels
-                            else:
-                                x_ts = [x[b:b+batch_limit].clone() for x in input_shots]
-                                print([x.device for x in x_ts])
-                                ys = labels[b:b+batch_limit].clone()
+                        preds = self.feed_to_model(copy_model, input_shots, labels)
+                        batch_loss = self.format_and_compute_loss(preds, labels)
 
-                            # Shift to correct device
-                            x_ts, ys = self.dataset.shift_sample_to_device((x_ts, ys), self.device)
-                            print([x.device for x in x_ts])
-
-                            # x_ts, ys = self.dataset.shift_sample_to_device((x_ts, ys), self.device)
-
-                            preds = copy_model(x_ts)
-
-                            batch_loss += self.format_and_compute_loss(preds, ys)
-
-                        batch_loss /= shots
+                        # batch_loss /= shots
                         avg_loss.update(batch_loss.item())
 
                         batch_loss.backward()
@@ -279,7 +284,7 @@ class MetaInferenceAgent(InferenceAgent):
 
                     # Get preds for evaluating training performance
                     with torch.no_grad():
-                        preds = copy_model(input_shots)
+                        preds = self.feed_to_model(copy_model, input_shots, labels)
 
                     train_batch_metrics = self.evaluate_batch(preds, labels)
                     train_metric_results_per_shot[i].append(train_batch_metrics)
@@ -313,5 +318,6 @@ class MetaInferenceAgent(InferenceAgent):
                 print(f"Query loss after {i} shots: {avg_loss.item()}\n")
 
                 # Save results every shot
-                with open(os.path.join(self.out_dir, f"{self.exp_name}_query_shot_curve.json"), 'w') as f:
+                with open(os.path.join(self.out_dir,
+                                       f"{self.exp_name}_query_shot_curve.json"), 'w') as f:
                     json.dump(query_metric_results_per_shot, f, indent=2)

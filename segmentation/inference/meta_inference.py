@@ -248,15 +248,17 @@ class MetaInferenceAgent(InferenceAgent):
                     copy_model.train()
                     avg_loss = MeanMetric()
                     for rep in range(self.reps_per_shot):
-                        batch_limit = shots if self.shot_batch_limit is None else self.shot_batch_limit
+                        # Shift to correct device
+                        input_shots, labels = \
+                            self.dataset.shift_sample_to_device((input_shots, labels), self.device)
 
                         batch_loss = 0.
+                        batch_limit = shots if self.shot_batch_limit is None else self.shot_batch_limit
                         for b in range(0, shots, batch_limit):
                             x_ts = [x[b:b+batch_limit] for x in input_shots]
                             ys = labels[b:b+batch_limit]
 
-                            # Shift to correct device
-                            x_ts, ys = self.dataset.shift_sample_to_device((x_ts, ys), self.device)
+                            # x_ts, ys = self.dataset.shift_sample_to_device((x_ts, ys), self.device)
 
                             preds = copy_model(x_ts)
 

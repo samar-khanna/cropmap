@@ -152,18 +152,20 @@ class MetaInferenceAgent(InferenceAgent):
         """
         return compute_masked_loss(self.loss_fn, preds, targets, invalid_value=-1)
 
-    def feed_to_model(self, model, input_shots, labels):
+    def feed_to_model(self, model, input_shots, labels, compute_grad=True):
         """
-        Feeds input_shots to the model and returns the predictions
+        Feeds input_shots to the model, accumulate gradients, returns the predictions, loss
         @param model: Model to which shots are fed
         @param input_shots: [x1, ..., xt], each xi : (shots, c, h, w)
         @param labels: (shots, #classes, h, w)
-        @return: preds (shots, #classes, h, w)
+        @param compute_grad: Whether to calculate gradients for shot batch
+        @return: preds (shots, #classes, h, w), batch_loss
         """
         shots = labels.shape[0]
         batch_limit = shots if self.shot_batch_limit is None else self.shot_batch_limit
 
-        preds = []
+        batch_loss = 0.
+        batch_preds = []
         for b in range(0, shots, batch_limit):
             if self.shot_batch_limit is None:
                 x_ts, ys = input_shots, labels
@@ -174,9 +176,15 @@ class MetaInferenceAgent(InferenceAgent):
             # Shift to correct device
             x_ts, ys = self.dataset.shift_sample_to_device((x_ts, ys), self.device)
 
-            preds.append(model(x_ts))
+            preds = model(x_ts)
+            loss = self.format_and_compute_loss(preds, ys)
+            if compute_grad:
+                loss.backward()
 
-        return torch.cat(preds, dim=0)
+            batch_loss += loss.item()
+            batch_preds.append(preds)
+
+        return torch.cat(batch_preds, dim=0), batch_loss
 
     def evaluate_batch(self, preds, labels):
         """
@@ -276,22 +284,21 @@ class MetaInferenceAgent(InferenceAgent):
                     avg_loss = MeanMetric()
                     # batch_limit = shots if self.shot_batch_limit is None else self.shot_batch_limit
                     for rep in range(self.reps_per_shot):
+                        optimizer.zero_grad()
 
-                        batch_loss = 0.
-                        preds = self.feed_to_model(copy_model, input_shots, labels)
-                        batch_loss = self.format_and_compute_loss(preds, labels.to(self.device))
+                        preds, batch_loss = self.feed_to_model(copy_model, input_shots, labels)
 
-                        # batch_loss /= shots
-                        avg_loss.update(batch_loss.item())
+                        avg_loss.update(batch_loss)
 
-                        batch_loss.backward()
                         optimizer.step()
 
                     print(f"Shots batch loss after {i} shots: {avg_loss.item()}")
 
                     # Get preds for evaluating training performance
                     with torch.no_grad():
-                        preds = self.feed_to_model(copy_model, input_shots, labels.to(self.device))
+                        preds = self.feed_to_model(
+                            copy_model, input_shots, labels.to(self.device), compute_grad=False
+                        )
 
                     train_batch_metrics = self.evaluate_batch(preds, labels)
                     train_metric_results_per_shot[i].append(train_batch_metrics)

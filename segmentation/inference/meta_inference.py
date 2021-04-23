@@ -153,6 +153,13 @@ class MetaInferenceAgent(InferenceAgent):
         return compute_masked_loss(self.loss_fn, preds, targets, invalid_value=-1)
 
     def feed_to_model(self, model, input_shots, labels):
+        """
+        Feeds input_shots to the model and returns the predictions
+        @param model: Model to which shots are fed
+        @param input_shots: [x1, ..., xt], each xi : (shots, c, h, w)
+        @param labels: (shots, #classes, h, w)
+        @return: preds (shots, #classes, h, w)
+        """
         shots = labels.shape[0]
         batch_limit = shots if self.shot_batch_limit is None else self.shot_batch_limit
 
@@ -272,7 +279,7 @@ class MetaInferenceAgent(InferenceAgent):
 
                         batch_loss = 0.
                         preds = self.feed_to_model(copy_model, input_shots, labels)
-                        batch_loss = self.format_and_compute_loss(preds, labels)
+                        batch_loss = self.format_and_compute_loss(preds, labels.to(self.device))
 
                         # batch_loss /= shots
                         avg_loss.update(batch_loss.item())
@@ -284,7 +291,7 @@ class MetaInferenceAgent(InferenceAgent):
 
                     # Get preds for evaluating training performance
                     with torch.no_grad():
-                        preds = self.feed_to_model(copy_model, input_shots, labels)
+                        preds = self.feed_to_model(copy_model, input_shots, labels.to(self.device))
 
                     train_batch_metrics = self.evaluate_batch(preds, labels)
                     train_metric_results_per_shot[i].append(train_batch_metrics)

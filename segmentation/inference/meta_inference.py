@@ -184,7 +184,7 @@ class MetaInferenceAgent(InferenceAgent):
             batch_loss += loss.item()
             batch_preds.append(preds)
 
-        return torch.cat(batch_preds, dim=0), batch_loss
+        return torch.cat(batch_preds, dim=0), batch_loss/shots
 
     def evaluate_batch(self, preds, labels):
         """

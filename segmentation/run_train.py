@@ -12,12 +12,14 @@ from trainers.maml_trainer import MAMLTrainer
 from trainers.simclr_trainer import SimCLRTrainer
 from trainers.month_pred_trainer import MonthPredTrainer
 from trainers.missing_month_trainer import MissingMonthTrainer
+from trainers.knn_trainer import KNNTrainer
 
 TRAINER_TYPES = {
     "default": DefaultTrainer,
     "maml": MAMLTrainer,
     "simclr":SimCLRTrainer,
     "month_pred":MonthPredTrainer,
+    "knn":KNNTrainer,
     "missing_month": MissingMonthTrainer,
 }
 

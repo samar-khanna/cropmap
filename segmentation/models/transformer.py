@@ -29,7 +29,7 @@ class Transformer(nn.Module):
         """
         TODO:
         """
-        in_channels = config.get("input_shape", [3])[0]
+        in_channels = config.get("input_shape", [9])[0]
         return cls(num_classes, in_channels, **config["classifier_kwargs"])
 
     def forward(self, x):

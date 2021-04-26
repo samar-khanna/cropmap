@@ -55,6 +55,7 @@ class Transformer(nn.Module):
         x = x.permute(0, 2, 3, 1)  # (t*b, h, w, c)
         x = self.conv_layer_norm(x)  # (t*b, h, w, c)
 
+        x = x.permute(0, 3, 1, 2)  # (t*b, c, h, w)
         x = x.view(t, -1, self.dim_feature)  # (t, bhw, c)
         x = self.pos_enc(x)  # (t, bhw, c)
         x = self.transformer_encoder(x)  # (t, bhw, c)

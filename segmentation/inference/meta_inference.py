@@ -179,7 +179,7 @@ class MetaInferenceAgent(InferenceAgent):
             preds = model(x_ts)
             loss = self.format_and_compute_loss(preds, ys)
             if compute_grad:
-                loss.backward()
+                (loss * ys.shape[0]/shots).backward()
 
             batch_loss += loss.item()
             batch_preds.append(preds)
@@ -261,8 +261,8 @@ class MetaInferenceAgent(InferenceAgent):
                         assert len(support_loader) > 0, f"{task_name} has no input shots to train"
 
                         for batch_index, (input_t, y) in enumerate(support_loader):
-                            input_shots.append(input_t)  # shape (1, c, h, w)
-                            labels.append(y)
+                            input_shots.append(input_t)  # [x1, ..., xt], x_i: (1, c, h, w)
+                            labels.append(y)  # (1, #classes, h, w)
 
                             i += y.shape[0]
                             if i == shots:

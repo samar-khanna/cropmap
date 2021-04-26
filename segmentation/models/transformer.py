@@ -7,6 +7,17 @@ import torch.nn.functional as F
 class Transformer(nn.Module):
     def __init__(self, num_classes, in_channels, dim_feature, num_layers,
                  dim_feedforward=256, nhead=4, dropout=0):
+        """
+        Creates a Transformer for images stacked in a time-sequence.
+        Assumes all input time-shots will have same batch size.
+        @param num_classes: Number of classes in prediction/label
+        @param in_channels: Number of channels in each input image in time-series
+        @param dim_feature: Encoding dimension (# channels) before inputted to transformer
+        @param num_layers: Number of Transformer encoder layers in Transformer module
+        @param dim_feedforward: Hidden number of nodes in fully connected net in Transformer
+        @param nhead: Number of self attention heads
+        @param dropout: Dropout fraction for the encoder layer
+        """
         super().__init__()
         self.dim_feature = dim_feature
         self.pos_enc = PositionalEncoding(dim_feature)
@@ -27,18 +38,21 @@ class Transformer(nn.Module):
     @classmethod
     def create(cls, config, num_classes):
         """
-        TODO:
+        Creates a Transformer from a config file, along with target number of classes.
+        @param config: Dictionary config for the Transformer (should contain classifier_kwargs)
+        @param num_classes: Number of classes in prediction/label
+        @return: Instantiated Transformer
         """
         in_channels = config.get("input_shape", [9])[0]
         return cls(num_classes, in_channels, **config["classifier_kwargs"])
 
     def forward(self, x):
-        # input is list of length n
+        # input is list of length t
         # each entry is (b, c, h, w)
-        # concatenate to (n*b, c, h, w)
+        # concatenate to (t*b, c, h, w)
         # extract features
-        # split back out into n x (b,c,h,w)
-        # Transformer wants (n, b * h * w, c)
+        # split back out into t x (b,c,h,w)
+        # Transformer wants (t, b * h * w, c)
 
         # TODO: Do we need to worry about padded sequences with -1s?
         # TODO: Worry about 0s interacting with LayerNorm?
@@ -55,6 +69,7 @@ class Transformer(nn.Module):
         x = x.permute(0, 2, 3, 1)  # (t*b, h, w, c)
         x = self.conv_layer_norm(x)  # (t*b, h, w, c)
 
+        # Call to contiguous to ensure the next viewing operation happens as expected
         x = x.permute(0, 3, 1, 2).contiguous()  # (t*b, c, h, w)
         x = x.view(t, -1, self.dim_feature)  # (t, bhw, c)
         x = self.pos_enc(x)  # (t, bhw, c)

@@ -1,0 +1,10 @@
+{
+  "name":"dtwnet",
+  "classifier":"DTWNet",
+  "classifier_kwargs": {
+    "n_filter":1,
+    "kernel_shape_str":"3 9",
+    "feature_len":3,
+     "num_mlp_layers": 1
+    }
+}

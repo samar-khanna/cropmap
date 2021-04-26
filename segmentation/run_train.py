@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 
 from trainers.base_trainer import Trainer
+from trainers.knn_trainer import KNNTrainer
 from trainers.default_trainer import DefaultTrainer
 from trainers.maml_trainer import MAMLTrainer
 from trainers.simclr_trainer import SimCLRTrainer
@@ -16,8 +17,9 @@ from trainers.missing_month_trainer import MissingMonthTrainer
 TRAINER_TYPES = {
     "default": DefaultTrainer,
     "maml": MAMLTrainer,
-    "simclr":SimCLRTrainer,
-    "month_pred":MonthPredTrainer,
+    "simclr": SimCLRTrainer,
+    "month_pred": MonthPredTrainer,
+    "knn": KNNTrainer,
     "missing_month": MissingMonthTrainer,
 }
 

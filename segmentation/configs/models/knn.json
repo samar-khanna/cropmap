@@ -1,0 +1,9 @@
+{
+  "name": "knn",
+  "classifier": "kNN",
+  "classifier_kwargs": {
+        "k":1,
+        "metric":"L2",
+        "use_ndvi":0
+  }
+}

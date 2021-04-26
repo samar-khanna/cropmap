@@ -7,6 +7,8 @@ from models.block_unet import BlockUNet
 from models.simple_net import SimpleNet
 from models.transformer import Transformer
 from models.transformer_feature_extract import TransformerFeatureExtract
+from models.dtwnet import DTWNET_SINGLE
+from models.knn import kNN
 
 from data_loaders.image_loader import ImageDataset
 from data_loaders.time_series_loader import TimeSeriesDataset
@@ -22,6 +24,8 @@ MODELS = {
     "dumbnet": DumbNet,
     "transformer": Transformer,
     "transformer_feature_extract": TransformerFeatureExtract,
+    "knn": kNN,
+    "dtwnet": DTWNET_SINGLE,
 }
 
 
@@ -35,4 +39,6 @@ LOADERS = {
     "dumbnet": TimeSeriesDataset,
     "transformer": TimeSeriesDataset,
     "transformer_feature_extract": TransformerFeatureExtract,
+    "knn": TimeSeriesDataset,
+    "dtwnet": TimeSeriesDataset,
 }

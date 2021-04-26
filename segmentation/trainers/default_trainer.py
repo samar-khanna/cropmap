@@ -166,11 +166,6 @@ class DefaultTrainer(Trainer):
         @param is_train: Whether to train or validate the model
         @return: Dict of {metric_name: metric_val}
         """
-        if is_train:
-            self.model.train()
-        else:
-            self.model.eval()
-
         # Set up metrics
         epoch_metrics = {name: MeanMetric() for name in self.metric_names}
         epoch_metrics["loss"] = MeanMetric()
@@ -206,7 +201,10 @@ class DefaultTrainer(Trainer):
         return self.create_metrics_dict(**epoch_metrics)
 
     def validate_one_epoch(self, val_loaders):
-        return self._run_one_epoch(val_loaders, is_train=False)
+        self.model.eval()
+        with torch.no_grad():
+            return self._run_one_epoch(val_loaders, is_train=False)
 
     def train_one_epoch(self, train_loaders):
+        self.model.train()
         return self._run_one_epoch(train_loaders, is_train=True)

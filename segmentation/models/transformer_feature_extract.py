@@ -12,7 +12,7 @@ import math
 #   nhead can be 8 (default) for now, have in config
 #   dim feedforward 256
 
-class Transformer(nn.Module):
+class TransformerFeatureExtract(nn.Module):
     def __init__(self, feature_extractor, num_classes, dim_feature, num_layers, dim_feedforward=256, nhead=4,
                  dropout=0):
         super().__init__()

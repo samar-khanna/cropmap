@@ -119,7 +119,7 @@ class MissingMonthTrainer(DefaultTrainer):
             b, _, h, w = y.shape
 
             # Get list of repeated one-hots for each month then stack
-            drop_month = torch.randint(0, n_months, size=b)
+            drop_month = torch.randint(0, n_months, size=(b,))
             one_hot_mat_list = [
                 torch.eye(n_months)[d].repeat(h, w, 1).permute(2, 0, 1)  # (n_months, h, w)
                 for d in drop_month

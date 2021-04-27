@@ -4,13 +4,13 @@ import torch.nn as nn
 import torch.optim as optim
 from typing import Optional
 
-from trainers.base_trainer import Trainer
+from trainers.default_trainer import DefaultTrainer
 from data_loaders.dataset import CropDataset
 from trainers.trainer_utils import compute_masked_loss
 from metrics import calculate_metrics, MeanMetric
 
 
-class MissingMonthTrainer(Trainer):
+class MissingMonthTrainer(DefaultTrainer):
     def __init__(
             self,
             model: nn.Module,
@@ -63,7 +63,7 @@ class MissingMonthTrainer(Trainer):
         """
         Creates a metrics dictionary, mapping `metric_name`--> `metric_val`
         The metrics are 1) averaged over all classes 2) per class
-        @param loss: Either `None`, or if specified, PyTorch loss number for the epoch
+        @param num_classes: Number of classes in final output / label
         @param metrics: Each metric should be a numpy array of shape (num_classes)
         @return: {metric_name: metric_val}
         """
@@ -87,30 +87,6 @@ class MissingMonthTrainer(Trainer):
 
         return metrics_dict
 
-    def init_checkpoint_metric(self):
-        """
-        Returns -∞ value for initial best validation IoU
-        @return:
-        """
-        return -np.inf
-
-    def check_checkpoint_metric(self, val_metrics, epochs_since_last_save, prev_best):
-        """
-        Checks if class mean validation IoU for current epoch is better than previous high.
-        Returns updated IoU if epoch val IoU is better, or if >10 epochs have passed and
-        current epoch val IoU is less than 5% smaller than previous best.
-        @param val_metrics:
-        @param epochs_since_last_save:
-        @param prev_best:
-        @return: Updated best validation IoU, or None if shouldn't checkpoint weights.
-        """
-        val_iou = val_metrics['mean/iou']
-        diff = val_iou - prev_best
-        if diff > 0 or (epochs_since_last_save > 10 and abs(diff / prev_best) < 0.05):
-            return val_iou if diff > 0 else prev_best
-
-        return None
-
     def format_and_compute_loss(self, preds, targets):
         """
         Wrapper function for formatting preds and targets for loss.
@@ -126,41 +102,6 @@ class MissingMonthTrainer(Trainer):
 
         return compute_masked_loss(self.loss_fn, preds, targets, invalid_value=-1)
 
-    def train_one_step(self, images, labels):
-        """
-        Performs one training step over a batch.
-        Passes the batch of images through the model, and backprops the gradients.
-        @param images: Tensor of shape (b, c, h, w)
-        @param labels: Tensor of shape (b, c, h, w)
-        @return: model predictions, loss value
-        """
-        # Flush the gradient buffers
-        self.optimizer.zero_grad()
-
-        # Feed model
-        preds = self.model(images)
-        loss = self.format_and_compute_loss(preds, labels)
-
-        # Backpropagate
-        loss.backward()
-        self.optimizer.step()
-
-        return preds, loss
-
-    def val_one_step(self, images, labels):
-        """
-        Performs one validation step over a batch.
-        Passes the batch of images through the model.
-        @param images: Tensor of shape (b, c, h, w)
-        @param labels: Tensor of shape (b, c, h, w)
-        @return: model predictions, loss value
-        """
-        # Feed model
-        preds = self.model(images)
-        loss = self.format_and_compute_loss(preds, labels)
-
-        return preds, loss
-
     def _run_one_epoch(self, loaders, is_train):
         """
         Runs a train/validation loop over all data in dataset
@@ -168,11 +109,6 @@ class MissingMonthTrainer(Trainer):
         @param is_train: Whether to train or validate the model
         @return: Dict of {metric_name: metric_val}
         """
-        if is_train:
-            self.model.train()
-        else:
-            self.model.eval()
-
         # Set up metrics
         epoch_metrics = {name: MeanMetric() for name in self.metric_names}
         epoch_metrics["loss"] = MeanMetric()
@@ -184,8 +120,10 @@ class MissingMonthTrainer(Trainer):
 
             # Get list of repeated one-hots for each month then stack
             drop_month = torch.randint(0, n_months, size=b)
-            one_hot_mat_list = [torch.eye(n_months)[d].repeat(h, w, 1).permute(2, 0, 1)  # (n_months, h, w)
-                                for d in drop_month]
+            one_hot_mat_list = [
+                torch.eye(n_months)[d].repeat(h, w, 1).permute(2, 0, 1)  # (n_months, h, w)
+                for d in drop_month
+            ]
             y = torch.stack(one_hot_mat_list)  # (b, n_months, h, w)
 
             # Drop month from input
@@ -221,9 +159,3 @@ class MissingMonthTrainer(Trainer):
 
         # Create metrics dict
         return self.create_metrics_dict(n_months, **epoch_metrics)
-
-    def validate_one_epoch(self, val_loaders):
-        return self._run_one_epoch(val_loaders, is_train=False)
-
-    def train_one_epoch(self, train_loaders):
-        return self._run_one_epoch(train_loaders, is_train=True)

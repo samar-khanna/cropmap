@@ -121,15 +121,23 @@ class MissingMonthTrainer(DefaultTrainer):
             # Get list of repeated one-hots for each month then stack
             drop_month = torch.randint(0, n_months, size=(b,))
             one_hot_mat_list = [
-                torch.eye(n_months)[d].repeat(h, w, 1).permute(2, 0, 1)  # (n_months, h, w)
+                torch.eye(n_months)[d].repeat(h, w, 1).permute(2, 0, 1)  # (t, h, w)
                 for d in drop_month
             ]
-            y = torch.stack(one_hot_mat_list)  # (b, n_months, h, w)
+            y = torch.stack(one_hot_mat_list, dim=0)  # (b, t, h, w)
+
+            batch_range = torch.arange(b).unsqueeze(-1)  # (b, 1)
+            keep_months = torch.as_tensor(
+                [[j for j in range(n_months) if j != drop_month[i]] for i in range(b)]
+            )  # (b, t-1)
 
             # Drop month from input
-            for i, t in enumerate(input_t):
-                keep_months = torch.as_tensor([j for j in range(n_months) if j != drop_month[i]])
-                input_t[i] = t[keep_months]
+            # ASSUME: Equal time series length for all images in batch
+            # Change from (t, b, c, h, w) -> (b, t, c, h, w)
+            batch_first_input = torch.stack(input_t, dim=0).transpose(0, 1)
+            batch_first_input = batch_first_input[batch_range, keep_months, :]  # (b, t-1, c,h,w)
+            input_t = batch_first_input.transpose(0, 1)  # (t-1, b, c,h,w)
+            input_t = [t for t in input_t]  # back to list for correct format
 
             # Shift to correct device
             input_t, y = self.dataset.shift_sample_to_device((input_t, y), self.device)

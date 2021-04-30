@@ -25,7 +25,7 @@ class Transformer(nn.Module):
         self.pos_enc = PositionalEncoding(dim_feature)
 
         self.in_layer_norm = nn.LayerNorm(in_channels)
-        self.first_conv = nn.Conv2d(in_channels, dim_feature, kernel_size=3, padding=1)
+        self.first_conv = nn.Conv2d(in_channels, dim_feature, kernel_size=1)
         # self.conv_block = NConvBlock(in_channels, dim_feature, n=2, kernel_size=3)
         self.conv_layer_norm = nn.LayerNorm(dim_feature)
 
@@ -68,7 +68,6 @@ class Transformer(nn.Module):
 
         x = x.permute(0, 3, 1, 2)  # (t*b, in_c, h, w)
         x = self.first_conv(x)  # (t*b, c, h, w)
-        # x = self.conv_block(x)  # (t*b, c, h, w)
 
         x = x.permute(0, 2, 3, 1)  # (t*b, h, w, c)
         x = self.conv_layer_norm(x)  # (t*b, h, w, c)

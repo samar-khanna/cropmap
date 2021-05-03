@@ -8,11 +8,7 @@ import pickle
 import argparse
 
 from metrics import MeanMetric
-from models.simple_net import SimpleNet
-from data_loaders.image_loader import ImageDataset
 from data_loaders.time_series_loader import TimeSeriesDataset
-from utils.loading import load_model, save_model, create_dataset
-from utils.utils import create_dirs
 
 
 def passed_arguments():
@@ -55,7 +51,8 @@ if __name__ == "__main__":
         classes = json.load(f)
 
     use_cuda = torch.cuda.is_available()
-    device = torch.device("cuda:0" if use_cuda else "cpu")
+    # device = torch.device("cuda:0" if use_cuda else "cpu")
+    device = torch.device("cpu")
 
     # interest_classes = [
     #     "Corn", "Soybeans", "Potatoes", "Oats", "Apples", "Fallow-Idle Cropland",

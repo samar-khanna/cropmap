@@ -7,13 +7,15 @@ from .model_utils import NConvBlock
 
 
 class Transformer(nn.Module):
-    def __init__(self, num_classes, in_channels, dim_feature, num_layers,
-                 dim_feedforward=256, nhead=4, dropout=0):
+    def __init__(self, num_classes, in_channels, n_conv, k_conv=1, dim_feature=64,
+                 num_layers=2, dim_feedforward=256, nhead=2, dropout=0):
         """
         Creates a Transformer for images stacked in a time-sequence.
         Assumes all input time-shots will have same batch size.
         @param num_classes: Number of classes in prediction/label
         @param in_channels: Number of channels in each input image in time-series
+        @param n_conv: Number of conv blocks to extract conv features from each input
+        @param k_conv: Kernel size for conv block to extract conv features.
         @param dim_feature: Encoding dimension (# channels) before inputted to transformer
         @param num_layers: Number of Transformer encoder layers in Transformer module
         @param dim_feedforward: Hidden number of nodes in fully connected net in Transformer
@@ -25,8 +27,8 @@ class Transformer(nn.Module):
         self.pos_enc = PositionalEncoding(dim_feature)
 
         self.in_layer_norm = nn.LayerNorm(in_channels)
-        self.first_conv = nn.Conv2d(in_channels, dim_feature, kernel_size=1)
-        # self.conv_block = NConvBlock(in_channels, dim_feature, n=2, kernel_size=3)
+        self.feature_extractor = NConvBlock(in_channels, dim_feature, n_conv, k_conv)
+        # self.first_conv = nn.Conv2d(in_channels, dim_feature, kernel_size=1)
         self.conv_layer_norm = nn.LayerNorm(dim_feature)
 
         encoder_layer = nn.TransformerEncoderLayer(
@@ -67,7 +69,8 @@ class Transformer(nn.Module):
         x = self.in_layer_norm(x)  # (t*b, h, w, in_c)
 
         x = x.permute(0, 3, 1, 2)  # (t*b, in_c, h, w)
-        x = self.first_conv(x)  # (t*b, c, h, w)
+        # x = self.first_conv(x)  # (t*b, c, h, w)
+        x = self.feature_extractor(x)  # (t*b, c, h, w)
 
         x = x.permute(0, 2, 3, 1)  # (t*b, h, w, c)
         x = self.conv_layer_norm(x)  # (t*b, h, w, c)

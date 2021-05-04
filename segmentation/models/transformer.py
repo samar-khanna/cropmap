@@ -27,7 +27,8 @@ class Transformer(nn.Module):
         self.pos_enc = PositionalEncoding(dim_feature)
 
         self.in_layer_norm = nn.LayerNorm(in_channels)
-        self.feature_extractor = NConvBlock(in_channels, dim_feature, n_conv, k_conv)
+        self.feature_extractor = NConvBlock(in_channels, dim_feature, n_conv, k_conv,
+                                            padding=0 if k_conv == 1 else 1)
         # self.first_conv = nn.Conv2d(in_channels, dim_feature, kernel_size=1)
         self.conv_layer_norm = nn.LayerNorm(dim_feature)
 

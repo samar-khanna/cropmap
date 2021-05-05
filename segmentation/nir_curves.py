@@ -76,6 +76,8 @@ if __name__ == "__main__":
                        for class_id in range(len(classes))}
     class_avg_swir2 = {class_id: {month: MeanMetric() for month in months.values()}
                        for class_id in range(len(classes))}
+    class_cloudy = {class_id: {month: MeanMetric() for month in months.values()}
+                    for class_id in range(len(classes))}
 
     for batch_index, (xs, y) in enumerate(val_loader):
         xs, y = dataset.shift_sample_to_device((xs, y), device)
@@ -103,18 +105,28 @@ if __name__ == "__main__":
                     if len(features) > 0:
                         class_avg[class_id][m].update(np.mean(features))
 
+                # Count percentage of cloudy pixels in input per class
+                cloudy_mask = (~valid_mask) & class_mask.astype(np.bool)  # shape (b, h, w)
+                class_cloudy[class_id][m].update(cloudy_mask.sum()/class_mask.sum())
+
+            class_cloudy['mean'][m].update((~valid_mask).sum()/valid_mask.size)
+
     rev_classes = {og_id: class_name for class_name, og_id in classes.items()}
-    final_dict = {'nir': {}, 'swir1': {}, 'swir2': {}}
+    final_dict = {'nir': {}, 'swir1': {}, 'swir2': {}, 'cloudy': {}}
     for band_name, class_avg_dict in [('nir', class_avg_nir),
                                       ('swir1', class_avg_swir1),
-                                      ('swir2', class_avg_swir2)]:
+                                      ('swir2', class_avg_swir2),
+                                      ('cloudy', class_cloudy)]:
         for class_id, month_dict in class_avg_dict.items():
             for m, class_avg in month_dict.items():
                 try:
                     month_dict[m] = class_avg.item()
                 except ValueError:
                     month_dict[m] = -1
-            final_dict[band_name][rev_classes[dataset.map_idx_to_class[class_id]]] = month_dict
+
+            class_name = rev_classes[dataset.map_idx_to_class[class_id]] \
+                if type(class_id) is not str else class_id
+            final_dict[band_name][class_name] = month_dict
 
     with open(os.path.join(args.inf_out, f'{args.name}_growth_curves.pkl'), 'wb') as f:
         pickle.dump(final_dict, f)

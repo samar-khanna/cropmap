@@ -78,6 +78,7 @@ if __name__ == "__main__":
                        for class_id in range(len(classes))}
     class_cloudy = {class_id: {month: MeanMetric() for month in months.values()}
                     for class_id in range(len(classes))}
+    class_cloudy['mean'] = {month: MeanMetric() for month in months.values()}
 
     for batch_index, (xs, y) in enumerate(val_loader):
         xs, y = dataset.shift_sample_to_device((xs, y), device)
@@ -107,7 +108,8 @@ if __name__ == "__main__":
 
                 # Count percentage of cloudy pixels in input per class
                 cloudy_mask = (~valid_mask) & class_mask.astype(np.bool)  # shape (b, h, w)
-                class_cloudy[class_id][m].update(cloudy_mask.sum()/class_mask.sum())
+                if class_mask.sum() > 0:
+                    class_cloudy[class_id][m].update(cloudy_mask.sum()/class_mask.sum())
 
             class_cloudy['mean'][m].update((~valid_mask).sum()/valid_mask.size)
 

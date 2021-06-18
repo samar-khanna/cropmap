@@ -101,13 +101,15 @@ def calculate_metrics(preds, label_masks, pred_threshold=0.0, zero_nans=True):
     iou_scores = tp / (tp + fp + fn)
     precision = tp / (tp + fp)
     recall = tp / (tp + fn)
+    accuracy = (tp + tn) / (tp + fp + tn + fn)
 
     if zero_nans:
         iou_scores[np.isnan(iou_scores)] = 0.0
         precision[np.isnan(precision)] = 0.0
         recall[np.isnan(recall)] = 0.0
+        accuracy[np.isnan(accuracy)] = 0.0
 
-    metrics = {"iou": iou_scores, "prec": precision, "recall": recall}
+    metrics = {"iou": iou_scores, "prec": precision, "recall": recall, "acc": accuracy}
     return metrics
 
 

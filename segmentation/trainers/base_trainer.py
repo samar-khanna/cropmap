@@ -55,7 +55,7 @@ class Trainer:
         # Get list of metrics to use for training
         self.metric_names = metric_names
         if len(self.metric_names) == 0:
-            self.metric_names = ["iou", "prec", "recall"]
+            self.metric_names = ["iou", "prec", "recall", "acc"]
 
         # Set up loggers
         self.train_writer = train_writer

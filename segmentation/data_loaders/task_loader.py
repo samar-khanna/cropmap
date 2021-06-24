@@ -137,7 +137,7 @@ class TaskDataset(CropDataset):
             mask = self.read_window(mask_path, c, r, tw, th)
 
             # Map class ids in mask to indexes within num_classes.
-            mask = self.map_class_to_idx[mask]
+            mask = self.map_class_to_idx[mask]  # (1, h, w)
             y = self.one_hot_mask(mask, self.num_classes) if self.use_one_hot else mask
 
         # Sample is (x, y) pair of image and mask.
@@ -235,7 +235,7 @@ class TaskDataset(CropDataset):
             th, tw = self.tile_size
 
             # Get (r, c) start position of each tile in area, and shuffle
-            inds = [(r, c) for r in range(0, h - th, th) for c in range(0, w - tw, tw)]
+            inds = [(r, c) for r in range(0, h - th + 1, th) for c in range(0, w - tw + 1, tw)]
             random.shuffle(inds)
 
             # Dict mapping {set_type: SplitInfo}

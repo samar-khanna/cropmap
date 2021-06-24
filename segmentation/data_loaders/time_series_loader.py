@@ -40,7 +40,7 @@ class TimeSeriesDataset(CropDataset):
         @param overlap: Number of pixels that each tile overlaps with others
         @param use_one_hot: Whether the mask will use one-hot encoding or class id per pixel.
         @param inf_mode: Whether data is being loaded in inference mode
-        @param double_yield: If true yields pairs of different augs of same image instead of img-target pair
+        @param double_yield: Yields pairs of different augs of same image instead of img-target pair
         @param kwargs: Any external kwargs
         """
         super().__init__(data_path, classes, interest_classes, data_map_path, transforms)
@@ -134,7 +134,7 @@ class TimeSeriesDataset(CropDataset):
             mask = self.read_window(mask_path, c, r, tw, th)
 
             # Map class ids in mask to indexes within num_classes.
-            mask = self.map_class_to_idx[mask]
+            mask = self.map_class_to_idx[mask]  # (1, h, w)
             y = self.one_hot_mask(mask, self.num_classes) if self.use_one_hot else mask
 
         # Apply any augmentation.
@@ -227,11 +227,10 @@ class TimeSeriesDataset(CropDataset):
 
                 h, w = sample_shape
                 th, tw = self.tile_size
-                step_h = th - self.overlap
-                step_w = tw - self.overlap
+                # th, tw = th - self.overlap, tw - self.overlap
 
                 # Get (r, c) start position of each tile in area
-                inds = [(r, c) for r in range(0, h - step_h, step_h) for c in range(0, w - step_w, step_w)]
+                inds = [(r, c) for r in range(0, h-th+1, th) for c in range(0, w-tw+1, tw)]
 
                 # Clean by rejecting indices of any x in time sample that contain NaN
                 if clean_indices:

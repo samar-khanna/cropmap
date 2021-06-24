@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from typing import Callable, Any, Optional
 
+
 def apply_to_model_parameters(
         model: nn.Module,
         param_func: Callable[[Any], Any],

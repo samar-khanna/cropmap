@@ -6,7 +6,7 @@ from typing import Optional
 
 from data_loaders.dataset import CropDataset
 from inference.base_inference import InferenceAgent
-from metrics import create_metrics_dict, confusion_matrix
+from metrics import create_metrics_dict, confusion_matrix_from_images
 
 
 class DefaultInferenceAgent(InferenceAgent):
@@ -62,7 +62,7 @@ class DefaultInferenceAgent(InferenceAgent):
                 _label_mask = label_mask[np.newaxis, ...]  # shape (b, #c, h, w)
 
                 # Get raw confusion matrix
-                CM = confusion_matrix(_pred, _label_mask, pred_threshold=0)
+                CM = confusion_matrix_from_images(_pred, _label_mask, pred_threshold=0)
 
                 # Find the count of each class in ground truth, record in metrics dict as whole num
                 n = self.dataset.num_classes

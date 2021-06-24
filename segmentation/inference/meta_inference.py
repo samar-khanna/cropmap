@@ -11,7 +11,7 @@ from torch.utils.data import Dataset, DataLoader
 from data_loaders.dataset import CropDataset
 from inference.base_inference import InferenceAgent
 from data_loaders.task_loader import TaskDataset
-from metrics import create_metrics_dict, confusion_matrix, MeanMetric
+from metrics import create_metrics_dict, confusion_matrix_from_images, MeanMetric
 
 from trainers.base_trainer import Trainer
 from trainers.trainer_utils import compute_masked_loss
@@ -207,7 +207,7 @@ class MetaInferenceAgent(InferenceAgent):
             _label_mask = label_mask[np.newaxis, ...]  # shape (b, #c, h, w)
 
             # Get raw confusion matrix
-            CM = confusion_matrix(_pred, _label_mask, pred_threshold=0)
+            CM = confusion_matrix_from_images(_pred, _label_mask, pred_threshold=0)
 
             # Find the count of each class in ground truth,
             # record in metrics dict as whole num

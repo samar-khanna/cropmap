@@ -183,7 +183,7 @@ def calculate_metrics(preds, label_masks, pred_threshold=0.0, zero_nans=True):
         recall[np.isnan(recall)] = 0.0
         accuracy[np.isnan(accuracy)] = 0.0
 
-    metrics = {"iou": iou_scores, "prec": precision, "recall": recall, "acc": accuracy}
+    metrics = {"iou": iou_scores, "prec": precision, "recall": recall, "class_acc": accuracy}
     return metrics
 
 

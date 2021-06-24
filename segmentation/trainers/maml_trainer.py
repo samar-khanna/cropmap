@@ -250,6 +250,7 @@ class MAMLTrainer(Trainer):
             # Set up metrics
             task_metrics = {name: MeanMetric() for name in self.metric_names}
             task_metrics["loss"] = MeanMetric()
+            task_metrics["accuracy"] = MeanMetric()
 
             for batch_index, (input_t, y) in enumerate(query_loader):
                 input_t, y = self.dataset.shift_sample_to_device((input_t, y), self.device)

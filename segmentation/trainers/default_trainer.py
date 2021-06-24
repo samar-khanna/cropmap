@@ -77,7 +77,7 @@ class DefaultTrainer(Trainer):
             metric = metric_arr
             metrics_dict[f"mean/{metric_name}"] = np.nanmean(metric)
 
-            # Break down metric by class
+            # Break down metric by class if metric is an array
             if isinstance(metric_arr, np.ndarray):
                 for class_name, i in classes.items():
                     class_metric_name = f'class_{class_name}/{metric_name}'
@@ -169,6 +169,7 @@ class DefaultTrainer(Trainer):
         # Set up metrics
         epoch_metrics = {name: MeanMetric() for name in self.metric_names}
         epoch_metrics["loss"] = MeanMetric()
+        epoch_metrics["accuracy"] = MeanMetric()
 
         for batch_index, (input_t, y) in enumerate(loaders):
             # Shift to correct device

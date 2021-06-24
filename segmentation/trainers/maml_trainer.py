@@ -8,7 +8,7 @@ from trainers.base_trainer import Trainer
 from trainers.trainer_utils import apply_to_model_parameters, compute_masked_loss
 
 from data_loaders.task_loader import TaskDataset
-from metrics import calculate_metrics, MeanMetric
+from metrics import calculate_metrics, MeanMetric, mean_accuracy_from_images
 
 
 class MAMLTrainer(Trainer):
@@ -265,6 +265,7 @@ class MAMLTrainer(Trainer):
 
                 _metrics = calculate_metrics(preds_arr, y_arr, pred_threshold=0)
                 _metrics["loss"] = loss.item()
+                _metrics["accuracy"] = mean_accuracy_from_images(preds_arr, y_arr, pred_threshold=0)
 
                 # Update metrics for task
                 for metric_name, current_val in task_metrics.items():

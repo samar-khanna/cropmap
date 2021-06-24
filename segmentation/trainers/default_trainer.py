@@ -7,7 +7,7 @@ from typing import Optional
 from trainers.base_trainer import Trainer
 from data_loaders.dataset import CropDataset
 from trainers.trainer_utils import compute_masked_loss
-from metrics import calculate_metrics, MeanMetric
+from metrics import calculate_metrics, MeanMetric, mean_accuracy_from_images
 
 
 class DefaultTrainer(Trainer):
@@ -186,6 +186,7 @@ class DefaultTrainer(Trainer):
 
             _metrics = calculate_metrics(preds_arr, y_arr, pred_threshold=0)
             _metrics["loss"] = loss.item()
+            _metrics["accuracy"] = mean_accuracy_from_images(preds_arr, y_arr, pred_threshold=0)
 
             # Update metrics for epoch
             for metric_name, current_val in epoch_metrics.items():

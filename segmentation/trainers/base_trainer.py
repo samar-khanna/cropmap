@@ -291,6 +291,13 @@ class Trainer:
             if not metric_name.startswith('class'):
                 print(f"{metric_name}: {metric_value}")
 
+    def is_display_epoch(self, epoch):
+        """
+        Checks if images should be logged to tensorboard for current epoch.
+        @param epoch: Current epoch number (0 indexed)
+        """
+        return epoch % 20 == 0
+
     def log_images(self, im_batch, epoch, phase):
         """
         Adds batch of images to the tensorboard
@@ -358,11 +365,14 @@ class Trainer:
 
             train_metrics, train_display = self.train_one_epoch(train_loaders)
             self.log_metrics(train_metrics, epoch=epoch, phase="train")
-            self.log_images(train_display, epoch=epoch, phase='train')
 
             val_metrics, val_display = self.validate_one_epoch(val_loaders)
             self.log_metrics(val_metrics, epoch=epoch, phase="val")
-            self.log_images(val_display, epoch=epoch, phase='val')
+
+            # Check whether to log images
+            if self.is_display_epoch(epoch):
+                self.log_images(train_display, epoch=epoch, phase='train')
+                self.log_images(val_display, epoch=epoch, phase='val')
 
             # Save model checkpoint if checkpointing condition is satisfied
             new_best_val_metric = self.check_checkpoint_metric(

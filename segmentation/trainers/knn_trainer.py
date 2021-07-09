@@ -22,6 +22,7 @@ class KNNTrainer(Trainer):
             num_epochs: int,
             use_one_hot: bool,
             save_path: str,
+            num_display=8,
             metric_names=(),
             optim_kwargs=None,
             train_writer=None,
@@ -38,6 +39,7 @@ class KNNTrainer(Trainer):
         @param num_epochs: Number of epochs to run training
         @param use_one_hot: Whether the mask will use one-hot encoding or class id per pixel
         @param save_path: Path where model weights will be saved
+        @param num_display: Number of model preds to display. Grid has 2x due to ground truths
         @param metric_names: Names of metrics that will measure training performance per epoch
         @param optim_kwargs: Keyword arguments for PyTorch optimizer
         @param train_writer: Tensorboard writer for training metrics
@@ -53,6 +55,7 @@ class KNNTrainer(Trainer):
             num_epochs=num_epochs,
             use_one_hot=use_one_hot,
             save_path=save_path,
+            num_display=num_display,
             metric_names=metric_names,
             optim_kwargs=optim_kwargs,
             train_writer=train_writer,

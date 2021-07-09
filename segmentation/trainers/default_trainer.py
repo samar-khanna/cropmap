@@ -4,9 +4,10 @@ import torch.nn as nn
 import torch.optim as optim
 from typing import Optional
 
+from utils.colors import get_cmap
 from trainers.base_trainer import Trainer
 from data_loaders.dataset import CropDataset
-from trainers.trainer_utils import compute_masked_loss
+from trainers.trainer_utils import compute_masked_loss, get_display_indices
 from metrics import calculate_metrics, MeanMetric, mean_accuracy_from_images
 
 
@@ -22,6 +23,7 @@ class DefaultTrainer(Trainer):
             num_epochs: int,
             use_one_hot: bool,
             save_path: str,
+            num_display=8,
             metric_names=(),
             optim_kwargs=None,
             train_writer=None,
@@ -38,6 +40,7 @@ class DefaultTrainer(Trainer):
         @param num_epochs: Number of epochs to run training
         @param use_one_hot: Whether the mask will use one-hot encoding or class id per pixel
         @param save_path: Path where model weights will be saved
+        @param num_display: Number of model preds to display. Grid has 2x due to ground truths
         @param metric_names: Names of metrics that will measure training performance per epoch
         @param optim_kwargs: Keyword arguments for PyTorch optimizer
         @param train_writer: Tensorboard writer for training metrics
@@ -53,6 +56,7 @@ class DefaultTrainer(Trainer):
             num_epochs=num_epochs,
             use_one_hot=use_one_hot,
             save_path=save_path,
+            num_display=num_display,
             metric_names=metric_names,
             optim_kwargs=optim_kwargs,
             train_writer=train_writer,
@@ -159,6 +163,32 @@ class DefaultTrainer(Trainer):
 
         return preds, loss
 
+    def _get_display_indices(self, batch_index, len_loader, curr_len_display):
+        return get_display_indices(
+            batch_index, self.batch_size, self.num_display, len_loader, curr_len_display
+        )
+
+    def _format_for_display(self, pred_batch, gt_batch, idx=0):
+        # TODO: Put this function in CropDataset
+        # get first in batch as convention
+        pred, gt = pred_batch[idx], gt_batch[idx]  # (b, c, h, w) -> (c, h, w)
+        if self.use_one_hot:
+            gt = self.dataset.inverse_one_hot_mask(gt)  # (c, h, w) -> (1, h, w)
+        gt = np.squeeze(gt)  # (1, h, w) -> (h, w)
+        unk_mask = gt == -1  # (h, w)
+
+        pred = np.argmax(pred, axis=0)  # (c, h, w) -> (h, w)
+        pred[unk_mask] = -1
+
+        # Colorise the images and drop alpha channel
+        cmap = get_cmap(self.dataset.all_classes)
+        color_gt = cmap(gt).transpose(2, 0, 1)  # (h,w) -> (h,w,4) -> (4,h,w)
+        color_pred = cmap(pred).transpose(2, 0, 1)  # (h,w) -> (h,w,4) -> (4,h,w)
+
+        # Drop alpha channel
+        display_im = np.stack((color_pred[..., :3], color_gt[..., :3]), axis=0)
+        return display_im  # (2, 3, h, w)
+
     def _run_one_epoch(self, loaders, is_train):
         """
         Runs a train/validation loop over all data in dataset
@@ -170,6 +200,9 @@ class DefaultTrainer(Trainer):
         epoch_metrics = {name: MeanMetric() for name in self.metric_names}
         epoch_metrics["loss"] = MeanMetric()
         epoch_metrics["accuracy"] = MeanMetric()
+
+        # Set up batch of images to display
+        display_batch = []
 
         for batch_index, (input_t, y) in enumerate(loaders):
             # Shift to correct device
@@ -193,14 +226,22 @@ class DefaultTrainer(Trainer):
             for metric_name, current_val in epoch_metrics.items():
                 current_val.update(_metrics[metric_name])
 
+            # Check and add pred/gt to running display image batch
+            for idx in self._get_display_indices(batch_index, len(loaders), len(display_batch)):
+                display_batch.append(self._format_for_display(preds_arr, y_arr, idx))
+
             if self.num_shots is not None and (batch_index+1) == self.num_shots:
                 break
 
         # Get rid of the mean metrics
         epoch_metrics = {metric_name: val.item() for metric_name, val in epoch_metrics.items()}
+        metrics_dict = self.create_metrics_dict(**epoch_metrics)
+
+        # Concatenate the images along the batch dimension
+        display_batch = np.concatenate(display_batch) if len(display_batch) > 0 else None
 
         # Create metrics dict
-        return self.create_metrics_dict(**epoch_metrics)
+        return metrics_dict, display_batch
 
     def validate_one_epoch(self, val_loaders):
         self.model.eval()

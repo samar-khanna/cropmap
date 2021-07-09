@@ -11,8 +11,8 @@ from torch.utils.tensorboard import SummaryWriter
 
 import models.loss as custom_loss
 from data_loaders.dataset import CropDataset
-from utils.loading import load_model, save_model, create_dataset
 from utils.utils import create_dirs
+from utils.loading import load_model, save_model, create_dataset
 
 
 class Trainer:
@@ -27,6 +27,7 @@ class Trainer:
             num_epochs: int,
             use_one_hot: bool,
             save_path: str,
+            num_display=8,
             metric_names=(),
             optim_kwargs=None,
             train_writer=None,
@@ -43,6 +44,7 @@ class Trainer:
         @param num_epochs: Number of epochs to run training
         @param use_one_hot: Whether the mask will use one-hot encoding or class id per pixel
         @param save_path: Path where model weights will be saved
+        @param num_display: Number of model preds to display. Grid has 2x due to ground truths
         @param metric_names: Names of metrics that will measure training performance per epoch
         @param optim_kwargs: Keyword arguments for PyTorch optimizer
         @param train_writer: Tensorboard writer for training metrics
@@ -51,6 +53,7 @@ class Trainer:
         self.num_shots = num_shots
         self.batch_size = batch_size
         self.num_epochs = num_epochs
+        self.num_display = num_display
 
         # Get list of metrics to use for training
         self.metric_names = metric_names
@@ -166,6 +169,7 @@ class Trainer:
             num_epochs=trainer_config.get("epochs", 200),
             use_one_hot=use_one_hot,
             save_path=save_path,
+            num_display=trainer_config.get("num_display", 8),
             metric_names=trainer_config.get("metrics", []),
             optim_kwargs=optim_kwargs,
             train_writer=train_writer,
@@ -287,6 +291,17 @@ class Trainer:
             if not metric_name.startswith('class'):
                 print(f"{metric_name}: {metric_value}")
 
+    def log_images(self, im_batch, epoch, phase):
+        """
+        Adds batch of images to the tensorboard
+        @param im_batch: (b, 3, h, w) RGB image tensor/np array.
+        @param epoch: Current epoch number
+        @param phase: One of train/val
+        """
+        writer = self.train_writer if phase.lower() == "train" else self.val_writer
+        if im_batch is not None and writer is not None:
+            writer.add_images(f"{phase}_images", im_batch, epoch + 1, dataformats='NCHW')
+
     def init_checkpoint_metric(self):
         """
         Returns an initial value for the metric used to determine when to save
@@ -341,11 +356,13 @@ class Trainer:
         for epoch in range(start_epoch, start_epoch + self.num_epochs):
             print(f"Starting epoch {epoch + 1}:")
 
-            train_metrics = self.train_one_epoch(train_loaders)
+            train_metrics, train_display = self.train_one_epoch(train_loaders)
             self.log_metrics(train_metrics, epoch=epoch, phase="train")
+            self.log_images(train_display, epoch=epoch, phase='train')
 
-            val_metrics = self.validate_one_epoch(val_loaders)
+            val_metrics, val_display = self.validate_one_epoch(val_loaders)
             self.log_metrics(val_metrics, epoch=epoch, phase="val")
+            self.log_images(val_display, epoch=epoch, phase='val')
 
             # Save model checkpoint if checkpointing condition is satisfied
             new_best_val_metric = self.check_checkpoint_metric(

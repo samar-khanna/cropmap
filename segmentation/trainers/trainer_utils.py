@@ -87,3 +87,34 @@ def compute_masked_loss(loss_fn, preds, targets, invalid_value=-1):
 
     # Only compute loss for valid pixels
     return (loss_t * valid_mask).mean()
+
+
+def get_display_indices(batch_index, batch_size, num_display, len_loader, curr_len_display):
+    """
+    Checks if current batch has the next display item(s) given the current number
+    of items queued for display.
+    @param batch_index: Index of current batch
+    @param batch_size: Size of each batch of items
+    @param num_display: Total intended number of items to display
+    @param len_loader: Number of batches in the data loader
+    @param curr_len_display: Current number of items queued for display
+    @return: Indices within current batch if to display, else empty list.
+    """
+    b = batch_size
+    n = num_display
+    total = len_loader * b  # total number of items (i.e. images)
+
+    if n == 0: return []
+
+    # total_items/num_display gives number of items to skip before next index
+    target = (total // n) * curr_len_display if (total // n) > 0 else curr_len_display
+
+    # If target item idx is within curr batch, return the idx mod curr batch
+    indices = []
+    while batch_index * b <= target <= min((batch_index + 1) * b, len_loader * b - 1):
+        indices.append(target % (batch_index * b) if batch_index * b > 0 else target)
+
+        target = curr_len_display + len(indices)
+        target *= (total // n) if (total // n) > 0 else 1
+
+    return indices

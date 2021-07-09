@@ -178,7 +178,12 @@ class DefaultTrainer(Trainer):
         unk_mask = gt == -1  # (h, w)
 
         pred = np.argmax(pred, axis=0)  # (c, h, w) -> (h, w)
+
+        # Map to original class idx
+        pred = self.dataset.map_idx_to_class[pred]  # (h, w)
         pred[unk_mask] = -1
+        gt = self.dataset.map_idx_to_class[gt]  # (h, w)
+        gt[unk_mask] = -1
 
         # Colorise the images and drop alpha channel
         cmap = get_cmap(self.dataset.all_classes)

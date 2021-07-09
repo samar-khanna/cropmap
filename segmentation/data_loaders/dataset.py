@@ -111,6 +111,9 @@ class CropDataset(Dataset):
         represents the index of the class, this expands the mask into a
         (c, h, w) mask where each depth slice for index j is a one-hot
         encoding for pixels that belong to class j.
+        @param mask: (1, h, w) dense mask
+        @param num_classes: Total number of classes (i.e. c)
+        @return: (c, h, w) one-hot mask (the one-hot is along axis 0)
         """
         # Expand y in to (w, h, c) array (for multiplication)
         y = np.ones((mask.shape[2], mask.shape[1], num_classes))
@@ -124,6 +127,21 @@ class CropDataset(Dataset):
         y = y == mask
 
         return y
+
+    @staticmethod
+    def inverse_one_hot_mask(one_hot_mask, unk_value=-1):
+        """
+        Inverse operation of one_hot_mask. Returns the dense mask given
+        a one-hot encoded map
+        @param one_hot_mask: (c, h, w) one-hot mask. Each 2d (h,w) slice corresponds
+        to class mask associated with that slice's index (i.e. from 0 to c-1)
+        @param unk_value: Value to put int dense mask for pixels belonging to no class
+        @return: (1, h, w) dense mask, each known pixel is value between 0 to c-1
+        """
+        mask = np.argmax(one_hot_mask, axis=0)  # (c, h, w) -> (h, w)
+        unk_mask = np.all(~one_hot_mask.astype(np.bool), axis=0)  # (c, h, w) -> (h, w)
+        mask[unk_mask] = unk_value
+        return np.expand_dims(mask, axis=0)  # (1, h, w)
 
     @staticmethod
     def read_window(path_to_tif, col: int, row: int, width: int, height: int):

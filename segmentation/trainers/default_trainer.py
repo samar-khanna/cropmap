@@ -186,7 +186,7 @@ class DefaultTrainer(Trainer):
         color_pred = cmap(pred).transpose(2, 0, 1)  # (h,w) -> (h,w,4) -> (4,h,w)
 
         # Drop alpha channel
-        display_im = np.stack((color_pred[..., :3], color_gt[..., :3]), axis=0)
+        display_im = np.stack((color_pred[:3, ...], color_gt[:3, ...]), axis=0)
         return display_im  # (2, 3, h, w)
 
     def _run_one_epoch(self, loaders, is_train):
@@ -230,7 +230,7 @@ class DefaultTrainer(Trainer):
             for idx in self._get_display_indices(batch_index, len(loaders), len(display_batch)):
                 display_batch.append(self._format_for_display(preds_arr, y_arr, idx))
 
-            if self.num_shots is not None and (batch_index+1) == self.num_shots:
+            if self.num_shots is not None and (batch_index + 1) == self.num_shots:
                 break
 
         # Get rid of the mean metrics

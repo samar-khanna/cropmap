@@ -111,7 +111,7 @@ def get_display_indices(batch_index, batch_size, num_display, len_loader, curr_l
 
     # If target item idx is within curr batch, return the idx mod curr batch
     indices = []
-    while batch_index * b <= target <= min((batch_index + 1) * b, len_loader * b - 1):
+    while batch_index * b <= target < min((batch_index + 1) * b, len_loader * b):
         indices.append(target % (batch_index * b) if batch_index * b > 0 else target)
 
         target = curr_len_display + len(indices)

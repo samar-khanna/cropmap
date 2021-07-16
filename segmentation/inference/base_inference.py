@@ -6,7 +6,6 @@ import torch.nn as nn
 
 from data_loaders.dataset import CropDataset
 
-from utils.utils import create_dirs
 from utils.loading import load_model, create_dataset
 
 
@@ -84,7 +83,7 @@ class InferenceAgent:
         # Create output directory, save directory and metrics directories.
         out_dir = out_dir if out_dir is not None else \
             os.path.join(data_path, 'inference', "_".join((model_config["name"], trainer_config["name"])))
-        create_dirs(out_dir)
+        os.makedirs(out_dir, exist_ok=True)
 
         # SAVE config file in output directory at beginning of inference
         cls.save_config(trainer_config, out_dir, cls._SAVED_TRAINER_CONFIG_NAME)

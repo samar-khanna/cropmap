@@ -8,7 +8,7 @@ from typing import Optional
 from utils.colors import get_cmap
 from data_loaders.dataset import CropDataset
 from inference.base_inference import InferenceAgent
-from metrics import create_metrics_dict, confusion_matrix_from_images
+from metrics import create_metrics_dict, confusion_matrix_from_images, mean_accuracy_from_images
 
 
 class DefaultInferenceAgent(InferenceAgent):
@@ -102,6 +102,10 @@ class DefaultInferenceAgent(InferenceAgent):
                 # Get raw confusion matrix
                 CM = confusion_matrix_from_images(_pred, _label_mask, pred_threshold=0)
 
+                # TODO: How to do deal with this? Might have same issue as NaN
+                # Get mean accuracy
+                mean_acc = mean_accuracy_from_images(_pred, _label_mask, pred_threshold=0)
+
                 # Find the count of each class in ground truth, record in metrics dict as whole num
                 n = self.dataset.num_classes
                 label_class_counts = np.count_nonzero(label_mask.reshape(n, -1), axis=-1)
@@ -109,6 +113,7 @@ class DefaultInferenceAgent(InferenceAgent):
                 # Create metrics dict
                 metrics_dict = create_metrics_dict(
                     self.dataset.remapped_classes,
+                    accuracy=mean_acc,
                     tn=CM[:, 0, 0],
                     fp=CM[:, 0, 1],
                     fn=CM[:, 1, 0],

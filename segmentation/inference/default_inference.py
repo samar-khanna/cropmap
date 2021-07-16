@@ -2,8 +2,10 @@ import os
 import json
 import numpy as np
 import torch.nn as nn
+from PIL import Image
 from typing import Optional
 
+from utils.colors import get_cmap
 from data_loaders.dataset import CropDataset
 from inference.base_inference import InferenceAgent
 from metrics import create_metrics_dict, confusion_matrix_from_images
@@ -30,11 +32,47 @@ class DefaultInferenceAgent(InferenceAgent):
         """
         super().__init__(model, dataset, batch_size, out_dir, exp_name, metric_names)
 
-    def infer(self, set_type):
+    def _format_for_display(self, pred, gt):
+        # TODO: Here we always use one-hot. Be careful when copying
+        gt = self.dataset.inverse_one_hot_mask(gt)  # (c, h, w) -> (1, h, w)
+        gt = np.squeeze(gt)  # (1, h, w) -> (h, w)
+        unk_mask = gt == -1  # (h, w)
+
+        pred = np.argmax(pred, axis=0)  # (c, h, w) -> (h, w)
+
+        # Map to original class idx
+        pred = self.dataset.map_idx_to_class[pred]  # (h, w)
+        pred[unk_mask] = -1
+        gt = self.dataset.map_idx_to_class[gt]  # (h, w)
+        gt[unk_mask] = -1
+
+        # Colorise the images and drop alpha channel
+        cmap = get_cmap(self.dataset.all_classes)
+        color_gt = cmap(gt).transpose(2, 0, 1)  # (h,w) -> (h,w,4) -> (4,h,w)
+        color_pred = cmap(pred).transpose(2, 0, 1)  # (h,w) -> (h,w,4) -> (4,h,w)
+
+        # Drop alpha channel
+        display_im = np.stack((color_pred[:3, ...], color_gt[:3, ...]), axis=0)
+        return display_im  # (2, 3, h, w)
+
+    def _format_for_save(self, im_arr):
+        """
+        Formats given pred/gt image for saving
+        @param im_arr: (3, h, w) RGB image, with min val 0. and max val 1.
+        @return: PIL RGB image object
+        """
+        # Format pred-mask to save
+        im_arr = (im_arr * 255).astype(np.uint8)  # bytescaling
+        im_arr = im_arr.transpose(1, 2, 0)  # (c, h, w) -> (h, w, c)
+        im = Image.fromarray(im_arr, mode="RGB")
+        return im
+
+    def infer(self, set_type, save_images=False):
         """
         Runs inference for the model on the given set_type for the dataset.
         Saves metrics in inference out directory per ground truth mask.
         @param set_type: One of train/val/test
+        @param save_images: Whether to store pred/gt image results in out dir
         """
         train_loaders, val_loaders, test_loaders = \
             self.dataset.create_data_loaders(batch_size=self.batch_size)
@@ -52,8 +90,8 @@ class DefaultInferenceAgent(InferenceAgent):
             # TODO: Fix inference for time series
             # Convert from tensor to numpy array
             # imgs = input_t.detach().cpu().numpy()
-            preds = preds.detach().cpu().numpy()
-            label_masks = y.detach().cpu().numpy()
+            preds = preds.detach().cpu().numpy()  # (b, #c, h, w)
+            label_masks = y.detach().cpu().numpy()  # (b, #c, h, w)
 
             # TODO: Add back images to this loop later
             # Iterate over each image in batch.
@@ -100,6 +138,17 @@ class DefaultInferenceAgent(InferenceAgent):
                 # gt_im, gt_mask = draw_mask_on_im(img, label_mask)
                 # gt_im.save(os.path.join(ch.inf_dir, f"{img_id}_gt.jpg"))
                 # gt_mask.save(os.path.join(ch.inf_dir, f"{img_id}_raw_gt.jpg"))
+
+                if save_images:
+                    display_pred_gt = self._format_for_display(pred, label_mask)
+                    pred_mask, gt_mask = display_pred_gt[0], display_pred_gt[1]
+
+                    # Format pred-mask to save
+                    pred_im = self._format_for_save(pred_mask)
+                    pred_im.save(os.path.join(self.out_dir, f"{img_id}_raw_pred.png"))
+
+                    gt_im = self._format_for_save(gt_mask)
+                    gt_im.save(os.path.join(self.out_dir, f"{img_id}_raw_gt.png"))
 
                 # Save eval results.
                 with open(os.path.join(self.out_dir, f"{img_id}_metrics.json"), 'w') as f:

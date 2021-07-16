@@ -225,11 +225,12 @@ class MetaInferenceAgent(InferenceAgent):
 
         return batch_total_metrics
 
-    def infer(self, set_type):
+    def infer(self, set_type, save_images=False):
         """
         Runs inference for the model on the given set_type for the dataset.
         Saves metrics in inference out directory per ground truth mask.
         @param set_type: One of train/val/test
+        @param save_images: Whether to store pred/gt image results in out dir
         """
         train_loaders, val_loaders, test_loaders = \
             self.dataset.create_data_loaders(batch_size=self.batch_size)

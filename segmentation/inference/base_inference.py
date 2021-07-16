@@ -36,12 +36,12 @@ class InferenceAgent:
         """
         self.batch_size = batch_size
         self.out_dir = out_dir
-        self.exp_name = exp_name
+        self.exp_name = exp_name  # TODO: We don't need this. Get rid.
 
         # Get list of metrics to use for training
         self.metric_names = metric_names
         if len(self.metric_names) == 0:
-            self.metric_names = ["iou", "prec", "recall"]
+            self.metric_names = ["iou", "prec", "recall", "class_acc"]
 
         # Set up dataset
         self.dataset = dataset
@@ -150,9 +150,10 @@ class InferenceAgent:
             json.dump(config, f, indent=2)
         print(f"Saved config file at: {config_path}")
 
-    def infer(self, set_type):
+    def infer(self, set_type, save_images=False):
         """
         Runs inference for the model on the given set_type for the dataset.
         @param set_type: One of train/val/test
+        @param save_images: Whether to store pred/gt image results in out dir
         """
         raise NotImplementedError("This should be overwritten")

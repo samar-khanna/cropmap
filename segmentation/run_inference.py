@@ -51,6 +51,10 @@ def passed_arguments():
                         type=str,
                         default=None,
                         help='Experiment name, used as directory name in inf_dir')
+    parser.add_argument('--save_images',
+                        default=False,
+                        action='store_true',
+                        help="Whether to save pred/gt patch images.")
     args = parser.parse_args()
     return args
 
@@ -91,6 +95,6 @@ if __name__ == "__main__":
     )
 
     # Run inference
-    inference_agent.infer(set_type)
+    inference_agent.infer(set_type, save_images=args.save_images)
 
     print(f"Inference complete for set {set_type}!")

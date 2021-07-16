@@ -206,9 +206,10 @@ def create_metrics_dict(classes, loss=None, **metrics):
         metrics_dict[f"mean/{metric_name}"] = np.nanmean(metric)
 
         # Break down metric by class
-        for class_name, i in classes.items():
-            class_metric_name = f'class_{class_name}/{metric_name}'
-            class_metric = metric[i]
-            metrics_dict[class_metric_name] = class_metric
+        if isinstance(metric_arr, np.ndarray):
+            for class_name, i in classes.items():
+                class_metric_name = f'class_{class_name}/{metric_name}'
+                class_metric = metric[i]
+                metrics_dict[class_metric_name] = class_metric
 
     return metrics_dict

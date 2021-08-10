@@ -32,29 +32,6 @@ class DefaultInferenceAgent(InferenceAgent):
         """
         super().__init__(model, dataset, batch_size, out_dir, exp_name, metric_names)
 
-    def _format_for_display(self, pred, gt):
-        # TODO: Here we always use one-hot. Be careful when copying
-        gt = self.dataset.inverse_one_hot_mask(gt)  # (c, h, w) -> (1, h, w)
-        gt = np.squeeze(gt)  # (1, h, w) -> (h, w)
-        unk_mask = gt == -1  # (h, w)
-
-        pred = np.argmax(pred, axis=0)  # (c, h, w) -> (h, w)
-
-        # Map to original class idx
-        pred = self.dataset.map_idx_to_class[pred]  # (h, w)
-        pred[unk_mask] = -1
-        gt = self.dataset.map_idx_to_class[gt]  # (h, w)
-        gt[unk_mask] = -1
-
-        # Colorise the images and drop alpha channel
-        cmap = get_cmap(self.dataset.all_classes)
-        color_gt = cmap(gt).transpose(2, 0, 1)  # (h,w) -> (h,w,4) -> (4,h,w)
-        color_pred = cmap(pred).transpose(2, 0, 1)  # (h,w) -> (h,w,4) -> (4,h,w)
-
-        # Drop alpha channel
-        display_im = np.stack((color_pred[:3, ...], color_gt[:3, ...]), axis=0)
-        return display_im  # (2, 3, h, w)
-
     def _format_for_save(self, im_arr):
         """
         Formats given pred/gt image for saving
@@ -145,7 +122,7 @@ class DefaultInferenceAgent(InferenceAgent):
                 # gt_mask.save(os.path.join(ch.inf_dir, f"{img_id}_raw_gt.jpg"))
 
                 if save_images:
-                    display_pred_gt = self._format_for_display(pred, label_mask)
+                    display_pred_gt = self.dataset.format_for_display(pred, label_mask)
                     pred_mask, gt_mask = display_pred_gt[0], display_pred_gt[1]
 
                     # Format pred-mask to save

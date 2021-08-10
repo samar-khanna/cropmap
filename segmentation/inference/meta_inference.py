@@ -136,9 +136,9 @@ class MetaInferenceAgent(InferenceAgent):
             classes=classes,
             interest_classes=interest_classes,
             data_map_path=data_map_path,
+            use_one_hot=True,
             transforms=transforms,
             train_val_test=(0.8, 0.1, 0.1),
-            use_one_hot=True,
             inf_mode=True
         )
 

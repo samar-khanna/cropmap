@@ -25,7 +25,6 @@ class SimCLRTrainer(Trainer):
             num_shots: Optional[int],
             batch_size: int,
             num_epochs: int,
-            use_one_hot: bool,
             save_path: str,
             num_display=8,
             metric_names=(),
@@ -42,7 +41,6 @@ class SimCLRTrainer(Trainer):
         @param num_shots: Number of batched samples from training set to feed to model
         @param batch_size: Batch size of input images for training
         @param num_epochs: Number of epochs to run training
-        @param use_one_hot: Whether the mask will use one-hot encoding or class id per pixel
         @param save_path: Path where model weights will be saved
         @param num_display: Number of model preds to display. Grid has 2x due to ground truths
         @param metric_names: Names of metrics that will measure training performance per epoch
@@ -58,7 +56,6 @@ class SimCLRTrainer(Trainer):
             num_shots=num_shots,
             batch_size=batch_size,
             num_epochs=num_epochs,
-            use_one_hot=use_one_hot,
             save_path=save_path,
             num_display=num_display,
             metric_names=metric_names,

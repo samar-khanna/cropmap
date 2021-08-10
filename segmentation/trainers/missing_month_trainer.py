@@ -20,7 +20,6 @@ class MissingMonthTrainer(DefaultTrainer):
             num_shots: Optional[int],
             batch_size: int,
             num_epochs: int,
-            use_one_hot: bool,
             save_path: str,
             num_display=8,
             metric_names=(),
@@ -37,7 +36,6 @@ class MissingMonthTrainer(DefaultTrainer):
         @param num_shots: Number of batched samples from training set to feed to model
         @param batch_size: Batch size of input images for training
         @param num_epochs: Number of epochs to run training
-        @param use_one_hot: Whether the mask will use one-hot encoding or class id per pixel
         @param save_path: Path where model weights will be saved
         @param num_display: Number of model preds to display. Grid has 2x due to ground truths
         @param metric_names: Names of metrics that will measure training performance per epoch
@@ -53,7 +51,6 @@ class MissingMonthTrainer(DefaultTrainer):
             num_shots=num_shots,
             batch_size=batch_size,
             num_epochs=num_epochs,
-            use_one_hot=use_one_hot,
             save_path=save_path,
             num_display=num_display,
             metric_names=metric_names,
@@ -100,7 +97,7 @@ class MissingMonthTrainer(DefaultTrainer):
         """
         # TODO
         # If there is no channel dimension in the target, remove it for CrossEntropy
-        if not self.use_one_hot:
+        if not self.dataset.use_one_hot:
             targets = targets.squeeze(1).type(torch.long)
 
         return compute_masked_loss(self.loss_fn, preds, targets, invalid_value=-1)
@@ -152,7 +149,7 @@ class MissingMonthTrainer(DefaultTrainer):
             # Convert to numpy and calculate metrics
             preds_arr = preds.detach().cpu().numpy()
             y_arr = y.detach().cpu().numpy()
-            if not self.use_one_hot:
+            if not self.dataset.use_one_hot:
                 y_arr = self.dataset.one_hot_mask(y_arr, n_months)
 
             _metrics = calculate_metrics(preds_arr, y_arr, pred_threshold=0)

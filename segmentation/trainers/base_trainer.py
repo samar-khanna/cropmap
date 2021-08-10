@@ -25,7 +25,6 @@ class Trainer:
             num_shots: Optional[int],
             batch_size: int,
             num_epochs: int,
-            use_one_hot: bool,
             save_path: str,
             num_display=8,
             metric_names=(),
@@ -42,7 +41,6 @@ class Trainer:
         @param num_shots: Number of batched samples from training set to feed to model
         @param batch_size: Batch size of input images for training
         @param num_epochs: Number of epochs to run training
-        @param use_one_hot: Whether the mask will use one-hot encoding or class id per pixel
         @param save_path: Path where model weights will be saved
         @param num_display: Number of model preds to display. Grid has 2x due to ground truths
         @param metric_names: Names of metrics that will measure training performance per epoch
@@ -80,7 +78,6 @@ class Trainer:
         self.model.to(self.device)
 
         # Set up loss
-        self.use_one_hot = use_one_hot
         self.loss_fn = loss_fn
         self.loss_fn.to(self.device)
 
@@ -167,7 +164,6 @@ class Trainer:
             num_shots=trainer_config.get("num_shots", None),
             batch_size=trainer_config.get("batch_size", 32),
             num_epochs=trainer_config.get("epochs", 200),
-            use_one_hot=use_one_hot,
             save_path=save_path,
             num_display=trainer_config.get("num_display", 8),
             metric_names=trainer_config.get("metrics", []),
@@ -211,9 +207,9 @@ class Trainer:
             data_map_path=data_map_path,
             classes=classes,
             interest_classes=interest_classes,
+            use_one_hot=use_one_hot,
             transforms=transforms,
             train_val_test=(0.8, 0.1, 0.1),
-            use_one_hot=use_one_hot,
             inf_mode=False,
         )
 

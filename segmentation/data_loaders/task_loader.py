@@ -35,11 +35,17 @@ class TaskDataset(CropDataset):
                  data_path, classes, interest_classes=(), data_map_path=None, transforms=None,
                  tile_size=(224, 224), overlap=0, train_val_test=Splits(), use_one_hot=True,
                  inf_mode=False, **kwargs):
-        super().__init__(data_path, classes, interest_classes, data_map_path, transforms)
+        super().__init__(
+            data_path=data_path,
+            classes=classes,
+            interest_classes=interest_classes,
+            data_map_path=data_map_path,
+            use_one_hot=use_one_hot,
+            transforms=transforms
+        )
 
         self.tile_size = tile_size
         self.overlap = overlap
-        self.use_one_hot = use_one_hot
         self.inf_mode = inf_mode
         self.train_val_test = train_val_test
 

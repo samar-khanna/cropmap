@@ -43,11 +43,17 @@ class TimeSeriesDataset(CropDataset):
         @param double_yield: Yields pairs of different augs of same image instead of img-target pair
         @param kwargs: Any external kwargs
         """
-        super().__init__(data_path, classes, interest_classes, data_map_path, transforms)
+        super().__init__(
+            data_path=data_path,
+            classes=classes,
+            interest_classes=interest_classes,
+            data_map_path=data_map_path,
+            use_one_hot=use_one_hot,
+            transforms=transforms
+        )
 
         self.tile_size = tile_size
         self.overlap = overlap
-        self.use_one_hot = use_one_hot
         self.inf_mode = inf_mode
         self.double_yield = double_yield
 

@@ -1,8 +1,11 @@
 import os
+import json
+import numpy as np
 import rasterio
 from rasterio.windows import Window
-import numpy as np
 import torchvision.transforms as torch_transforms
+
+from utils.colors import get_cmap
 from torch.utils.data import Dataset, Sampler
 from torch.utils.data._utils.collate import default_collate
 import data_loaders.data_transforms as data_transforms
@@ -18,6 +21,7 @@ class CropDataset(Dataset):
             classes,
             interest_classes=(),
             data_map_path=None,
+            use_one_hot=True,
             transforms=None
     ):
         """
@@ -28,8 +32,10 @@ class CropDataset(Dataset):
         @param classes: Dict of {class_name: class_id}
         @param interest_classes: List of class names to use (subset of all classes)
         @param data_map_path: Path to .json file containing train/val/test splits
+        @param use_one_hot: Whether the mask will use one-hot encoding or class id per pixel
         @param transforms: Sequence of transform names available in `data_transforms` file
         """
+        self.use_one_hot = use_one_hot
         self.data_path = os.path.abspath(data_path)
 
         data_map_name = self._DATA_MAP_NAME
@@ -66,7 +72,7 @@ class CropDataset(Dataset):
         for transform_name, transform_kwargs in transforms.items():
             # Get transform function from our own file, or else from torchvision
             transform_class = getattr(data_transforms, transform_name, None)
-            if not transform_class:
+            if transform_class is None:
                 transform_class = getattr(torch_transforms, transform_name)
 
             transform_fn = transform_class(**transform_kwargs)
@@ -142,6 +148,35 @@ class CropDataset(Dataset):
         unk_mask = np.all(~one_hot_mask.astype(np.bool), axis=0)  # (c, h, w) -> (h, w)
         mask[unk_mask] = unk_value
         return np.expand_dims(mask, axis=0)  # (1, h, w)
+
+    def format_for_display(self, pred, gt):
+        """
+        Colorises a model prediction and ground truth mask according to crop colors.
+        @param pred: (c, h, w) np array of predicted class logits/probabilities per pixel
+        @param gt: (c, h, w) or (1, h, w) np array of ground truth one-hot or class index
+        @return: (2, 3, h, w) np array of RGB colored pred & gt
+        """
+        if self.use_one_hot:
+            gt = self.inverse_one_hot_mask(gt)  # (c, h, w) -> (1, h, w)
+        gt = np.squeeze(gt, axis=0)  # (1, h, w) -> (h, w)
+        unk_mask = gt == -1  # (h, w)
+
+        pred = np.argmax(pred, axis=0)  # (c, h, w) -> (h, w)
+
+        # Map to original class idx
+        pred = self.map_idx_to_class[pred]  # (h, w)
+        pred[unk_mask] = -1
+        gt = self.map_idx_to_class[gt]  # (h, w)
+        gt[unk_mask] = -1
+
+        # Colorise the images and drop alpha channel
+        cmap = get_cmap(self.all_classes)
+        color_gt = cmap(gt).transpose(2, 0, 1)  # (h,w) -> (h,w,4) -> (4,h,w)
+        color_pred = cmap(pred).transpose(2, 0, 1)  # (h,w) -> (h,w,4) -> (4,h,w)
+
+        # Drop alpha channel
+        display_im = np.stack((color_pred[:3, ...], color_gt[:3, ...]), axis=0)
+        return display_im  # (2, 3, h, w)
 
     @staticmethod
     def read_window(path_to_tif, col: int, row: int, width: int, height: int):

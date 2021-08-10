@@ -29,10 +29,12 @@ def plot_color_legend(classes, save_image=False):
     Requires:
       `classes`: Dictionary of `class_name` --> `class_index` \n
     """
+    cmap = get_cmap(classes)
+
     handles = []
     for class_name, class_idx in classes.items():
-        r, g, b = get_color_choice(class_idx)
-        color = r/255, g/255, b/255
+        r, g, b, a = cmap(class_idx)
+        color = r, g, b
         patch = mpatches.Patch(color=color, label=class_name)
 
         handles.append(patch)
@@ -43,6 +45,7 @@ def plot_color_legend(classes, save_image=False):
         mode="expand",
         fontsize="x-small",
         title="Color legend")
+    plt.gca().axis('off')
     plt.show()
 
 

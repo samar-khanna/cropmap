@@ -1,0 +1,16 @@
+{
+  "name":"ssavf",
+  "classifier":"SSAVF",
+  "classifier_kwargs": {
+    "seq_len": 8,
+    "n_conv": 4,
+    "k_conv": 3,
+    "dim_feature": 64,
+    "dim_theta_reg": 16,
+    "tess": [6],
+    "zero_boundary": true,
+    "shift_method": "random",
+    "theta_scale": 0.5
+  },
+  "input_shape": [9, 224, 224]
+}

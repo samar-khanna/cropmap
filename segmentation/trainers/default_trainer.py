@@ -4,7 +4,6 @@ import torch.nn as nn
 import torch.optim as optim
 from typing import Optional
 
-from utils.colors import get_cmap
 from trainers.base_trainer import Trainer
 from data_loaders.dataset import CropDataset
 from trainers.trainer_utils import compute_masked_loss, get_display_indices

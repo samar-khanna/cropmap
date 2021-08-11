@@ -32,7 +32,7 @@ MODELS = {
     "dumbnet": DumbNet,
     "transformer": Transformer,
     "transformer_feature_extract": TransformerFeatureExtract,
-    "knn": kNN,
+    # "knn": kNN,
     "ssavf": SSAVF,
 }
 

@@ -3,7 +3,24 @@ import json
 import logging
 import argparse
 
-from segmentation import TRAINER_TYPES
+from trainers.knn_trainer import KNNTrainer
+from trainers.default_trainer import DefaultTrainer
+from trainers.maml_trainer import MAMLTrainer
+from trainers.ssavf_trainer import SSAVFTrainer
+from trainers.simclr_trainer import SimCLRTrainer
+from trainers.month_pred_trainer import MonthPredTrainer
+from trainers.missing_month_trainer import MissingMonthTrainer
+
+
+TRAINER_TYPES = {
+    "default": DefaultTrainer,
+    "maml": MAMLTrainer,
+    "simclr": SimCLRTrainer,
+    "month_pred": MonthPredTrainer,
+    "knn": KNNTrainer,
+    "missing_month": MissingMonthTrainer,
+    "ssavf": SSAVFTrainer,
+}
 
 
 def passed_arguments():

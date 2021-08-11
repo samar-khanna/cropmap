@@ -3,7 +3,7 @@ import json
 import logging
 import argparse
 
-from .segmentation import TRAINER_TYPES
+from segmentation import TRAINER_TYPES
 
 
 def passed_arguments():

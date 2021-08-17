@@ -8,21 +8,33 @@ class NConvBlock(nn.Module):
     """
     Applies (Conv, BatchNorm, ReLU) x N on input
     """
-    def __init__(self, in_channels, out_channels, n=2, kernel_size=3, padding=1):
+    def __init__(self, in_channels, out_channels, n=2,
+                 conv_type='2d', kernel_size=3, padding=1, use_bn=True):
         super().__init__()
         assert n > 0, "Need at least 1 conv block"
+        assert conv_type in {'1d', '2d', '3d'}, "Only 1d/2d/3d convs accepted"
 
-        layers = [
-            nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, padding=padding),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(),
-        ]
+        if conv_type.lower() == '1d':
+            layer = nn.Conv1d
+        elif conv_type.lower() == '2d':
+            layer = nn.Conv2d
+        elif conv_type.lower() == '3d':
+            layer = nn.Conv3d
+        else:
+            raise NotImplementedError
+
+        layers = [layer(in_channels, out_channels, kernel_size=kernel_size, padding=padding)]
+        if use_bn:
+            layers.append(nn.BatchNorm2d(out_channels))
+        layers.append(nn.ReLU())
+
         for _ in range(n - 1):
-            layers.extend([
-                nn.Conv2d(out_channels, out_channels, kernel_size=kernel_size, padding=padding),
-                nn.BatchNorm2d(out_channels),
-                nn.ReLU(),
-            ])
+            layers.append(
+                layer(out_channels, out_channels, kernel_size=kernel_size, padding=padding)
+            )
+            if use_bn:
+                layers.append(nn.BatchNorm2d(out_channels))
+            layers.append(nn.ReLU())
 
         self.conv_block = nn.Sequential(*layers)
 

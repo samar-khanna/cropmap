@@ -2,14 +2,15 @@ import torch
 import torch.nn as nn
 from models.model_utils import NConvBlock
 
+
 class DumbNet(nn.Module):
     def __init__(self, in_channels, num_classes, num_conv=4, intermediate_channels=128):
         """
         Creates a simple segmentation network without any downsampling.
         """
         super().__init__()
-        self.conv_layers = NConvBlock(in_channels, intermediate_channels, n=num_conv,
-                                        kernel_size=1, padding=0)
+        self.conv_layers = NConvBlock(in_channels, intermediate_channels,
+                                      n=num_conv, kernel_size=1, padding=0)
 
         self.final_conv = nn.Conv2d(intermediate_channels, num_classes, kernel_size=1)
 

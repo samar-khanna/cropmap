@@ -17,7 +17,8 @@ class SSAVF(nn.Module):
 
         self.in_layer_norm = nn.LayerNorm(in_channels)
         if n_conv > 0:
-            self.feature_extractor = NConvBlock(in_channels, dim_feature, n_conv, k_conv,
+            self.feature_extractor = NConvBlock(in_channels, dim_feature, conv_type='1d',
+                                                n=n_conv, kernel_size=k_conv, use_bn=False,
                                                 padding=0 if k_conv == 1 else 1)
             self.conv_layer_norm = nn.LayerNorm(dim_feature)
         else:
@@ -53,7 +54,8 @@ class SSAVF(nn.Module):
 
         return cls(num_classes, in_channels, **config["classifier_kwargs"])
 
-    def images_to_pixels(self, x):
+    @staticmethod
+    def images_to_pixels(x):
         t = len(x)
         b, c, h, w = x[0].shape
 
@@ -63,47 +65,44 @@ class SSAVF(nn.Module):
 
         return x
 
-    def shift_data(self, x):
-        t = len(x)
-        b, c, h, w = x[0].shape
+    @staticmethod
+    def pixels_to_images(x, h, w):
+        # Call to contiguous to ensure subsequent viewing operations happen as expected
+        N, c, t = x.shape
+        x = x.view(-1, h, w, c, t)  # (b, h, w, in_c, t)
+        x = x.permute(4, 0, 3, 1, 2).contiguous()  # (t, b, in_c, h, w)
+        return [t for t in x]  # len t list, each tensor (b, in_c, h, w)
 
-        x = self.images_to_pixels(x)  # (b*h*w, in_c, t)
+    def shift_data(self, x):
+        N, in_c, t = x.shape  # (b*h*w, in_c, t)
 
         if 'random' in self.shift_method:
-            theta = self.theta_scale * self.T.sample_transformation(b*h*w)  # (b*h*w, d)
+            theta = self.theta_scale * self.T.sample_transformation(N)  # (b*h*w, d)
         else:
             raise NotImplementedError
 
         out = self.T.transform_data(x, theta, outsize=(t, ))  # (b*h*w, in_c, t)
 
-        # Call to contiguous to ensure the next viewing operation happens as expected
-        out = out.view(b, h, w, c, t)  # (b, h, w, in_c, t)
-        out = out.permute(4, 0, 3, 1, 2).contiguous()  # (t, b, in_c, h, w)
-        return [x for x in out], theta
+        return out, theta
 
     def localise(self, x):
-        t = len(x)
-        b, c, h, w = x[0].shape
+        N, in_c, t = x.shape
 
-        x = torch.cat(x, dim=0)  # (t*b, in_c, h, w)
-        x = x.permute(0, 2, 3, 1)  # (t*b, h, w, in_c)
-        x = self.in_layer_norm(x)  # (t*b, h, w, in_c)
+        x = x.permute(0, 2, 1)  # (b*h*w, t, in_c)
+        x = self.in_layer_norm(x)  # (b*h*w, t, in_c)
 
-        x = x.permute(0, 3, 1, 2)  # (t*b, in_c, h, w)
-        # x = self.first_conv(x)  # (t*b, c, h, w)
-        x = self.feature_extractor(x)  # (t*b, c, h, w)
+        x = x.permute(0, 2, 1)  # (b*h*w, in_c, t)
+        x = self.feature_extractor(x)  # (b*h*w, c, t)
 
-        x = x.permute(0, 2, 3, 1)  # (t*b, h, w, c)
-        x = self.conv_layer_norm(x)  # (t*b, h, w, c)
+        x = x.permute(0, 2, 1)  # (b*h*w, t, c)
+        x = self.conv_layer_norm(x)  # (b*h*w, t, c)
 
-        x = x.view(t, b, h, w, self.dim_feature)  # (t, b, h, w, c)
-        x = x.permute(1, 2, 3, 4, 0).contiguous()  # (b, h, w, c, t)
-        x = x.view(-1, self.dim_feature, t)  # (b*h*w, c, t)
-
+        x = x.permute(0, 2, 1)  # (b*h*w, c, t)
         return x
 
     def forward(self, x, x_shift=None):
-        t = len(x)
+        # x shape is (b*h*w, in_c, t)
+        N, in_c, t = x.shape
 
         theta_shift = None
         if x_shift is None:
@@ -116,9 +115,8 @@ class SSAVF(nn.Module):
 
         theta_pred = self.theta_reg(x_cat)  # (b*h*w, d)
 
-        x_pixels = self.images_to_pixels(x)  # (b*h*w, in_c, t)
-        x_shift = self.images_to_pixels(x_shift)  # (b*h*w, in_c, t)
-        x_aligned = self.T.transform_data(x_pixels, theta_pred, outsize=(t, ))
+        # ASSUME: x and x_shift are already in shape (b*h*h, in_c, t)
+        x_aligned = self.T.transform_data(x, theta_pred, outsize=(t, ))
 
         if theta_shift is None:
             return x_aligned, x_shift, theta_pred

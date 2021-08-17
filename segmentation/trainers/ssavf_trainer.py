@@ -103,7 +103,7 @@ class SSAVFTrainer(Trainer):
         """
         Performs one training step over a batch.
         Passes the batch of images through the model, and backprops the gradients.
-        @param images: Tensor of shape (b, c, h, w)
+        @param images: Tensor or list of tensors of shape (b, c, h, w)
         @param labels: Tensor of shape (b, c, h, w)
         @return: model predictions, loss value
         """
@@ -124,7 +124,7 @@ class SSAVFTrainer(Trainer):
         """
         Performs one validation step over a batch.
         Passes the batch of images through the model.
-        @param images: Tensor of shape (b, c, h, w)
+        @param images: Tensor or list of tensors of shape (b, c, h, w)
         @param labels: Tensor of shape (b, c, h, w)
         @return: model predictions, loss value
         """
@@ -151,8 +151,9 @@ class SSAVFTrainer(Trainer):
             input_t, y = self.dataset.shift_sample_to_device((input_t, y), self.device)
 
             # Input into the model
+            input_pix = self.model.images_to_pixels(input_t)
             feed_func = self.train_one_step if is_train else self.val_one_step
-            x_aligned, x_shift, loss = feed_func(input_t, y)
+            x_aligned, x_shift, loss = feed_func(input_pix, y)
             euc_loss = self.loss_fn(x_aligned, x_shift)
 
             # TODO: We can technically get per class euclidean loss for x_align x_shift

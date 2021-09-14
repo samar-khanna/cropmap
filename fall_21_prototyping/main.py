@@ -16,6 +16,16 @@ import matplotlib.pyplot as plt
 import sys
 import torch
 from copy import copy
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--generalization-region", type=str, required=True)
+parser.add_argument("--save-basedir", type=str, default="/share/bharath/bw462/sat/knn_caching/")
+parser.add_argument("--data-mode", type=str, default="generalization")
+parser.add_argument("--clf-strs", type=str, nargs='+', default=['euc_centroid'])
+parser.add_argument("--data-prep-strs", type=str, nargs='+', default=[''])
+parser.add_argument("--subsample-freq", type=int, default=1)
+args = parser.parse_args()
 
 class MaskCloudyTargetsTransform:
     def __init__(self, mask_value=-1, cloud_value=0., is_conservative=True):
@@ -45,7 +55,7 @@ class MaskCloudyTargetsTransform:
 mask_cloud_transform = MaskCloudyTargetsTransform()
 
 basedir = "/share/bharath/sak296/data_usa_2017/"
-save_basedir = "/share/bharath/bw462/sat/knn_caching/"
+save_basedir = args.save_basedir
 
 regions = os.listdir(basedir)
 all_dirs = []
@@ -53,7 +63,6 @@ for region in regions:
     region_basedir = f"{basedir}/{region}"
     region_dirs = [f"{region_basedir}/{d}/2017/" for d in os.listdir(region_basedir)]
     all_dirs.append(region_dirs)
-print(all_dirs)
 
 # dates are the same
 start_month = 4
@@ -62,9 +71,14 @@ dates = [d for d in os.listdir(all_dirs[0][0]) if os.path.isdir(f"{all_dirs[0][0
 dates = sorted(dates)
 print("Dates for data:", dates)
 
+generalization_region = args.generalization_region # e.g. us_south
+generalization_region_i = regions.index(generalization_region)
+
 values = []
 targets = []
 for region, dir_group in zip(regions, all_dirs):
+    if args.data_mode == 'direct' and region!=generalization_region: continue
+    print(f"Loading {region}")
     sub_values = [[], []]
     sub_targets = [[], []]
     for data_dir in dir_group:
@@ -76,7 +90,7 @@ for region, dir_group in zip(regions, all_dirs):
         save_value_path = save_dir + f"values_{start_month}_{end_month}.pickle"
         save_target_path = save_dir + f"targets_{start_month}_{end_month}.pickle"
         if os.path.exists(save_value_path) and os.path.exists(save_target_path):
-            print(f"Loading from {save_dir}")
+            # print(f"Loading from {save_dir}")
             x = pickle.load(open(save_value_path, 'rb'))
             y = pickle.load(open(save_target_path, 'rb'))
         else:
@@ -105,16 +119,11 @@ for region, dir_group in zip(regions, all_dirs):
             pickle.dump(x, open(save_value_path, "wb"))
             pickle.dump(y, open(save_target_path, "wb"))
         if not len(y): continue
-        print("Appending", save_dir)
         sub_values[split_idx].append(x)
         sub_targets[split_idx].append(y)
     # print(len(sub_values), len(sub_values[0]))
     values.append(copy(sub_values))
     targets.append(copy(sub_targets))
-
-
-generalization_region = sys.argv[1] # 'us_south' # 'washington'
-generalization_region_i = regions.index(generalization_region)
 
 
 # values and targets are still of length 5 but have train and test components to them
@@ -125,7 +134,7 @@ generalization_region_i = regions.index(generalization_region)
 # global_to_single = fusion of two above train sets
 processed_values = [[], []]
 processed_targets_with_region_is = [[], []]
-data_mode = "global_to_single"
+data_mode = args.data_mode
 # data_mode = "global_to_single"
 for region_i, (x_data, y_data) in enumerate(zip(values, targets)):
     for orig_split_idx in [0, 1]: # train and test
@@ -177,7 +186,7 @@ for vals, (targets, region_i) in zip(processed_values[1], processed_targets_with
 test_x = np.concatenate(test_values, axis=2).transpose(2, 0, 1)
 test_x = test_x.reshape(test_x.shape[0], -1)
 test_y = np.concatenate(test_targets)
-subsample_freq = 1
+subsample_freq = args.subsample_freq
 test_x = test_x[::subsample_freq]
 test_y = test_y[::subsample_freq]
 print("Test data shapes", test_x.shape, test_y.shape)
@@ -273,6 +282,7 @@ class SoftDTWBarycenter():
 
 class MeanBarycenter():
     def __init__(self):
+        print("Euc centroid is better b/c same effect with less code and handles differing classes")
         pass
 
     def fit(self, train_x, train_y):
@@ -299,12 +309,12 @@ clean_drop_channels = [4, 5, 7, 8]
 IR_channels = [7, 8]
 # clf_strs=['mlp', 'logistic']
 # clf_strs=['softdtw_centroid', 'euc_centroid_custom', 'euc_centroid']
-clf_strs=['euc_centroid']
+clf_strs = args.clf_strs
 # clf_strs= ['euc_knn_5', 'euc_knn_3', 'euc_knn_1',
 #             'dtw_knn_5', 'dtw_knn_3', 'dtw_knn_1',
 #            'logistic']
 #  data_prep_strs = ['', 'normalize', 'clean_drop', 'ir_drop', 'normalize+clean_drop', "normalize+ir_drop", "ndvi", "normalize+ndvi"]
-data_prep_strs = ['']
+data_prep_strs = args.data_prep_strs
 for clf_str in clf_strs:
     for data_prep in data_prep_strs:
             print(clf_str, data_prep)

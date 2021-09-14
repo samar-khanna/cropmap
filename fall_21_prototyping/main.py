@@ -9,7 +9,6 @@ from collections import Counter
 from interest_classes import interest_classes
 import random
 from pprint import pprint
-samples_per_class = 5
 import matplotlib
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
@@ -78,7 +77,6 @@ generalization_region_i = regions.index(generalization_region)
 values = []
 targets = []
 for region, dir_group in zip(regions, all_dirs):
-    if args.data_mode == 'direct' and region!=generalization_region: continue
     print(f"Loading {region}")
     sub_values = [[], []]
     sub_targets = [[], []]
@@ -149,6 +147,7 @@ for region_i, (x_data, y_data) in enumerate(zip(values, targets)):
             used_split_idx = 0 if region_i!=generalization_region_i else orig_split_idx # can be 0 or 1
         else:
             raise NotImplementedError
+        print(regions[region_i], orig_split_idx, len(x_data[orig_split_idx]), used_split_idx)
         # used_split_idx = 0 if region_i!=generalization_region_i else 1 # orig_split_idx
         joined_x = np.concatenate(x_data[orig_split_idx], axis=2)
         joined_y = np.concatenate(y_data[orig_split_idx])
@@ -192,7 +191,7 @@ class TorchMLP():
         curr_dim = input_dim
         layers = []
         for _ in range(num_hidden_layers):
-            layers.extend( [torch.nn.Linear(curr_dim, hidden_width), torch.nn.ReLU()])
+            layers.extend( [torch.nn.Linear(curr_dim, hidden_width), torch.nn.ReLU(), torch.nn.BatchNorm1d(hidden_width)])
             curr_dim = hidden_width
         layers.extend( [torch.nn.Linear(curr_dim, num_classes)] )
         mlp = torch.nn.Sequential(*layers)
@@ -202,31 +201,88 @@ class TorchMLP():
 
     def cast_targets(self, y):
         if self.orig_class_to_index is None:
-            classes = sorted(list(set(y)))
-            self.orig_class_to_index = {int(c):i for i,c in enumerate(classes)}
+            self.seen_classes = set(y)
+            self.orig_class_to_index = {int(c):i for i,c in enumerate(interest_classes)}
+        else:
+            new_classes = set(y) - self.seen_classes
+            if len(new_classes):
+                print(f"Previously unseen classes {new_classes}")
+                num_unseen = 0
+                for c in new_classes:
+                    num_unseen += (y == c).sum()
+                frac_unseen = num_unseen / y.shape[0]
+                print(f"These account for {frac_unseen} of testing data")
+                
         new_targets = [self.orig_class_to_index[int(y_i)] for y_i in y]
         return new_targets
 
-    def fit(self, train_x, train_y, num_epochs=1, bs=4096):
+    def fit(self, train_x, train_y, bs=4096):
         x = torch.Tensor(train_x)
         n_train = x.shape[0]
         y = torch.LongTensor(self.cast_targets(train_y))
         dataset = torch.utils.data.TensorDataset(x, y)
-        loader = torch.utils.data.DataLoader(dataset, batch_size=bs)
+        num_val_points = n_train // 10
+        num_train_points = n_train - num_val_points
+        train_set, val_set = torch.utils.data.random_split(dataset, [num_train_points, num_val_points])
+
+        train_loader = torch.utils.data.DataLoader(train_set, batch_size=bs)
+        val_loader = torch.utils.data.DataLoader(val_set, batch_size=bs)
         opt = torch.optim.Adam(self.mlp.parameters())
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, 'min', patience=5)
         criterion = torch.nn.CrossEntropyLoss()
-        for epoch_i in range(num_epochs):
+        epoch_i = 0
+        lr_steps = 0
+        best_val_loss = np.inf
+        while lr_steps <= 3:
             num_seen = 0
-            for bi, (bx, by) in enumerate(loader):
+            num_correct = 0
+            loss_sum = 0
+            for bi, (bx, by) in enumerate(train_loader):
                 bx = bx.cuda()
                 by = by.cuda()
-                num_seen += bx.shape[0]
-                if not bi%20: print(f"{num_seen} / {n_train}")
+                curr_bs = bx.shape[0]
+                num_seen += curr_bs
+                if not bi%500: print(f"{num_seen} / {n_train}")
                 opt.zero_grad()
                 preds = self.mlp(bx)
                 loss = criterion(preds, by)
                 loss.backward()
                 opt.step()
+                num_correct += (preds.argmax(dim=1) == by).sum().item()
+                loss_sum += curr_bs * loss.item()
+            ave_loss = loss_sum / num_seen
+            print(f"Train Acc @ Epoch {epoch_i}: {num_correct / num_seen}")
+            print(f"Train Loss @ Epoch {epoch_i}: {ave_loss}")
+
+            with torch.no_grad():
+                num_seen = 0
+                num_correct = 0
+                loss_sum = 0
+                for bi, (bx, by) in enumerate(val_loader):
+                    bx = bx.cuda()
+                    by = by.cuda()
+                    curr_bs = bx.shape[0]
+                    num_seen += curr_bs
+                    if not bi%500: print(f"{num_seen} / {n_train}")
+                    preds = self.mlp(bx)
+                    loss = criterion(preds, by)
+                    num_correct += (preds.argmax(dim=1) == by).sum().item()
+                    loss_sum += curr_bs * loss.item()
+                ave_loss = loss_sum / num_seen
+                print(f"Val Acc @ Epoch {epoch_i}: {num_correct / num_seen}")
+                print(f"Val Loss @ Epoch {epoch_i}: {ave_loss}")
+
+                curr_lr = opt.state_dict()['param_groups'][0]['lr']
+                scheduler.step(ave_loss)
+                if curr_lr != opt.state_dict()['param_groups'][0]['lr']:
+                    print("Stepped LR")
+                    lr_steps += 1
+                if ave_loss < best_val_loss:
+                    best_sd = self.mlp.state_dict()
+
+            epoch_i += 1
+            print()
+        self.mlp.load_state_dict(best_sd)
 
 
     def score(self, test_x, test_y, bs=4096):

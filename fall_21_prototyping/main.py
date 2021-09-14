@@ -1,5 +1,5 @@
 import rasterio
-from sklearn import neighbors, linear_model, metrics, neural_network ##
+from sklearn import neighbors, linear_model, metrics, neural_network 
 from tslearn.metrics import dtw, soft_dtw
 from tslearn.barycenters import dtw_barycenter_averaging, dtw_barycenter_averaging_subgradient, softdtw_barycenter
 import os
@@ -18,6 +18,7 @@ import torch
 from copy import copy
 import argparse
 
+print(sys.argv)
 parser = argparse.ArgumentParser()
 parser.add_argument("--generalization-region", type=str, required=True)
 parser.add_argument("--save-basedir", type=str, default="/share/bharath/bw462/sat/knn_caching/")
@@ -121,7 +122,6 @@ for region, dir_group in zip(regions, all_dirs):
         if not len(y): continue
         sub_values[split_idx].append(x)
         sub_targets[split_idx].append(y)
-    # print(len(sub_values), len(sub_values[0]))
     values.append(copy(sub_values))
     targets.append(copy(sub_targets))
 
@@ -150,10 +150,8 @@ for region_i, (x_data, y_data) in enumerate(zip(values, targets)):
         else:
             raise NotImplementedError
         # used_split_idx = 0 if region_i!=generalization_region_i else 1 # orig_split_idx
-        # print([a.shape for a in x_data[orig_split_idx]])
         joined_x = np.concatenate(x_data[orig_split_idx], axis=2)
         joined_y = np.concatenate(y_data[orig_split_idx])
-        # print(joined_x.shape, joined_y.shape)
         processed_values[used_split_idx].append(joined_x) # .transpose([2, 0, 1]))
         # adding in region_i to track
         processed_targets_with_region_is[used_split_idx].append((joined_y, region_i))
@@ -161,15 +159,11 @@ for region_i, (x_data, y_data) in enumerate(zip(values, targets)):
 
 
 
-# train_values = [vals[0] for i,vals in enumerate(processed_values) if i!=generalization_region_i]
-# train_targets = [targets[0] for i,targets in enumerate(processed_targets) if i!=generalization_region_i]
 # could do below in fancy list comp but this suffices
 train_values = []
 train_targets = []
 for vals, (targets, region_i) in zip(processed_values[0], processed_targets_with_region_is[0]):
-    # if region_i==generalization_region_i: continue
     train_values.append(vals)
-    # print(vals.shape, targets.shape)
     train_targets.append(targets)
 train_x = np.concatenate(train_values, axis=2).transpose(2, 0, 1)
 train_x = train_x.reshape(train_x.shape[0], -1)
@@ -179,9 +173,7 @@ print("Train data shapes", train_x.shape, train_y.shape)
 test_values = []
 test_targets = []
 for vals, (targets, region_i) in zip(processed_values[1], processed_targets_with_region_is[1]):
-    # if region_i!=generalization_region_i: continue
     test_values.append(vals)
-    # print(vals.shape, targets.shape)
     test_targets.append(targets)
 test_x = np.concatenate(test_values, axis=2).transpose(2, 0, 1)
 test_x = test_x.reshape(test_x.shape[0], -1)
@@ -191,23 +183,8 @@ test_x = test_x[::subsample_freq]
 test_y = test_y[::subsample_freq]
 print("Test data shapes", test_x.shape, test_y.shape)
 
-"""
-test_values = [vals[1] for i,vals in enumerate(processed_values) if i==generalization_region_i]
-test_targets = [targets[1] for i,targets in enumerate(processed_targets) if i==generalization_region_i]
-test_x = np.concatenate(test_values, axis=2).transpose(2, 0, 1)
-test_x = test_x.reshape(test_x.shape[0], -1)
-test_y = np.concatenate(test_targets)
-"""
-
-# test_x = processed_values[generalization_region_i].transpose([2, 0, 1])[::100].copy()
-# test_y = processed_targets[generalization_region_i][::100].copy()
-# train_x = all_x.transpose(2, 0, 1)
-# train_y = all_y
-# processed values is 5 (# regions) x n_points x 8 x 9
-
 
 all_mean_reps = []
-# num_points_to_average = int(sys.argv[3]) if len(sys.argv)>3 else None
 
 class TorchMLP():
     def __init__(self, num_classes=len(interest_classes), num_hidden_layers=1, hidden_width=256, input_dim=72):
@@ -252,6 +229,26 @@ class TorchMLP():
                 opt.step()
 
 
+    def score(self, test_x, test_y, bs=4096):
+        x = torch.Tensor(test_x)
+        n_train = x.shape[0]
+        y = torch.LongTensor(self.cast_targets(test_y))
+        dataset = torch.utils.data.TensorDataset(x, y)
+        loader = torch.utils.data.DataLoader(dataset, batch_size=bs)
+        criterion = torch.nn.CrossEntropyLoss()
+        num_seen = 0
+        num_correct = 0
+        for bi, (bx, by) in enumerate(loader):
+            bx = bx.cuda()
+            by = by.cuda()
+            num_seen += bx.shape[0]
+            if not bi%20: print(f"{num_seen} / {n_train}")
+            preds = self.mlp(bx)
+            loss = criterion(preds, by)
+            num_correct += (preds.argmax(dim=1) == by).sum().item()
+        return num_correct / num_seen
+
+
 class SoftDTWBarycenter():
     def __init__(self):
         pass
@@ -291,15 +288,11 @@ class MeanBarycenter():
         k = 1
         for class_i in interest_classes:
             matching_idx = np.argwhere(train_y==class_i).squeeze()
-            # print(class_i, matching_idx.shape)
             centroid = train_x[matching_idx].mean(axis=0).squeeze()
-            # print(centroid.shape)
             centroids.append(centroid)
             centroid_labels.append(class_i)
         self.clf = neighbors.KNeighborsClassifier(n_neighbors=k, weights='distance')
-        print(k, centroid_labels, len(centroids))
         self.clf.fit(centroids, centroid_labels)
-        print(self.clf.get_params())
 
     def score(self, test_x, test_y):
         return self.clf.score(test_x, test_y)
@@ -307,13 +300,7 @@ class MeanBarycenter():
 
 clean_drop_channels = [4, 5, 7, 8]
 IR_channels = [7, 8]
-# clf_strs=['mlp', 'logistic']
-# clf_strs=['softdtw_centroid', 'euc_centroid_custom', 'euc_centroid']
 clf_strs = args.clf_strs
-# clf_strs= ['euc_knn_5', 'euc_knn_3', 'euc_knn_1',
-#             'dtw_knn_5', 'dtw_knn_3', 'dtw_knn_1',
-#            'logistic']
-#  data_prep_strs = ['', 'normalize', 'clean_drop', 'ir_drop', 'normalize+clean_drop', "normalize+ir_drop", "ndvi", "normalize+ndvi"]
 data_prep_strs = args.data_prep_strs
 for clf_str in clf_strs:
     for data_prep in data_prep_strs:
@@ -338,17 +325,12 @@ for clf_str in clf_strs:
             elif clf_str == 'logistic':
                 clf = linear_model.LogisticRegression()
             elif clf_str == 'mlp':
-                clf = neural_network.MLPClassifier()
-                # clf = linear_model.LogisticRegression()
+                clf = TorchMLP()
             elif clf_str == 'linear':
                 clf = TorchMLP(num_hidden_layers=0)
-            elif clf_str == 'TorchMLP':
-                clf = TorchMLP()
             else:
                 raise NotImplementedError
-            # print("RUNNING ON 1/100 DATA")
             data_prep_list = data_prep.split('+')
-            # samples x dates x channels
             if 'normalize' in data_prep_list:
                 train_x = (train_x - train_x.mean(axis=(0,1))) / train_x.std(axis=(0,1))
                 test_x = (test_x - test_x.mean(axis=(0,1))) / train_x.std(axis=(0,1))

@@ -9,11 +9,6 @@
 #SBATCH --partition=default_partition       # Request partition
 #SBATCH --gres=gpu:1
 
-# source activate earthengine
-cd ~/satellite/my_knn/
-
-echo "$1 $2 $3"
-# python3 nearest_barycenter.py $1 $2 $3
-# python3 tmp.py $1 $2 $3
-# python3 global_centers.py $1 $2 $3
-python3 logistic_regression.py $1 $2 $3
+cd ~/satellite/cropmap/fall_21_prototyping/
+echo "$@"
+python3 main.py $@

@@ -185,9 +185,10 @@ print("Test data shapes", test_x.shape, test_y.shape)
 
 all_mean_reps = []
 
-class TorchMLP():
+class TorchNN():
     def __init__(self, num_classes=len(interest_classes), num_hidden_layers=1, hidden_width=256, input_dim=72):
         self.num_classes = len(interest_classes)
+        self.hidden_width = hidden_width
         curr_dim = input_dim
         layers = []
         for _ in range(num_hidden_layers):
@@ -195,9 +196,10 @@ class TorchMLP():
             curr_dim = hidden_width
         layers.extend( [torch.nn.Linear(curr_dim, num_classes)] )
         mlp = torch.nn.Sequential(*layers)
-        print("Cudaing MLP")
+        print("Cudaing NN")
         self.mlp = mlp.cuda()
         self.orig_class_to_index = None
+        self.opt = torch.optim.Adam(self.mlp.parameters())
 
     def cast_targets(self, y):
         if self.orig_class_to_index is None:
@@ -225,15 +227,14 @@ class TorchMLP():
         num_train_points = n_train - num_val_points
         train_set, val_set = torch.utils.data.random_split(dataset, [num_train_points, num_val_points])
 
-        train_loader = torch.utils.data.DataLoader(train_set, batch_size=bs)
+        train_loader = torch.utils.data.DataLoader(train_set, batch_size=bs, shuffle=True)
         val_loader = torch.utils.data.DataLoader(val_set, batch_size=bs)
-        opt = torch.optim.Adam(self.mlp.parameters())
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, 'min', patience=5)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.opt, 'min', patience=5)
         criterion = torch.nn.CrossEntropyLoss()
         epoch_i = 0
         lr_steps = 0
         best_val_loss = np.inf
-        while lr_steps <= 3:
+        while lr_steps <= 2:
             num_seen = 0
             num_correct = 0
             loss_sum = 0
@@ -243,11 +244,11 @@ class TorchMLP():
                 curr_bs = bx.shape[0]
                 num_seen += curr_bs
                 if not bi%500: print(f"{num_seen} / {n_train}")
-                opt.zero_grad()
+                self.opt.zero_grad()
                 preds = self.mlp(bx)
                 loss = criterion(preds, by)
                 loss.backward()
-                opt.step()
+                self.opt.step()
                 num_correct += (preds.argmax(dim=1) == by).sum().item()
                 loss_sum += curr_bs * loss.item()
             ave_loss = loss_sum / num_seen
@@ -272,9 +273,9 @@ class TorchMLP():
                 print(f"Val Acc @ Epoch {epoch_i}: {num_correct / num_seen}")
                 print(f"Val Loss @ Epoch {epoch_i}: {ave_loss}")
 
-                curr_lr = opt.state_dict()['param_groups'][0]['lr']
+                curr_lr = self.opt.state_dict()['param_groups'][0]['lr']
                 scheduler.step(ave_loss)
-                if curr_lr != opt.state_dict()['param_groups'][0]['lr']:
+                if curr_lr != self.opt.state_dict()['param_groups'][0]['lr']:
                     print("Stepped LR")
                     lr_steps += 1
                 if ave_loss < best_val_loss:
@@ -286,23 +287,146 @@ class TorchMLP():
 
 
     def score(self, test_x, test_y, bs=4096):
-        x = torch.Tensor(test_x)
+        with torch.no_grad():
+            x = torch.Tensor(test_x)
+            n_train = x.shape[0]
+            y = torch.LongTensor(self.cast_targets(test_y))
+            dataset = torch.utils.data.TensorDataset(x, y)
+            loader = torch.utils.data.DataLoader(dataset, batch_size=bs)
+            criterion = torch.nn.CrossEntropyLoss()
+            num_seen = 0
+            num_correct = 0
+            for bi, (bx, by) in enumerate(loader):
+                bx = bx.cuda()
+                by = by.cuda()
+                num_seen += bx.shape[0]
+                if not bi%20: print(f"{num_seen} / {n_train}")
+                preds = self.mlp(bx)
+                loss = criterion(preds, by)
+                num_correct += (preds.argmax(dim=1) == by).sum().item()
+            return num_correct / num_seen
+
+
+class TransductiveStartupNN(TorchNN):
+
+    def __init__(self, *args, **kwargs):
+        super(TransductiveStartupNN, self).__init__(*args, **kwargs)
+
+
+
+    def transductive_fit(self, train_x, train_y, test_x, test_y, bs=4096):
+        # startup doesn't use any weighting between two losses
+        # Reinit MLP head
+        print("Reinitializing head and transductive fitting")
+        self.mlp[-1].load_state_dict(torch.nn.Linear(curr_dim, num_classes).state_dict())
+
+        # make loaders
+        x = torch.Tensor(train_x)
         n_train = x.shape[0]
-        y = torch.LongTensor(self.cast_targets(test_y))
+        y = torch.LongTensor(self.cast_targets(train_y))
         dataset = torch.utils.data.TensorDataset(x, y)
-        loader = torch.utils.data.DataLoader(dataset, batch_size=bs)
+        num_val_points = n_train // 10
+        num_train_points = n_train - num_val_points
+        train_set, val_set = torch.utils.data.random_split(dataset, [num_train_points, num_val_points])
+
+        trans_x = torch.Tensor(test_x)
+        n_trans = trans_x.shape[0]
+        dataset = torch.utils.data.TensorDataset(x, y)
+        num_trans_val_points = n_trans // 10
+        num_trans_train_points = n_trans - num_trans_val_points
+        trans_train_set, trans_val_set = torch.utils.data.random_split(dataset, [num_trans_train_points, num_trans_val_points])
+
+
+        train_loader = torch.utils.data.DataLoader(train_set, batch_size=bs, shuffle=True)
+        trans_train_loader = torch.utils.data.DataLoader(trans_train_set, batch_size=bs, shuffle=True)
+
+        # shuffling val so can match to length of trans data
+        val_loader = torch.utils.data.DataLoader(val_set, batch_size=bs, shuffle=True)
+        trans_val_loader = torch.utils.data.DataLoader(trans_val_set, batch_size=bs, shuffle=True)
+
+
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.opt, 'min', patience=5)
         criterion = torch.nn.CrossEntropyLoss()
-        num_seen = 0
-        num_correct = 0
-        for bi, (bx, by) in enumerate(loader):
-            bx = bx.cuda()
-            by = by.cuda()
-            num_seen += bx.shape[0]
-            if not bi%20: print(f"{num_seen} / {n_train}")
-            preds = self.mlp(bx)
-            loss = criterion(preds, by)
-            num_correct += (preds.argmax(dim=1) == by).sum().item()
-        return num_correct / num_seen
+        trans_criterion = torch.nn.KLDivLoss()
+        epoch_i = 0
+        lr_steps = 0
+        best_val_loss = np.inf
+        while lr_steps <= 2:
+            num_seen = 0
+            # num_correct = 0
+            loss_sum = 0
+            for bi, ((bx, by), (btx, bty)) in enumerate(zip(train_loader, trans_train_loader)):
+                bx = bx.cuda()
+                by = by.cuda()
+                btx = btx.cuda()
+                bty = bty.cuda()
+                curr_bs = bx.shape[0]
+                num_seen += curr_bs
+                if not bi%500: print(f"{num_seen} / {min(num_train_points, num_trans_train_points)}")
+                self.opt.zero_grad()
+                train_preds = self.mlp(bx)
+                train_loss = criterion(train_preds, by)
+                trans_preds = self.mlp(btx).softmax()
+                trans_loss = trans_criterion(trans_preds, btx)
+                loss = train_loss + trans_loss
+                loss.backward()
+                self.opt.step()
+                # num_correct += (preds.argmax(dim=1) == by).sum().item()
+                loss_sum += curr_bs * loss.item()
+            ave_loss = loss_sum / num_seen
+            # print(f"Train Acc @ Epoch {epoch_i}: {num_correct / num_seen}")
+            print(f"Transductive Train Loss @ Epoch {epoch_i}: {ave_loss}")
+
+            with torch.no_grad():
+                num_seen = 0
+                # num_correct = 0
+                loss_sum = 0
+                for bi, ((bx, by), (btx, bty)) in enumerate(zip(val_loader, trans_val_loader)):
+                    bx = bx.cuda()
+                    by = by.cuda()
+                    btx = btx.cuda()
+                    bty = bty.cuda()
+                    curr_bs = bx.shape[0]
+                    num_seen += curr_bs
+                    if not bi%500: print(f"{num_seen} / {min(num_val_points, num_trans_val_points)}")
+                    train_preds = self.mlp(bx)
+                    train_loss = criterion(train_preds, by)
+                    trans_preds = self.mlp(btx).softmax()
+                    trans_loss = trans_criterion(trans_preds, btx)
+                    loss = train_loss + trans_loss
+                    loss.backward()
+                    # num_correct += (preds.argmax(dim=1) == by).sum().item()
+                    loss_sum += curr_bs * loss.item()
+                ave_loss = loss_sum / num_seen
+                # print(f"Val Acc @ Epoch {epoch_i}: {num_correct / num_seen}")
+                print(f"Transductive Val Loss @ Epoch {epoch_i}: {ave_loss}")
+
+                curr_lr = self.opt.state_dict()['param_groups'][0]['lr']
+                scheduler.step(ave_loss)
+                if curr_lr != self.opt.state_dict()['param_groups'][0]['lr']:
+                    print("Stepped LR")
+                    lr_steps += 1
+                if ave_loss < best_val_loss:
+                    best_sd = self.mlp.state_dict()
+
+            epoch_i += 1
+            print()
+        self.mlp.load_state_dict(best_sd)
+
+    def transductive_score(self, train_x, train_y, test_x, test_y, bs=4096):
+        with torch.no_grad():
+            x = torch.Tensor(test_x)
+            n_train = x.shape[0]
+            dataset = torch.utils.data.TensorDataset(x)
+            loader = torch.utils.data.DataLoader(dataset, batch_size=bs, shuffle=False)
+            soft_targets = []
+            for bx in enumerate(loader):
+                soft_targets.append(self.mlp(bx).softmax(dim=1))
+            trans_y = torch.cat(soft_targets)
+        self.transductive_fit(train_x, train_y, test_x, trans_y, bs=bs)
+        # transductive fit along with original train data
+        #
+        return self.score(test_x, test_y)
 
 
 class SoftDTWBarycenter():
@@ -326,7 +450,7 @@ class SoftDTWBarycenter():
             centroids.append(centroid)
             centroid_labels.append(class_i)
         self.clf = neighbors.KNeighborsClassifier(metric=self.reshape_softdtw)
-        self.clf.fit(centroids.reshape(len(interest_classes), -1), centroid_labels)
+        self.clf.fit(np.array(centroids).reshape(len(interest_classes), -1), centroid_labels)
 
 
     def score(self, test_x, test_y):
@@ -381,9 +505,11 @@ for clf_str in clf_strs:
             elif clf_str == 'logistic':
                 clf = linear_model.LogisticRegression()
             elif clf_str == 'mlp':
-                clf = TorchMLP()
+                clf = TorchNN()
+            elif clf_str == 'transductive_mlp':
+                clf = TransductiveStartupNN()
             elif clf_str == 'linear':
-                clf = TorchMLP(num_hidden_layers=0)
+                clf = TorchNN(num_hidden_layers=0)
             else:
                 raise NotImplementedError
             data_prep_list = data_prep.split('+')
@@ -405,8 +531,8 @@ for clf_str in clf_strs:
                 test_x = ndvi(test_x)
             train_x = train_x.reshape(train_x.shape[0], -1)
             test_x = test_x.reshape(test_x.shape[0], -1)
-            clf.fit(train_x, train_y)
-            gen_score = clf.score(test_x, test_y)
+            # clf.fit(train_x, train_y)
+            gen_score = clf.transductive_score(train_x, train_y, test_x, test_y) if 'transductive' in clf_str else clf.score(test_x, test_y)
             # metrics.plot_confusion_matrix(clf, test_x, test_y)
             # plt.savefig(f"{generalization_region}_{clf_str}_{data_prep}.png")
             # pred_test_y = clf.predict(test_x)

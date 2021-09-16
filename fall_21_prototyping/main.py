@@ -24,7 +24,8 @@ parser.add_argument("--save-basedir", type=str, default="/share/bharath/bw462/sa
 parser.add_argument("--data-mode", type=str, default="generalization")
 parser.add_argument("--clf-strs", type=str, nargs='+', default=['euc_centroid'])
 parser.add_argument("--data-prep-strs", type=str, nargs='+', default=[''])
-parser.add_argument("--subsample-freq", type=int, default=1)
+parser.add_argument("--train-subsample-freq", type=int, default=1)
+parser.add_argument("--test-subsample-freq", type=int, default=1)
 args = parser.parse_args()
 
 class MaskCloudyTargetsTransform:
@@ -167,6 +168,9 @@ for vals, (targets, region_i) in zip(processed_values[0], processed_targets_with
 train_x = np.concatenate(train_values, axis=2).transpose(2, 0, 1)
 train_x = train_x.reshape(train_x.shape[0], -1)
 train_y = np.concatenate(train_targets)
+train_subsample_freq = args.train_subsample_freq
+train_x = train_x[::train_subsample_freq]
+train_y = train_y[::train_subsample_freq]
 print("Train data shapes", train_x.shape, train_y.shape)
 
 test_values = []
@@ -177,9 +181,9 @@ for vals, (targets, region_i) in zip(processed_values[1], processed_targets_with
 test_x = np.concatenate(test_values, axis=2).transpose(2, 0, 1)
 test_x = test_x.reshape(test_x.shape[0], -1)
 test_y = np.concatenate(test_targets)
-subsample_freq = args.subsample_freq
-test_x = test_x[::subsample_freq]
-test_y = test_y[::subsample_freq]
+test_subsample_freq = args.test_subsample_freq
+test_x = test_x[::test_subsample_freq]
+test_y = test_y[::test_subsample_freq]
 print("Test data shapes", test_x.shape, test_y.shape)
 
 

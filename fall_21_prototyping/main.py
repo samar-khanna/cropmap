@@ -180,8 +180,14 @@ for region_i, (x_data, y_data) in enumerate(zip(values, targets)):
 # could do below in fancy list comp but this suffices
 train_values = []
 train_targets = []
+region_class_hash_increment = 1e6
 for vals, (targets, region_i) in zip(processed_values[0], processed_targets_with_region_is[0]):
     train_values.append(vals)
+    # For now need to manipulate data so can only all per_region or all not
+    is_per_region_arr = ['per_region' in s for s in args.clf_strs]
+    if any(is_per_region_arr): assert all(is_per_region_arr)
+    if is_per_region_arr[0]:
+        targets += region_class_hash_increment * region_i
     train_targets.append(targets)
 train_x = np.concatenate(train_values, axis=2).transpose(2, 0, 1)
 # train_x = train_x.reshape(train_x.shape[0], -1)
@@ -664,6 +670,24 @@ class TransductiveEucCentroid(neighbors.NearestCentroid):
         return self.score(test_x, test_y)
 
 
+class PerRegionNearestCentroid():
+
+    def __init__(self, n_neighbors=1, weights='distance'):
+        self.clf = neighbors.KNeighborsClassifier(n_neighbors=n_neighbors, weights=weights)
+
+    def fit(self, train_x, train_y):
+        print("TEST. REMOVE"); self.clf.fit(train_x, train_y)
+        per_region_centroid_clf = neighbors.NearestCentroid()
+        per_region_centroid_clf.fit(train_x, train_y)
+        centroids = per_region_centroid_clf.centroids_
+        classes = per_region_centroid_clf.classes_
+        true_classes = classes % region_class_hash_increment
+        self.clf.fit(centroids, true_classes)
+
+    def score(self, test_x, test_y):
+        return self.clf.score(test_x, test_y)
+
+
 clean_drop_channels = [4, 5, 7, 8]
 IR_channels = [7, 8]
 clf_strs = args.clf_strs
@@ -707,12 +731,12 @@ for clf_str in clf_strs:
                 clf =  DTWBarycenter('SG')
             elif clf_str == 'euc_centroid':
                 clf = neighbors.NearestCentroid()
+            elif clf_str == 'per_region_euc_centroid':
+                clf = PerRegionNearestCentroid()
             elif clf_str == 'hybrid_barycenter':
                 clf = DTWBarycenter('hybrid')
             elif clf_str == 'transductive_euc_centroid':
                 clf = TransductiveEucCentroid()
-            elif clf_str == 'euc_centroid_custom':
-                clf = MeanBarycenter()
             elif clf_str == 'logistic':
                 clf = linear_model.LogisticRegression()
             elif clf_str == 'mlp':

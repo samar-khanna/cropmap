@@ -225,7 +225,7 @@ class TorchNN():
         layers.extend( [torch.nn.Linear(curr_dim, num_classes)] )
         mlp = torch.nn.Sequential(*layers)
         print("Cudaing NN")
-        self.mlp = mlp.cuda()
+        self.mlp = mlp.to(torch.device('gpu' if torch.cuda.is_available() else 'cpu'))
         self.opt = torch.optim.Adam(self.mlp.parameters(), lr=1e-2, weight_decay=wd)
 
     def cast_targets(self, y):
@@ -345,8 +345,9 @@ class TransformerNN(TorchNN):
         super().__init__(num_classes=num_classes)
         mlp = Transformer(num_classes=num_classes, in_channels=in_channels, n_conv=n_conv, **kwargs)
 
-        print("Re-cudaing Transformer NN")
-        self.mlp = mlp.cuda()
+        print(f"CUDA there?: {torch.cuda.is_available()}")
+        print("Re-cudaing Transformer NN if needed")
+        self.mlp = mlp.to(torch.device('gpu' if torch.cuda.is_available() else 'cpu'))
         self.opt = torch.optim.Adam(self.mlp.parameters())
 
 

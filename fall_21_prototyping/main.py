@@ -252,6 +252,7 @@ class TorchNN():
         return new_targets
 
     def fit(self, train_x, train_y, bs=4096):
+        self.mlp.train()
         x = torch.Tensor(train_x)
         n_train = x.shape[0]
         y = torch.LongTensor(self.cast_targets(train_y))
@@ -326,6 +327,7 @@ class TorchNN():
 
     def score(self, test_x, test_y, bs=4096):
         with torch.no_grad():
+            self.mlp.eval()
             x = torch.Tensor(test_x)
             n_train = x.shape[0]
             y = torch.LongTensor(self.cast_targets(test_y))
@@ -357,6 +359,48 @@ class TransformerNN(TorchNN):
         self.opt = torch.optim.Adam(self.mlp.parameters())
 
 
+class TransformerEnsemble():
+    def __init__(self, *args, **kwargs):
+        self.transformer_constructor = lambda : TransformerNN(*args, **kwargs)
+
+    def fit(self, train_x, train_y):
+        # This gives region indices for each transformer
+        region_assignments = train_y // region_class_hash_increment
+        self.region_class_factors = sorted(set(list(region_assignments)))
+        self.num_regions = len(self.region_class_factors)
+        self.transformers = [self.transformer_constructor() for _ in range(self.num_regions)]
+        for net in self.transformers: net.mlp.train()
+        print(self.region_class_factors)
+        per_region_masks = [region_assignments==r for r in self.region_class_factors]
+        per_region_x = [train_x[mask] for mask in per_region_masks]
+        per_region_y = [train_y[mask] for mask in per_region_masks]
+        for region_i, (region_x, region_y, net) in enumerate(zip(per_region_x, per_region_y, self.transformers)):
+            print(region_i, region_x.shape, region_y.shape, net)
+            net.fit(region_x, region_y % region_class_hash_increment)
+
+    def score(self, test_x, test_y, bs=4096):
+        with torch.no_grad():
+            for net in self.transformers: net.mlp.eval()
+            x = torch.Tensor(test_x)
+            n_train = x.shape[0]
+            print("Ignore any missing class region")
+            y = torch.LongTensor(self.transformers[0].cast_targets(test_y % region_class_hash_increment))
+            dataset = torch.utils.data.TensorDataset(x, y)
+            loader = torch.utils.data.DataLoader(dataset, batch_size=bs)
+            num_seen = 0
+            num_correct = 0
+            for bi, (bx, by) in enumerate(loader):
+                bx = bx.cuda()
+                by = by.cuda()
+                num_seen += bx.shape[0]
+                # if not bi%20: print(f"{num_seen} / {n_train}")
+                all_probs = torch.stack([net.mlp(bx).softmax(dim=1) for net in self.transformers])
+                preds = torch.mean(all_probs, dim=0)
+                print(preds.shape)
+                num_correct += (preds.argmax(dim=1) == by).sum().item()
+            return num_correct / num_seen
+
+
 class TransductiveStartupNN(TorchNN):
 
     def __init__(self, *args, **kwargs):
@@ -366,6 +410,7 @@ class TransductiveStartupNN(TorchNN):
     def transductive_fit(self, train_x, train_y, test_x, trans_y, bs=4096):
         # startup doesn't use any weighting between two losses
         # Reinit MLP head
+        self.mlp.train()
         print("Reinitializing head and transductive fitting")
         self.mlp[-1].load_state_dict(torch.nn.Linear(self.hidden_width, self.num_classes).state_dict())
 
@@ -470,6 +515,7 @@ class TransductiveStartupNN(TorchNN):
     def transductive_score(self, train_x, train_y, test_x, test_y, bs=4096):
         print(f"Initial score {self.score(test_x, test_y)}")
         with torch.no_grad():
+            self.mlp.eval()
             x = torch.Tensor(test_x)
             n_train = x.shape[0]
             dataset = torch.utils.data.TensorDataset(x)
@@ -491,6 +537,7 @@ class TransductiveHardNN(TorchNN):
         self.thresh = confidence_threshold
 
     def transductive_fit(self, train_x, train_y, test_x, bs=4096):
+        self.mlp.train()
         x = torch.Tensor(train_x)
         n_train = x.shape[0]
         y = torch.LongTensor(self.cast_targets(train_y))
@@ -765,6 +812,8 @@ for clf_str in clf_strs:
                 clf = TorchNN(num_hidden_layers=0)
             elif clf_str == 'transformer':
                 clf = TransformerNN()
+            elif clf_str == 'per_region_transformer_ensemble':
+                clf = TransformerEnsemble()
             else:
                 raise NotImplementedError
             clf.fit(train_x, train_y)

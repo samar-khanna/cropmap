@@ -1,7 +1,7 @@
 import rasterio
 from sklearn import neighbors, linear_model, metrics, neural_network 
 from tslearn.metrics import dtw, soft_dtw
-from tslearn.barycenters import dtw_barycenter_averaging, dtw_barycenter_averaging_subgradient, softdtw_barycenter
+from tslearn.barycenters import dtw_barycenter_averaging, dtw_barycenter_averaging_subgradient, softdtw_barycenter, euclidean_barycenter
 import os
 import numpy as np
 import pickle
@@ -20,12 +20,14 @@ from transformer import Transformer
 
 print(sys.argv)
 parser = argparse.ArgumentParser()
-parser.add_argument("--generalization-region", type=str, required=True)
+parser.add_argument("--generalization-region", type=str, default='')
+parser.add_argument("--source-region", type=str, default='')
 parser.add_argument("--save-basedir", type=str, default="/share/bharath/bw462/sat/knn_caching/")
 parser.add_argument("--data-mode", type=str, default="generalization")
 parser.add_argument("--clf-strs", type=str, nargs='+', default=['euc_centroid'])
 parser.add_argument("--data-prep-strs", type=str, nargs='+', default=[''])
-parser.add_argument("--subsample-freq", type=int, default=1)
+parser.add_argument("--train-subsample-freq", type=int, default=1)
+parser.add_argument("--test-subsample-freq", type=int, default=1)
 args = parser.parse_args()
 
 class MaskCloudyTargetsTransform:
@@ -73,7 +75,14 @@ dates = sorted(dates)
 print("Dates for data:", dates)
 
 generalization_region = args.generalization_region # e.g. us_south
-generalization_region_i = regions.index(generalization_region)
+generalization_region_i = regions.index(generalization_region) if generalization_region in regions else np.inf
+if not args.generalization_region: assert args.data_mode == 'global_to_global'
+
+if args.source_region:
+    assert args.data_mode == 'single_to_single'
+    source_region = args.source_region
+    source_region_i = regions.index(source_region)
+
 
 values = []
 targets = []
@@ -144,8 +153,18 @@ for region_i, (x_data, y_data) in enumerate(zip(values, targets)):
         elif data_mode == 'direct':
             if region_i != generalization_region_i: continue
             used_split_idx = orig_split_idx
+        elif data_mode == 'single_to_single':
+            if orig_split_idx==0 and region_i==source_region_i:
+                pass
+            elif orig_split_idx==1 and region_i==generalization_region_i:
+                pass
+            else:
+                continue
+            used_split_idx = orig_split_idx
         elif data_mode == 'global_to_single':
             used_split_idx = 0 if region_i!=generalization_region_i else orig_split_idx # can be 0 or 1
+        elif data_mode == 'global_to_global':
+            used_split_idx = orig_split_idx
         else:
             raise NotImplementedError
         print(regions[region_i], orig_split_idx, len(x_data[orig_split_idx]), used_split_idx)
@@ -166,8 +185,11 @@ for vals, (targets, region_i) in zip(processed_values[0], processed_targets_with
     train_values.append(vals)
     train_targets.append(targets)
 train_x = np.concatenate(train_values, axis=2).transpose(2, 0, 1)
-train_x = train_x.reshape(train_x.shape[0], -1)
+# train_x = train_x.reshape(train_x.shape[0], -1)
 train_y = np.concatenate(train_targets)
+train_subsample_freq = args.train_subsample_freq
+train_x = train_x[::train_subsample_freq]
+train_y = train_y[::train_subsample_freq]
 print("Train data shapes", train_x.shape, train_y.shape)
 
 test_values = []
@@ -176,18 +198,21 @@ for vals, (targets, region_i) in zip(processed_values[1], processed_targets_with
     test_values.append(vals)
     test_targets.append(targets)
 test_x = np.concatenate(test_values, axis=2).transpose(2, 0, 1)
-test_x = test_x.reshape(test_x.shape[0], -1)
+# test_x = test_x.reshape(test_x.shape[0], -1)
 test_y = np.concatenate(test_targets)
-subsample_freq = args.subsample_freq
-test_x = test_x[::subsample_freq]
-test_y = test_y[::subsample_freq]
+test_subsample_freq = args.test_subsample_freq
+test_x = test_x[::test_subsample_freq]
+test_y = test_y[::test_subsample_freq]
 print("Test data shapes", test_x.shape, test_y.shape)
 
 
 all_mean_reps = []
 
 class TorchNN():
-    def __init__(self, num_classes=len(interest_classes), num_hidden_layers=1, hidden_width=256, input_dim=72):
+    def __init__(self, num_classes=len(interest_classes), num_hidden_layers=1, hidden_width=256, wd=0):
+        input_dim = train_x.shape[1]
+        print(train_x.shape, input_dim)
+        
         self.orig_class_to_index = None
         self.num_classes = len(interest_classes)
 
@@ -201,7 +226,7 @@ class TorchNN():
         mlp = torch.nn.Sequential(*layers)
         print("Cudaing NN")
         self.mlp = mlp.cuda()
-        self.opt = torch.optim.Adam(self.mlp.parameters())
+        self.opt = torch.optim.Adam(self.mlp.parameters(), lr=1e-2, weight_decay=wd)
 
     def cast_targets(self, y):
         if self.orig_class_to_index is None:
@@ -216,7 +241,7 @@ class TorchNN():
                     num_unseen += (y == c).sum()
                 frac_unseen = num_unseen / y.shape[0]
                 print(f"These account for {frac_unseen} of testing data")
-                
+
         new_targets = [self.orig_class_to_index[int(y_i)] for y_i in y]
         return new_targets
 
@@ -236,6 +261,7 @@ class TorchNN():
         epoch_i = 0
         lr_steps = 0
         best_val_loss = np.inf
+        min_loss_epoch = None
         while lr_steps <= 2:
             num_seen = 0
             num_correct = 0
@@ -245,7 +271,7 @@ class TorchNN():
                 by = by.cuda()
                 curr_bs = bx.shape[0]
                 num_seen += curr_bs
-                if not bi%500: print(f"{num_seen} / {n_train}")
+                # if not bi%500: print(f"{num_seen} / {n_train}")
                 self.opt.zero_grad()
                 preds = self.mlp(bx)
                 loss = criterion(preds, by)
@@ -254,8 +280,9 @@ class TorchNN():
                 num_correct += (preds.argmax(dim=1) == by).sum().item()
                 loss_sum += curr_bs * loss.item()
             ave_loss = loss_sum / num_seen
-            print(f"Train Acc @ Epoch {epoch_i}: {num_correct / num_seen}")
-            print(f"Train Loss @ Epoch {epoch_i}: {ave_loss}")
+            if not epoch_i % 10:
+                print(f"Train Acc @ Epoch {epoch_i}: {num_correct / num_seen}")
+                print(f"Train Loss @ Epoch {epoch_i}: {ave_loss}")
 
             with torch.no_grad():
                 num_seen = 0
@@ -266,14 +293,16 @@ class TorchNN():
                     by = by.cuda()
                     curr_bs = bx.shape[0]
                     num_seen += curr_bs
-                    if not bi%500: print(f"{num_seen} / {n_train}")
+                    # if not bi%500: print(f"{num_seen} / {n_train}")
                     preds = self.mlp(bx)
                     loss = criterion(preds, by)
                     num_correct += (preds.argmax(dim=1) == by).sum().item()
                     loss_sum += curr_bs * loss.item()
                 ave_loss = loss_sum / num_seen
-                print(f"Val Acc @ Epoch {epoch_i}: {num_correct / num_seen}")
-                print(f"Val Loss @ Epoch {epoch_i}: {ave_loss}")
+                if not epoch_i % 10:
+                    print(f"Val Acc @ Epoch {epoch_i}: {num_correct / num_seen}")
+                    print(f"Val Loss @ Epoch {epoch_i}: {ave_loss}")
+                    print(f"Best Val Loss was {best_val_loss} @ Epoch {min_loss_epoch}")
 
                 curr_lr = self.opt.state_dict()['param_groups'][0]['lr']
                 scheduler.step(ave_loss)
@@ -282,9 +311,10 @@ class TorchNN():
                     lr_steps += 1
                 if ave_loss < best_val_loss:
                     best_sd = self.mlp.state_dict()
+                    best_val_loss = ave_loss
+                    min_loss_epoch = epoch_i
 
             epoch_i += 1
-            print()
         self.mlp.load_state_dict(best_sd)
 
 
@@ -302,7 +332,7 @@ class TorchNN():
                 bx = bx.cuda()
                 by = by.cuda()
                 num_seen += bx.shape[0]
-                if not bi%20: print(f"{num_seen} / {n_train}")
+                # if not bi%20: print(f"{num_seen} / {n_train}")
                 preds = self.mlp(bx)
                 loss = criterion(preds, by)
                 num_correct += (preds.argmax(dim=1) == by).sum().item()
@@ -312,7 +342,7 @@ class TorchNN():
 class TransformerNN(TorchNN):
     def __init__(self, num_classes=len(interest_classes), in_channels=9, t_len=8,
                  n_conv=2, **kwargs):
-        super().__init__(num_classes=num_classes, input_dim=in_channels*t_len)
+        super().__init__(num_classes=num_classes)
         mlp = Transformer(num_classes=num_classes, in_channels=in_channels, n_conv=n_conv, **kwargs)
 
         print("Re-cudaing Transformer NN")
@@ -365,6 +395,7 @@ class TransductiveStartupNN(TorchNN):
         epoch_i = 0
         lr_steps = 0
         best_val_loss = np.inf
+        min_loss_epoch = None
         while lr_steps <= 2:
             num_seen = 0
             # num_correct = 0
@@ -376,7 +407,7 @@ class TransductiveStartupNN(TorchNN):
                 bty = bty.cuda()
                 curr_bs = bx.shape[0]
                 num_seen += curr_bs
-                if not bi%500: print(f"{num_seen} / {min(num_train_points, num_trans_train_points)}")
+                # if not bi%500: print(f"{num_seen} / {min(num_train_points, num_trans_train_points)}")
                 self.opt.zero_grad()
                 train_preds = self.mlp(bx)
                 train_loss = criterion(train_preds, by)
@@ -389,7 +420,8 @@ class TransductiveStartupNN(TorchNN):
                 loss_sum += curr_bs * loss.item()
             ave_loss = loss_sum / num_seen
             # print(f"Train Acc @ Epoch {epoch_i}: {num_correct / num_seen}")
-            print(f"Transductive Train Loss @ Epoch {epoch_i}: {ave_loss}")
+            if not epoch_i % 10:
+                print(f"Transductive Train Loss @ Epoch {epoch_i}: {ave_loss}")
 
             with torch.no_grad():
                 num_seen = 0
@@ -402,7 +434,7 @@ class TransductiveStartupNN(TorchNN):
                     bty = bty.cuda()
                     curr_bs = bx.shape[0]
                     num_seen += curr_bs
-                    if not bi%500: print(f"{num_seen} / {min(num_val_points, num_trans_val_points)}")
+                    # if not bi%500: print(f"{num_seen} / {min(num_val_points, num_trans_val_points)}")
                     test_preds = self.mlp(bx)
                     test_loss = criterion(test_preds, by)
                     trans_preds = self.mlp(btx).softmax(dim=1)
@@ -412,8 +444,9 @@ class TransductiveStartupNN(TorchNN):
                     loss_sum += curr_bs * loss.item()
                 ave_loss = loss_sum / num_seen
                 # print(f"Val Acc @ Epoch {epoch_i}: {num_correct / num_seen}")
-                print(f"Transductive Val Loss @ Epoch {epoch_i}: {ave_loss}")
-
+                if not epoch_i % 10:
+                    print(f"Transductive Val Loss @ Epoch {epoch_i}: {ave_loss}")
+                    print(f"Best Val Loss was {best_val_loss} @ Epoch {min_loss_epoch}")
                 curr_lr = self.opt.state_dict()['param_groups'][0]['lr']
                 scheduler.step(ave_loss)
                 if curr_lr != self.opt.state_dict()['param_groups'][0]['lr']:
@@ -421,12 +454,14 @@ class TransductiveStartupNN(TorchNN):
                     lr_steps += 1
                 if ave_loss < best_val_loss:
                     best_sd = self.mlp.state_dict()
+                    min_loss_epoch = epoch_i
+                    best_val_loss = ave_loss
 
             epoch_i += 1
-            print()
         self.mlp.load_state_dict(best_sd)
 
     def transductive_score(self, train_x, train_y, test_x, test_y, bs=4096):
+        print(f"Initial score {self.score(test_x, test_y)}")
         with torch.no_grad():
             x = torch.Tensor(test_x)
             n_train = x.shape[0]
@@ -481,25 +516,25 @@ class TransductiveHardNN(TorchNN):
         epoch_i = 0
         lr_steps = 0
         best_val_loss = np.inf
+        min_loss_epoch = None
         while lr_steps <= 2:
             num_seen = 0
             # num_correct = 0
             loss_sum = 0
-            for bi, ((bx, by), btx) in enumerate(zip(train_loader, trans_train_loader)):
+            for bi, ((bx, by), (btx,)) in enumerate(zip(train_loader, trans_train_loader)):
                 bx = bx.cuda()
                 by = by.cuda()
                 btx = btx.cuda()
                 curr_bs = bx.shape[0]
                 num_seen += curr_bs
-                if not bi%500: print(f"{num_seen} / {min(num_train_points, num_trans_train_points)}")
+                # if not bi%500: print(f"{num_seen} / {min(num_train_points, num_trans_train_points)}")
                 self.opt.zero_grad()
                 train_preds = self.mlp(bx)
                 train_loss = criterion(train_preds, by)
                 trans_preds = self.mlp(btx)
                 trans_probs = trans_preds.softmax(dim=1)
-                confident_mask = trans_probs > self.thresh
-                confident_preds = trans_preds[confident_idx]
-                confident_inputs = btx[confident_mask]
+                confident_mask = trans_probs.max(dim=1)[0] > self.thresh
+                confident_preds = trans_preds[confident_mask]
                 trans_loss = criterion(confident_preds, confident_preds.argmax(dim=1))
                 loss = train_loss + trans_loss
                 loss.backward()
@@ -508,31 +543,35 @@ class TransductiveHardNN(TorchNN):
                 loss_sum += curr_bs * loss.item()
             ave_loss = loss_sum / num_seen
             # print(f"Train Acc @ Epoch {epoch_i}: {num_correct / num_seen}")
-            print(f"Transductive Train Loss @ Epoch {epoch_i}: {ave_loss}")
+            if not epoch_i % 10:
+                print(f"Transductive Train Loss @ Epoch {epoch_i}: {ave_loss}")
 
             with torch.no_grad():
                 num_seen = 0
                 # num_correct = 0
                 loss_sum = 0
-                for bi, ((bx, by), (btx, bty)) in enumerate(zip(val_loader, trans_val_loader)):
+                for bi, ((bx, by), (btx,)) in enumerate(zip(val_loader, trans_val_loader)):
                     bx = bx.cuda()
                     by = by.cuda()
                     btx = btx.cuda()
-                    bty = bty.cuda()
                     curr_bs = bx.shape[0]
                     num_seen += curr_bs
-                    if not bi%500: print(f"{num_seen} / {min(num_val_points, num_trans_val_points)}")
+                    # if not bi%500: print(f"{num_seen} / {min(num_val_points, num_trans_val_points)}")
                     train_preds = self.mlp(bx)
                     train_loss = criterion(train_preds, by)
-                    trans_preds = self.mlp(btx).softmax()
-                    trans_loss = trans_criterion(trans_preds, btx)
+                    trans_preds = self.mlp(btx)
+                    trans_probs = trans_preds.softmax(dim=1)
+                    confident_mask = trans_probs.max(dim=1)[0] > self.thresh
+                    confident_preds = trans_preds[confident_mask]
+                    trans_loss = criterion(confident_preds, confident_preds.argmax(dim=1))
                     loss = train_loss + trans_loss
-                    loss.backward()
                     # num_correct += (preds.argmax(dim=1) == by).sum().item()
                     loss_sum += curr_bs * loss.item()
                 ave_loss = loss_sum / num_seen
                 # print(f"Val Acc @ Epoch {epoch_i}: {num_correct / num_seen}")
-                print(f"Transductive Val Loss @ Epoch {epoch_i}: {ave_loss}")
+                if not epoch_i % 10:
+                    print(f"Transductive Val Loss @ Epoch {epoch_i}: {ave_loss}")
+                    print(f"Best Val Loss was {best_val_loss} @ Epoch {min_loss_epoch}")
 
                 curr_lr = self.opt.state_dict()['param_groups'][0]['lr']
                 scheduler.step(ave_loss)
@@ -541,44 +580,64 @@ class TransductiveHardNN(TorchNN):
                     lr_steps += 1
                 if ave_loss < best_val_loss:
                     best_sd = self.mlp.state_dict()
+                    best_val_loss = ave_loss
+                    min_loss_epoch = epoch_i
 
             epoch_i += 1
-            print()
         self.mlp.load_state_dict(best_sd)
 
 
     def transductive_score(self, train_x, train_y, test_x, test_y, bs=4096):
+        print(f"Initial score {self.score(test_x, test_y)}")
         self.transductive_fit(train_x, train_y, test_x, bs=4096)
         return self.score(test_x, test_y)
 
 
 
-class SoftDTWBarycenter():
-    def __init__(self):
-        pass
+class DTWBarycenter():
+    def __init__(self, barycenter_method):
+        self.barycenter_method = barycenter_method
+        if barycenter_method == 'soft':
+            self.barycenter_call = lambda x: softdtw_barycenter(x, max_iter=5)
+        elif barycenter_method == 'SG':
+            self.barycenter_call = lambda x: dtw_barycenter_averaging_subgradient(x, max_iter=5)
+        elif barycenter_method == 'hybrid':
+            self.barycenter_call = euclidean_barycenter
+        else:
+            raise NotImplementedError
 
-    def reshape_softdtw(self, s1, s2, n_time_points=8):
+    def reshape_dtw(self, s1, s2, n_time_points=8):
         feed1 = s1.reshape(n_time_points, -1)
         feed2 = s2.reshape(n_time_points, -1)
-        return soft_dtw(feed1, feed2)
+        return soft_dtw(feed1, feed2) if self.barycenter_method=='soft' else dtw(feed1, feed2)
 
 
     def fit(self, train_x, train_y):
         centroids = []
         centroid_labels = []
+        self.seen_classes = set()
         for class_i in interest_classes:
             print(f"Fitting class {class_i}")
             matching_idx = np.argwhere(train_y==class_i)
-            matching_x = train_x[matching_idx].reshape(matching_idx.shape[0], 8, 9)
-            centroid = softdtw_barycenter(matching_x, max_iter=5)
+            if not len(matching_idx): continue
+            self.seen_classes.add(class_i)
+            matching_x = train_x[matching_idx].reshape(matching_idx.shape[0], 8, -1)
+            centroid = self.barycenter_call(matching_x)
             centroids.append(centroid)
             centroid_labels.append(class_i)
-        self.clf = neighbors.KNeighborsClassifier(metric=self.reshape_softdtw)
-        self.clf.fit(np.array(centroids).reshape(len(interest_classes), -1), centroid_labels)
+        self.clf = neighbors.KNeighborsClassifier(metric=self.reshape_dtw)
+        self.clf.fit(np.array(centroids).reshape(len(self.seen_classes), -1), centroid_labels)
 
 
     def score(self, test_x, test_y):
-        print("Re-using soft dtw instead of hard, validate decision")
+        new_classes = set(y) - self.seen_classes
+        if len(new_classes):
+            print(f"Previously unseen classes {new_classes}")
+            num_unseen = 0
+            for c in new_classes:
+                num_unseen += (y == c).sum()
+            frac_unseen = num_unseen / y.shape[0]
+            print(f"These account for {frac_unseen} of testing data")
         return self.clf.score(test_x, test_y)
 
 
@@ -625,39 +684,6 @@ data_prep_strs = args.data_prep_strs
 for clf_str in clf_strs:
     for data_prep in data_prep_strs:
             print(clf_str, data_prep)
-            print("Initializing classifier")
-            if 'knn' in clf_str:
-                n_neighbors = int(clf_str.split('knn_')[1])
-                weights = 'distance'
-                if 'euc_knn' in clf_str:
-                    clf = neighbors.KNeighborsClassifier(n_neighbors=n_neighbors,
-                                                         weights=weights)
-                if 'dtw_knn' in clf_str:
-                    clf = neighbors.KNeighborsClassifier(metric=reshape_dtw,
-                                                         n_neighbors=n_neighbors,
-                                                          weights=weights)
-            elif 'softdtw_centroid' in clf_str:# might have _transducitve at front
-                clf = SoftDTWBarycenter()
-            elif clf_str == 'euc_centroid':
-                clf = neighbors.NearestCentroid()
-            elif clf_str == 'transductive_euc_centroid':
-                clf = TransductiveEucCentroid()
-            elif clf_str == 'euc_centroid_custom':
-                clf = MeanBarycenter()
-            elif clf_str == 'logistic':
-                clf = linear_model.LogisticRegression()
-            elif clf_str == 'mlp':
-                clf = TorchNN()
-            elif clf_str == 'transductive_startup_mlp':
-                clf = TransductiveStartupNN()
-            elif clf_str == 'transductive_hard_mlp':
-                clf = TransductiveHardNN()
-            elif clf_str == 'linear':
-                clf = TorchNN(num_hidden_layers=0)
-            elif clf_str == 'transformer':
-                clf = TransformerNN()
-            else:
-                raise NotImplementedError
             data_prep_list = data_prep.split('+')
             if 'normalize' in data_prep_list:
                 train_x = (train_x - train_x.mean(axis=(0,1))) / train_x.std(axis=(0,1))
@@ -677,6 +703,45 @@ for clf_str in clf_strs:
                 test_x = ndvi(test_x)
             train_x = train_x.reshape(train_x.shape[0], -1)
             test_x = test_x.reshape(test_x.shape[0], -1)
+            print("Initializing classifier")
+            if 'knn' in clf_str:
+                n_neighbors = int(clf_str.split('knn_')[1])
+                weights = 'distance'
+                if 'euc_knn' in clf_str:
+                    clf = neighbors.KNeighborsClassifier(n_neighbors=n_neighbors,
+                                                         weights=weights)
+                if 'dtw_knn' in clf_str:
+                    clf = neighbors.KNeighborsClassifier(metric=reshape_dtw,
+                                                         n_neighbors=n_neighbors,
+                                                          weights=weights)
+            elif 'softdtw_centroid' in clf_str:# might have _transducitve at front
+                clf =  DTWBarycenter('soft')
+            elif 'SGdtw_centroid' in clf_str:# might have _transducitve at front
+                clf =  DTWBarycenter('SG')
+            elif clf_str == 'euc_centroid':
+                clf = neighbors.NearestCentroid()
+            elif clf_str == 'hybrid_barycenter':
+                clf = DTWBarycenter('hybrid')
+            elif clf_str == 'transductive_euc_centroid':
+                clf = TransductiveEucCentroid()
+            elif clf_str == 'euc_centroid_custom':
+                clf = MeanBarycenter()
+            elif clf_str == 'logistic':
+                clf = linear_model.LogisticRegression()
+            elif clf_str == 'mlp':
+                clf = TorchNN()
+            elif clf_str == 'mlp_wd':
+                clf = TorchNN(wd=1e-2)
+            elif clf_str == 'transductive_startup_mlp':
+                clf = TransductiveStartupNN()
+            elif clf_str == 'transductive_hard_mlp':
+                clf = TransductiveHardNN()
+            elif clf_str == 'linear':
+                clf = TorchNN(num_hidden_layers=0)
+            elif clf_str == 'transformer':
+                clf = TransformerNN()
+            else:
+                raise NotImplementedError
             clf.fit(train_x, train_y)
             gen_score = clf.transductive_score(train_x, train_y, test_x, test_y) if 'transductive' in clf_str else clf.score(test_x, test_y)
             # metrics.plot_confusion_matrix(clf, test_x, test_y)

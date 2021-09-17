@@ -16,6 +16,7 @@ import sys
 import torch
 from copy import copy
 import argparse
+from transformer import Transformer
 
 print(sys.argv)
 parser = argparse.ArgumentParser()
@@ -187,7 +188,9 @@ all_mean_reps = []
 
 class TorchNN():
     def __init__(self, num_classes=len(interest_classes), num_hidden_layers=1, hidden_width=256, input_dim=72):
+        self.orig_class_to_index = None
         self.num_classes = len(interest_classes)
+
         self.hidden_width = hidden_width
         curr_dim = input_dim
         layers = []
@@ -198,7 +201,6 @@ class TorchNN():
         mlp = torch.nn.Sequential(*layers)
         print("Cudaing NN")
         self.mlp = mlp.cuda()
-        self.orig_class_to_index = None
         self.opt = torch.optim.Adam(self.mlp.parameters())
 
     def cast_targets(self, y):
@@ -307,11 +309,21 @@ class TorchNN():
             return num_correct / num_seen
 
 
+class TransformerNN(TorchNN):
+    def __init__(self, num_classes=len(interest_classes), in_channels=9, t_len=8,
+                 n_conv=2, **kwargs):
+        super().__init__(num_classes=num_classes, input_dim=in_channels*t_len)
+        mlp = Transformer(num_classes=num_classes, in_channels=in_channels, n_conv=n_conv, **kwargs)
+
+        print("Re-cudaing Transformer NN")
+        self.mlp = mlp.cuda()
+        self.opt = torch.optim.Adam(self.mlp.parameters())
+
+
 class TransductiveStartupNN(TorchNN):
 
     def __init__(self, *args, **kwargs):
         super(TransductiveStartupNN, self).__init__(*args, **kwargs)
-
 
 
     def transductive_fit(self, train_x, train_y, test_x, trans_y, bs=4096):
@@ -642,6 +654,8 @@ for clf_str in clf_strs:
                 clf = TransductiveHardNN()
             elif clf_str == 'linear':
                 clf = TorchNN(num_hidden_layers=0)
+            elif clf_str == 'transformer':
+                clf = TransformerNN()
             else:
                 raise NotImplementedError
             data_prep_list = data_prep.split('+')

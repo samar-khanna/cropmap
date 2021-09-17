@@ -360,7 +360,8 @@ class TransformerNN(TorchNN):
 
 
 class TransformerEnsemble():
-    def __init__(self, *args, **kwargs):
+    def __init__(self, method='average', *args, **kwargs):
+        self.method = method
         self.transformer_constructor = lambda : TransformerNN(*args, **kwargs)
 
     def fit(self, train_x, train_y):
@@ -395,8 +396,16 @@ class TransformerEnsemble():
                 num_seen += bx.shape[0]
                 # if not bi%20: print(f"{num_seen} / {n_train}")
                 all_probs = torch.stack([net.mlp(bx).softmax(dim=1) for net in self.transformers])
-                preds = torch.mean(all_probs, dim=0)
-                print(preds.shape)
+                if self.method == 'average':
+                    preds = torch.mean(all_probs, dim=0)
+                elif self.method == 'highest_confidence':
+                    # n_point x classes x regions
+                    transposed_probs = all_probs.permute(1, 2, 0)
+                    # Below isn't softmaxxed but still n_points x n_class
+                    preds = tranposed_probs.max(dim=2).values
+                    # should work below
+                else:
+                    raise NotImplementedError
                 num_correct += (preds.argmax(dim=1) == by).sum().item()
             return num_correct / num_seen
 

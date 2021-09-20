@@ -194,7 +194,6 @@ for vals, (targets, region_i) in zip(processed_values[0], processed_targets_with
     train_targets.append(targets)
     region_name = regions[region_i]
     if region_name not in train_regions: train_regions.append(regions[region_i])
-print(regions, train_regions)
 train_x = np.concatenate(train_values, axis=2).transpose(2, 0, 1)
 # train_x = train_x.reshape(train_x.shape[0], -1)
 train_y = np.concatenate(train_targets)
@@ -367,6 +366,22 @@ class TransformerNN(TorchNN):
         self.mlp = mlp.cuda()
         self.opt = torch.optim.Adam(self.mlp.parameters())
 
+class TargetClassesTransformerNN():
+    def __init__(self, *args, **kwargs):
+        self.transformer_constructor = lambda : TransformerNN(*args, **kwargs)
+
+    def fit(self, train_x, train_y):
+        self.train_x = train_x
+        self.train_y = train_y
+
+    def score(self, test_x, test_y):
+        target_classes = list(set(list(test_y)))
+        interest_idx = np.argwhere(np.isin(self.train_y, target_classes)).squeeze()
+        train_y = self.train_y[interest_idx]
+        train_x = self.train_x[interest_idx]
+        clf = self.transformer_constructor()
+        clf.fit(train_x, train_y)
+        return clf.score(test_x, test_y)
 
 class TransformerEnsemble():
     def __init__(self, method='average', *args, **kwargs):
@@ -895,6 +910,8 @@ for clf_str in clf_strs:
                 clf = TorchNN(num_hidden_layers=0)
             elif clf_str == 'transformer':
                 clf = TransformerNN()
+            elif clf_str == 'transformer_target_classes_only':
+                clf = TargetClassesTransformerNN()
             elif clf_str == 'per_region_transformer_average_ensemble':
                 clf = TransformerEnsemble()
             elif clf_str == 'per_region_transformer_confidence_ensemble':

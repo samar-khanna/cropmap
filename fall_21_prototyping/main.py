@@ -1,5 +1,6 @@
 import rasterio
-from sklearn import neighbors, linear_model, metrics, neural_network 
+from scipy import optimize, spatial
+from sklearn import neighbors, linear_model, metrics, cluster
 from tslearn.metrics import dtw, soft_dtw
 from tslearn.barycenters import dtw_barycenter_averaging, dtw_barycenter_averaging_subgradient, softdtw_barycenter, euclidean_barycenter
 import os
@@ -181,6 +182,7 @@ for region_i, (x_data, y_data) in enumerate(zip(values, targets)):
 # could do below in fancy list comp but this suffices
 train_values = []
 train_targets = []
+train_regions = []
 region_class_hash_increment = 1e6
 for vals, (targets, region_i) in zip(processed_values[0], processed_targets_with_region_is[0]):
     train_values.append(vals)
@@ -190,6 +192,9 @@ for vals, (targets, region_i) in zip(processed_values[0], processed_targets_with
     if is_per_region_arr[0]:
         targets += region_class_hash_increment * region_i
     train_targets.append(targets)
+    region_name = regions[region_i]
+    if region_name not in train_regions: train_regions.append(regions[region_i])
+print(regions, train_regions)
 train_x = np.concatenate(train_values, axis=2).transpose(2, 0, 1)
 # train_x = train_x.reshape(train_x.shape[0], -1)
 train_y = np.concatenate(train_targets)
@@ -251,7 +256,7 @@ class TorchNN():
         new_targets = [self.orig_class_to_index[int(y_i)] for y_i in y]
         return new_targets
 
-    def fit(self, train_x, train_y, bs=4096):
+    def fit(self, train_x, train_y, bs=4096, return_best_val_acc=False):
         self.mlp.train()
         x = torch.Tensor(train_x)
         n_train = x.shape[0]
@@ -268,6 +273,7 @@ class TorchNN():
         epoch_i = 0
         lr_steps = 0
         best_val_loss = np.inf
+        best_val_acc = - np.inf
         min_loss_epoch = None
         while lr_steps <= 2:
             num_seen = 0
@@ -306,8 +312,10 @@ class TorchNN():
                     num_correct += (preds.argmax(dim=1) == by).sum().item()
                     loss_sum += curr_bs * loss.item()
                 ave_loss = loss_sum / num_seen
+                val_acc = num_correct / num_seen
+                if val_acc > best_val_acc: best_val_acc = val_acc
                 if not epoch_i % 10:
-                    print(f"Val Acc @ Epoch {epoch_i}: {num_correct / num_seen}")
+                    print(f"Val Acc @ Epoch {epoch_i}: {val_acc}")
                     print(f"Val Loss @ Epoch {epoch_i}: {ave_loss}")
                     print(f"Best Val Loss was {best_val_loss} @ Epoch {min_loss_epoch}")
 
@@ -323,6 +331,7 @@ class TorchNN():
 
             epoch_i += 1
         self.mlp.load_state_dict(best_sd)
+        if return_best_val_acc: return best_val_acc
 
 
     def score(self, test_x, test_y, bs=4096):
@@ -408,6 +417,72 @@ class TransformerEnsemble():
                     raise NotImplementedError
                 num_correct += (preds.argmax(dim=1) == by).sum().item()
             return num_correct / num_seen
+
+class HDivergence():
+    def __init__(self, *args, **kwargs):
+        self.transformer_constructor = lambda : TransformerNN(*args, **kwargs)
+
+    def fit(self, train_x, train_y):
+        # This gives region indices for each transformer
+        region_assignments = train_y // region_class_hash_increment
+        self.region_class_factors = sorted(set(list(region_assignments)))
+        self.num_regions = len(self.region_class_factors)
+        per_region_masks = [region_assignments==r for r in self.region_class_factors]
+        self.per_region_x = [train_x[mask] for mask in per_region_masks]
+        self.per_region_y = [train_y[mask] for mask in per_region_masks]
+
+
+    def score(self, test_x, test_y):
+        h_div_accs = []
+        for region_train_x, region_train_y in zip(self.per_region_x, self.per_region_y):
+            transformer = self.transformer_constructor()
+            x = np.concatenate([region_train_x, test_x])
+            # class 1 is corn and 5 is soybeans both of which are interest classes
+            # so be having 1/5 as targets they get casted properly
+            y = np.concatenate([np.ones(region_train_x.shape[0]),
+                                5 * np.ones(test_x.shape[0])])
+            h_div_acc = transformer.fit(x, y, return_best_val_acc = True)
+            h_div_accs.append(h_div_acc)
+        selected_region_i = np.argmin(h_div_accs)
+        print("Use score to figure out which was selected")
+        print(train_regions[selected_region_i])
+        # return self.clfs[selected_region_i].score(test_x, test_y)
+
+class KMeansMatching():
+    def __init__(self, *args, **kwargs):
+        self.kmeans_constructor = lambda : cluster.KMeans(*args, **kwargs)
+
+    def fit(self, train_x, train_y):
+        # This gives region indices for each transformer
+        region_assignments = train_y // region_class_hash_increment
+        self.region_class_factors = sorted(set(list(region_assignments)))
+        self.num_regions = len(self.region_class_factors)
+        self.clfs = [self.kmeans_constructor() for _ in range(self.num_regions)]
+        per_region_masks = [region_assignments==r for r in self.region_class_factors]
+        per_region_x = [train_x[mask] for mask in per_region_masks]
+        per_region_y = [train_y[mask] for mask in per_region_masks]
+        self.centers_list = []
+        for region_i, (region_x, region_y, clf) in enumerate(zip(per_region_x, per_region_y, self.clfs)):
+            print(region_i, region_x.shape, region_y.shape, clf)
+            clf.fit(region_x, region_y % region_class_hash_increment)
+            self.centers_list.append(clf.cluster_centers_)
+
+
+    def score(self, test_x, test_y):
+        test_kmeans = self.kmeans_constructor()
+        test_kmeans.fit(test_x, test_y)
+        test_centers = test_kmeans.cluster_centers_
+        matching_costs = []
+        for train_centers in self.centers_list:
+            cost_matrix = spatial.distance.cdist(train_centers, test_centers)
+            sol_row_ind, sol_col_ind = optimize.linear_sum_assignment(cost_matrix)
+            cost = cost_matrix[sol_row_ind, sol_col_ind].sum()
+            matching_costs.append(cost)
+        selected_region_i = np.argmin(matching_costs)
+        print("Use score to figure out which was selected")
+        print(train_regions[selected_region_i])
+        # return self.clfs[selected_region_i].score(test_x, test_y)
+
 
 
 class TransductiveStartupNN(TorchNN):
@@ -746,7 +821,6 @@ class PerRegionNearestCentroid():
         self.clf = neighbors.KNeighborsClassifier(n_neighbors=n_neighbors, weights=weights)
 
     def fit(self, train_x, train_y):
-        print("TEST. REMOVE"); self.clf.fit(train_x, train_y)
         per_region_centroid_clf = neighbors.NearestCentroid()
         per_region_centroid_clf.fit(train_x, train_y)
         centroids = per_region_centroid_clf.centroids_
@@ -825,6 +899,10 @@ for clf_str in clf_strs:
                 clf = TransformerEnsemble()
             elif clf_str == 'per_region_transformer_confidence_ensemble':
                 clf = TransformerEnsemble(method='highest_confidence')
+            elif clf_str == 'per_region_kmeans_matching':
+                clf = KMeansMatching(n_clusters=50)
+            elif clf_str == 'per_region_h_div':
+                clf = HDivergence()
             else:
                 raise NotImplementedError
             clf.fit(train_x, train_y)

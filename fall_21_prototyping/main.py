@@ -402,7 +402,7 @@ class TransformerEnsemble():
                     # n_point x classes x regions
                     transposed_probs = all_probs.permute(1, 2, 0)
                     # Below isn't softmaxxed but still n_points x n_class
-                    preds = tranposed_probs.max(dim=2).values
+                    preds = transposed_probs.max(dim=2).values
                     # should work below
                 else:
                     raise NotImplementedError
@@ -821,8 +821,10 @@ for clf_str in clf_strs:
                 clf = TorchNN(num_hidden_layers=0)
             elif clf_str == 'transformer':
                 clf = TransformerNN()
-            elif clf_str == 'per_region_transformer_ensemble':
+            elif clf_str == 'per_region_transformer_average_ensemble':
                 clf = TransformerEnsemble()
+            elif clf_str == 'per_region_transformer_confidence_ensemble':
+                clf = TransformerEnsemble(method='highest_confidence')
             else:
                 raise NotImplementedError
             clf.fit(train_x, train_y)

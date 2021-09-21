@@ -221,7 +221,6 @@ all_mean_reps = []
 class TorchNN():
     def __init__(self, num_classes=len(interest_classes), num_hidden_layers=1, hidden_width=256, wd=0):
         input_dim = train_x.shape[1]
-        print(train_x.shape, input_dim)
         
         self.orig_class_to_index = None
         self.num_classes = len(interest_classes)
@@ -240,7 +239,7 @@ class TorchNN():
 
     def cast_targets(self, y):
         if self.orig_class_to_index is None:
-            self.seen_classes = set(y)
+            self.seen_classes = set(list(y))
             self.orig_class_to_index = {int(c):i for i,c in enumerate(interest_classes)}
         else:
             new_classes = set(y) - self.seen_classes
@@ -313,7 +312,7 @@ class TorchNN():
                 ave_loss = loss_sum / num_seen
                 val_acc = num_correct / num_seen
                 if val_acc > best_val_acc: best_val_acc = val_acc
-                if not epoch_i % 10:
+                if not epoch_i % 20:
                     print(f"Val Acc @ Epoch {epoch_i}: {val_acc}")
                     print(f"Val Loss @ Epoch {epoch_i}: {ave_loss}")
                     print(f"Best Val Loss was {best_val_loss} @ Epoch {min_loss_epoch}")
@@ -354,6 +353,21 @@ class TorchNN():
                 num_correct += (preds.argmax(dim=1) == by).sum().item()
             return num_correct / num_seen
 
+    def predict(self, test_x, bs=4096):
+        with torch.no_grad():
+            self.mlp.eval()
+            x = torch.Tensor(test_x)
+            n_train = x.shape[0]
+            dataset = torch.utils.data.TensorDataset(x)
+            loader = torch.utils.data.DataLoader(dataset, shuffle=False,
+                                                 batch_size=bs)
+            preds_list = []
+            for bi, (bx,) in enumerate(loader):
+                bx = bx.cuda()
+                preds_list.append(self.mlp(bx).argmax(dim=1))
+            return torch.cat(preds_list)
+
+
 
 class TransformerNN(TorchNN):
     def __init__(self, num_classes=len(interest_classes), in_channels=9, t_len=8,
@@ -382,6 +396,34 @@ class TargetClassesTransformerNN():
         clf = self.transformer_constructor()
         clf.fit(train_x, train_y)
         return clf.score(test_x, test_y)
+
+
+class RetrainTransformerNN():
+    def __init__(self, *args, **kwargs):
+        self.transformer_constructor = lambda : TransformerNN(*args, **kwargs)
+
+    def fit(self, train_x, train_y):
+        self.train_x = train_x
+        self.train_y = train_y
+
+    def score(self, test_x, test_y):
+        initial_transformer = self.transformer_constructor()
+        train_y_preds = initial_transformer.predict(self.train_x)
+        correct_mask = (train_y_preds.cpu() == torch.Tensor(initial_transformer.cast_targets(self.train_y)))
+        print(correct_mask.sum().item() / correct_mask.shape[0])
+        initial_transformer.fit(self.train_x, self.train_y)
+        print("Consider dataset split consequences here")
+        train_y_preds = initial_transformer.predict(self.train_x)
+        correct_mask = (train_y_preds.cpu() == torch.Tensor(initial_transformer.cast_targets(self.train_y)))
+        print(correct_mask.sum().item() / correct_mask.shape[0])
+
+        new_transformer = self.transformer_constructor()
+        retrain_idx = np.argwhere(correct_mask.numpy())
+        print(retrain_idx.shape[0], correct_mask.sum())
+        new_transformer.fit(self.train_x[retrain_idx].squeeze(),
+                            self.train_y[retrain_idx].squeeze())
+        return new_transformer.score(test_x, test_y)
+
 
 class TransformerEnsemble():
     def __init__(self, method='average', *args, **kwargs):
@@ -910,6 +952,8 @@ for clf_str in clf_strs:
                 clf = TorchNN(num_hidden_layers=0)
             elif clf_str == 'transformer':
                 clf = TransformerNN()
+            elif clf_str == 'retrain_transformer':
+                clf = RetrainTransformerNN()
             elif clf_str == 'transformer_target_classes_only':
                 clf = TargetClassesTransformerNN()
             elif clf_str == 'per_region_transformer_average_ensemble':

@@ -223,6 +223,7 @@ class TorchNN():
         input_dim = train_x.shape[1]
         
         self.orig_class_to_index = None
+        print("TODO: Dynamically adapt dimension of clf layer")
         self.num_classes = len(interest_classes)
 
         self.hidden_width = hidden_width
@@ -233,7 +234,7 @@ class TorchNN():
             curr_dim = hidden_width
         layers.extend( [torch.nn.Linear(curr_dim, num_classes)] )
         mlp = torch.nn.Sequential(*layers)
-        print("Cudaing NN")
+        # print("Cudaing NN")
         self.mlp = mlp.cuda()
         self.opt = torch.optim.Adam(self.mlp.parameters(), lr=1e-2, weight_decay=wd)
 
@@ -241,6 +242,7 @@ class TorchNN():
         if self.orig_class_to_index is None:
             self.seen_classes = set(list(y))
             self.orig_class_to_index = {int(c):i for i,c in enumerate(interest_classes)}
+            # print(self.orig_class_to_index)
         else:
             new_classes = set(y) - self.seen_classes
             if len(new_classes):
@@ -254,7 +256,9 @@ class TorchNN():
         new_targets = [self.orig_class_to_index[int(y_i)] for y_i in y]
         return new_targets
 
-    def fit(self, train_x, train_y, bs=4096, return_best_val_acc=False):
+    def fit(self, train_x, train_y, bs=4096, return_best_val_acc=False,
+             silent=False):
+        print_call = (lambda x: None) if silent else print
         self.mlp.train()
         x = torch.Tensor(train_x)
         n_train = x.shape[0]
@@ -282,7 +286,7 @@ class TorchNN():
                 by = by.cuda()
                 curr_bs = bx.shape[0]
                 num_seen += curr_bs
-                # if not bi%500: print(f"{num_seen} / {n_train}")
+                # if not bi%500: print_call(f"{num_seen} / {n_train}")
                 self.opt.zero_grad()
                 preds = self.mlp(bx)
                 loss = criterion(preds, by)
@@ -292,8 +296,8 @@ class TorchNN():
                 loss_sum += curr_bs * loss.item()
             ave_loss = loss_sum / num_seen
             if not epoch_i % 10:
-                print(f"Train Acc @ Epoch {epoch_i}: {num_correct / num_seen}")
-                print(f"Train Loss @ Epoch {epoch_i}: {ave_loss}")
+                print_call(f"Train Acc @ Epoch {epoch_i}: {num_correct / num_seen}")
+                print_call(f"Train Loss @ Epoch {epoch_i}: {ave_loss}")
 
             with torch.no_grad():
                 num_seen = 0
@@ -304,7 +308,7 @@ class TorchNN():
                     by = by.cuda()
                     curr_bs = bx.shape[0]
                     num_seen += curr_bs
-                    # if not bi%500: print(f"{num_seen} / {n_train}")
+                    # if not bi%500: print_call(f"{num_seen} / {n_train}")
                     preds = self.mlp(bx)
                     loss = criterion(preds, by)
                     num_correct += (preds.argmax(dim=1) == by).sum().item()
@@ -313,14 +317,14 @@ class TorchNN():
                 val_acc = num_correct / num_seen
                 if val_acc > best_val_acc: best_val_acc = val_acc
                 if not epoch_i % 20:
-                    print(f"Val Acc @ Epoch {epoch_i}: {val_acc}")
-                    print(f"Val Loss @ Epoch {epoch_i}: {ave_loss}")
-                    print(f"Best Val Loss was {best_val_loss} @ Epoch {min_loss_epoch}")
+                    print_call(f"Val Acc @ Epoch {epoch_i}: {val_acc}")
+                    print_call(f"Val Loss @ Epoch {epoch_i}: {ave_loss}")
+                    print_call(f"Best Val Loss was {best_val_loss} @ Epoch {min_loss_epoch}")
 
                 curr_lr = self.opt.state_dict()['param_groups'][0]['lr']
                 scheduler.step(ave_loss)
                 if curr_lr != self.opt.state_dict()['param_groups'][0]['lr']:
-                    print("Stepped LR")
+                    print_call("Stepped LR")
                     lr_steps += 1
                 if ave_loss < best_val_loss:
                     best_sd = self.mlp.state_dict()
@@ -353,7 +357,7 @@ class TorchNN():
                 num_correct += (preds.argmax(dim=1) == by).sum().item()
             return num_correct / num_seen
 
-    def predict(self, test_x, bs=4096):
+    def predict(self, test_x, bs=4096, return_vec=False):
         with torch.no_grad():
             self.mlp.eval()
             x = torch.Tensor(test_x)
@@ -364,7 +368,9 @@ class TorchNN():
             preds_list = []
             for bi, (bx,) in enumerate(loader):
                 bx = bx.cuda()
-                preds_list.append(self.mlp(bx).argmax(dim=1))
+                output = self.mlp(bx)
+                if not return_vec: output = output.argmax(dim=1)
+                preds_list.append(output)
             return torch.cat(preds_list)
 
 
@@ -375,8 +381,8 @@ class TransformerNN(TorchNN):
         super().__init__(num_classes=num_classes)
         mlp = Transformer(num_classes=num_classes, in_channels=in_channels, n_conv=n_conv, **kwargs)
 
-        print(f"CUDA there?: {torch.cuda.is_available()}")
-        print("Re-cudaing Transformer NN if needed")
+        # print(f"CUDA there?: {torch.cuda.is_available()}")
+        # print("Re-cudaing Transformer NN if needed")
         self.mlp = mlp.cuda()
         self.opt = torch.optim.Adam(self.mlp.parameters())
 
@@ -504,6 +510,58 @@ class HDivergence():
         print("Use score to figure out which was selected")
         print(train_regions[selected_region_i])
         # return self.clfs[selected_region_i].score(test_x, test_y)
+
+
+class HDivergenceSorting():
+    def __init__(self, num_training_trials=10, *args, **kwargs):
+        self.num_training_trials =  num_training_trials
+        self.transformer_constructor = lambda : TransformerNN(*args, **kwargs)
+
+    def fit(self, train_x, train_y):
+        self.train_x = train_x
+        self.train_y = train_y
+
+
+    def score(self, test_x, test_y):
+        transformer = self.transformer_constructor()
+        x = np.concatenate([self.train_x, test_x])
+        # class 1 is corn and 5 is soybeans both of which are interest classes
+        # so be having 1/5 as targets they get casted properly
+        # These correspond with targets of 0 and 1
+        # So basically relative weight of being in val
+        y = np.concatenate([np.ones(self.train_x.shape[0]),
+                            5 * np.ones(test_x.shape[0])])
+        transformer.fit(x, y)
+        # below is the non-softmaxed weights of which to predict
+        preds = transformer.predict(self.train_x, return_vec=True)[:, :2]
+        # making sure that network learned to ignore other bits (comment out above slicing)
+        # print(preds.softmax(dim=1)[:, :2].sum(dim=1).min(), preds.softmax(dim=1)[:, :2].sum(dim=1).mean())
+        probs = preds.softmax(dim=1)[:, 1].cpu()
+        # example stats from below print statement
+        # torch.Size([17782]) tensor(7.4238e-05, device='cuda:0') tensor(0.9902, device='cuda:0') tensor(0.0041, device='cuda:0')
+
+        # print(probs.shape, probs.min(), probs.max(), probs.mean())
+        q_tensor = torch.arange(99, 0, -1) / 100
+        q_values = torch.quantile(probs, q_tensor)
+        print(*zip(q_tensor, q_values))
+        all_accs = []
+        for q, v in zip(q_tensor, q_values):
+            print(q, v)
+            mask = (probs >= v)
+            retrain_idx = np.argwhere(mask.numpy())
+            q_accs = []
+            for trial_i in range(self.num_training_trials):
+                new_transformer = self.transformer_constructor()
+                new_transformer.fit(self.train_x[retrain_idx].squeeze(),
+                                    self.train_y[retrain_idx].squeeze(),
+                                    silent=True)
+                q_accs.append(new_transformer.score(test_x, test_y))
+            q_ave_acc = np.average(q_accs)
+            print(q_ave_acc)
+            all_accs.append(q_ave_acc)
+        return all_accs
+
+
 
 class KMeansMatching():
     def __init__(self, *args, **kwargs):
@@ -964,6 +1022,8 @@ for clf_str in clf_strs:
                 clf = KMeansMatching(n_clusters=50)
             elif clf_str == 'per_region_h_div':
                 clf = HDivergence()
+            elif clf_str == 'h_div_select':
+                clf = HDivergenceSorting()
             else:
                 raise NotImplementedError
             clf.fit(train_x, train_y)

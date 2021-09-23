@@ -516,8 +516,8 @@ class HDivergence():
 class GeneralizingHDivergence():
     # Idea is to train 3 vs 1 region and use that to evaluate whether to include
     # class from new region
-    def __init__(self, in_channels=9, *args, **kwargs):
-        self.thresh = args.thresh
+    def __init__(self, thresh=0.5, in_channels=9, *args, **kwargs):
+        self.thresh = thresh
         self.transformer_constructor = lambda n: TransformerNN(num_classes=n,
                                                               in_channels=in_channels,
                                                               *args, **kwargs)
@@ -555,7 +555,7 @@ class GeneralizingHDivergence():
             print(preds.shape)
             probs = preds.softmax(dim=1)[:, 1].cpu()
             print(probs, probs.min(), probs.max(), probs.mean())
-            take_idx = np.argwhere((probs >= thresh).numpy()).squeeze()
+            take_idx = np.argwhere((probs >= self.thresh).numpy()).squeeze()
             classified_as_test_x.append(left_out_x[take_idx].squeeze())
             classified_as_test_y.append(left_out_y[take_idx].squeeze())
         new_train_x = np.concatenate(classified_as_test_x)
@@ -1109,7 +1109,8 @@ for clf_str in clf_strs:
             elif clf_str == 'h_div_select':
                 clf = HDivergenceSorting()
             elif clf_str == 'per_region_gen_h_div':
-                clf = GeneralizingHDivergence(in_channels=7 if 'ir_drop' in data_prep_list else 9)
+                clf = GeneralizingHDivergence(thresh=args.thresh,
+                                            in_channels=7 if 'ir_drop' in data_prep_list else 9)
             else:
                 raise NotImplementedError
             clf.fit(train_x, train_y)

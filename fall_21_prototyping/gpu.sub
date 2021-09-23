@@ -10,5 +10,7 @@
 #SBATCH --gres=gpu:1
 
 cd ~/satellite/cropmap/fall_21_prototyping/
-echo "$@"
-python3 main.py $@
+for region in washington california us_south corn_belt new_york
+do
+    python3 main.py --generalization-region ${region} --clf-strs per_region_gen_h_div --train-subsample-freq 100 --test-subsample-freq 100 --thresh $1
+done

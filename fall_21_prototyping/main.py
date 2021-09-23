@@ -18,6 +18,7 @@ import torch
 from copy import copy
 import argparse
 from transformer import Transformer
+from scipy import stats
 
 print(sys.argv)
 parser = argparse.ArgumentParser()
@@ -29,6 +30,7 @@ parser.add_argument("--clf-strs", type=str, nargs='+', default=['euc_centroid'])
 parser.add_argument("--data-prep-strs", type=str, nargs='+', default=[''])
 parser.add_argument("--train-subsample-freq", type=int, default=1)
 parser.add_argument("--test-subsample-freq", type=int, default=1)
+parser.add_argument("--thresh", type=float, default=0.5, help="generic threshold")
 args = parser.parse_args()
 
 class MaskCloudyTargetsTransform:
@@ -483,7 +485,7 @@ class TransformerEnsemble():
 
 class HDivergence():
     def __init__(self, *args, **kwargs):
-        self.transformer_constructor = lambda : TransformerNN(*args, **kwargs)
+        self.transformer_constructor = lambda : TransformerNN(num_classes=2, *args, **kwargs)
 
     def fit(self, train_x, train_y):
         # This gives region indices for each transformer
@@ -511,11 +513,62 @@ class HDivergence():
         print(train_regions[selected_region_i])
         # return self.clfs[selected_region_i].score(test_x, test_y)
 
+class GeneralizingHDivergence():
+    # Idea is to train 3 vs 1 region and use that to evaluate whether to include
+    # class from new region
+    def __init__(self, in_channels=9, *args, **kwargs):
+        self.thresh = args.thresh
+        self.transformer_constructor = lambda n: TransformerNN(num_classes=n,
+                                                              in_channels=in_channels,
+                                                              *args, **kwargs)
+
+    def fit(self, train_x, train_y):
+        # This gives region indices for each transformer
+        region_assignments = train_y // region_class_hash_increment
+        self.region_class_factors = sorted(set(list(region_assignments)))
+        self.num_regions = len(self.region_class_factors)
+        per_region_masks = [region_assignments==r for r in self.region_class_factors]
+        self.per_region_x = [train_x[mask] for mask in per_region_masks]
+        self.per_region_y = [train_y[mask] for mask in per_region_masks]
+
+
+    def score(self, test_x, test_y):
+        # doing this per-point right now instead of per-class
+        classified_as_test_x = []
+        classified_as_test_y = []
+        for train_region_i in range(len(self.per_region_x)):
+            print(train_region_i)
+            left_out_x = self.per_region_x[train_region_i]
+            left_out_y = self.per_region_y[train_region_i]
+            included_x = self.per_region_x[:train_region_i] + self.per_region_x[train_region_i+1:]
+            used_train_x = np.concatenate(included_x)
+            transformer = self.transformer_constructor(2)
+            print(train_regions[train_region_i])
+            print(used_train_x.shape, test_x.shape)
+            x = np.concatenate([used_train_x, test_x])
+            # class 1 is corn and 5 is soybeans both of which are interest classes
+            # so be having 1/5 as targets they get casted properly
+            y = np.concatenate([np.ones(used_train_x.shape[0]),
+                                5 * np.ones(test_x.shape[0])])
+            transformer.fit(x, y)
+            preds = transformer.predict(left_out_x, return_vec=True)
+            print(preds.shape)
+            probs = preds.softmax(dim=1)[:, 1].cpu()
+            print(probs, probs.min(), probs.max(), probs.mean())
+            take_idx = np.argwhere((probs >= thresh).numpy()).squeeze()
+            classified_as_test_x.append(left_out_x[take_idx].squeeze())
+            classified_as_test_y.append(left_out_y[take_idx].squeeze())
+        new_train_x = np.concatenate(classified_as_test_x)
+        new_train_y = np.concatenate(classified_as_test_y) %region_class_hash_increment
+        print(new_train_x.shape, new_train_y.shape)
+        new_transformer = self.transformer_constructor(len(interest_classes))
+        new_transformer.fit(new_train_x, new_train_y)
+        return new_transformer.score(test_x, test_y)
 
 class HDivergenceSorting():
     def __init__(self, num_training_trials=10, *args, **kwargs):
         self.num_training_trials =  num_training_trials
-        self.transformer_constructor = lambda : TransformerNN(*args, **kwargs)
+        self.transformer_constructor = lambda : TransformerNN(num_classes=2, *args, **kwargs)
 
     def fit(self, train_x, train_y):
         self.train_x = train_x
@@ -533,6 +586,7 @@ class HDivergenceSorting():
                             5 * np.ones(test_x.shape[0])])
         transformer.fit(x, y)
         # below is the non-softmaxed weights of which to predict
+        # slicing should be undeeded now that have only 2 classes
         preds = transformer.predict(self.train_x, return_vec=True)[:, :2]
         # making sure that network learned to ignore other bits (comment out above slicing)
         # print(preds.softmax(dim=1)[:, :2].sum(dim=1).min(), preds.softmax(dim=1)[:, :2].sum(dim=1).mean())
@@ -555,12 +609,40 @@ class HDivergenceSorting():
                 new_transformer.fit(self.train_x[retrain_idx].squeeze(),
                                     self.train_y[retrain_idx].squeeze(),
                                     silent=True)
-                q_accs.append(new_transformer.score(test_x, test_y))
+                q_acc = new_transformer.score(test_x, test_y)
+                q_accs.append(q_acc)
+                print(q_acc)
             q_ave_acc = np.average(q_accs)
             print(q_ave_acc)
             all_accs.append(q_ave_acc)
         return all_accs
 
+
+class KMeansEvaluation():
+    def __init__(self, n_clusters, *args, **kwargs):
+        self.kmeans_constructor = lambda : cluster.KMeans(n_clusters=n_clusters, *args, **kwargs)
+        self.n_clusters = n_clusters
+
+    def fit(self, train_x, train_y):
+        pass
+
+    def score(self, test_x, test_y):
+        test_kmeans = self.kmeans_constructor()
+        assignments = test_kmeans.fit_predict(test_x, test_y)
+        print("Homogeneity score", metrics.homogeneity_score(test_y, assignments))
+        print(assignments.min(), assignments.max())
+        assignment_to_class = {}
+        for assignment_i in range(self.n_clusters):
+            assigned_data_mask = (assignments==assignment_i)
+            true_labels = test_y[assigned_data_mask]
+            cluster_label = stats.mode(true_labels)[0][0]
+            assignment_to_class[assignment_i] = cluster_label
+        class_preds = np.array([assignment_to_class[y] for y in assignments])
+        correct = (class_preds == test_y)
+        print(assignment_to_class)
+        print(Counter(assignment_to_class.values()))
+        print(correct.shape)
+        return correct.sum() / correct.shape[0]
 
 
 class KMeansMatching():
@@ -1014,6 +1096,8 @@ for clf_str in clf_strs:
                 clf = RetrainTransformerNN()
             elif clf_str == 'transformer_target_classes_only':
                 clf = TargetClassesTransformerNN()
+            elif clf_str == 'kmeans_eval':
+                clf = KMeansEvaluation(n_clusters=len(interest_classes))
             elif clf_str == 'per_region_transformer_average_ensemble':
                 clf = TransformerEnsemble()
             elif clf_str == 'per_region_transformer_confidence_ensemble':
@@ -1024,6 +1108,8 @@ for clf_str in clf_strs:
                 clf = HDivergence()
             elif clf_str == 'h_div_select':
                 clf = HDivergenceSorting()
+            elif clf_str == 'per_region_gen_h_div':
+                clf = GeneralizingHDivergence(in_channels=7 if 'ir_drop' in data_prep_list else 9)
             else:
                 raise NotImplementedError
             clf.fit(train_x, train_y)

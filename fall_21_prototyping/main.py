@@ -20,6 +20,7 @@ import argparse
 from transformer import Transformer
 from scipy import stats
 from mcr_loss import MaximalCodingRateReduction
+import autograd_hacks
 
 print(sys.argv)
 parser = argparse.ArgumentParser()
@@ -604,9 +605,10 @@ class NTK():
         grad_list = []
         for param in net.parameters():
             grad = param.grad
-            print(param.grad1)
             grad_list.append(param.grad.flatten())
         return torch.cat(grad_list)
+
+    
 
     def score(self, test_x, test_y, bs=1024):
         criterion = MaximalCodingRateReduction()
@@ -616,16 +618,19 @@ class NTK():
             print("Currently doing supervised transductive training with test_y, unacceptable long term")
             dataset = torch.utils.data.TensorDataset(torch.Tensor(test_x), torch.Tensor(test_y))
             loader = torch.utils.data.DataLoader(dataset, shuffle=False,
-                                                 batch_size=bs)
-            autograd_hacks.add_hooks(net.mlp)
+                                                 batch_size=1024)
+            # autograd hacks only is built for conv1d/linear so don't know how to go about transformer encoder
+            # just doing incremental batch size for now, stupid slow but get things rolling
+            # autograd_hacks.add_hooks(net.mlp)
             for bi, (bx,by) in enumerate(loader):
                 bx = bx.cuda()
                 # by = by.cuda()
                 output = net.mlp(bx)
                 loss, _, _ = criterion(output, by)
                 loss.backward()
+                # autograd_hacks.compute_grad1(net.mlp)
             gen_region_grad = self.get_grad_vec(net.mlp)
-            print(gen_region_grad.shape)
+            print(gen_region_grad.shape, gen_region_grad.sum())
             ###### RESUME HERE #####
             optim = torch.optim.Adam(net.mlp.parameters())
             optim.zero_grad()
@@ -647,16 +652,28 @@ class NTK():
                             bx = bx.cuda()
                             # by = by.cuda()
                             output = net.mlp(bx)
-                            loss = criterion(output, by)
+                            loss, _, _ = criterion(output, by)
                             loss.backward()
-                        grad = self.get_grad_vec(net.mlp)
+                            grad = self.get_grad_vec(net.mlp)
                         similarity = (gen_region_grad * grad).sum()
                         region_and_class_i_to_agreements[region_class_tuple].append(similarity)
+                        print("Ending here b/c switching to soft system idea")
+                        raise NotImplementedError
             else:
-                raise NotImplementedError
-                take_idx = np.argwhere((probs >= self.thresh).numpy()).squeeze()
-                classified_as_test_x.append(left_out_x[take_idx].squeeze())
-                classified_as_test_y.append(left_out_y[take_idx].squeeze())
+                dataset = torch.utils.data.TensorDataset(torch.Tensor(self.train_x), torch.Tensor(self.train_y))
+                loader = torch.utils.data.DataLoader(dataset, shuffle=False,
+                                                     batch_size=1)
+                grad_list = []
+                for bi, (bx,by) in enumerate(loader):
+                    print(f"{bi} / {len(loader)}")
+                    bx = bx.cuda()
+                    output = net.mlp(bx)
+                    loss, _, _ = criterion(output, by)
+                    loss.backward()
+                    grad_list.append(self.get_grad_vec(net.mlp))
+                    optim.zero_grad()
+                gen_region_grad = self.get_grad_vec(net.mlp)
+                
         pprint(region_and_class_i_to_agreements)
         asdf
         new_train_x = np.concatenate(classified_as_test_x)

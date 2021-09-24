@@ -19,6 +19,7 @@ from copy import copy
 import argparse
 from transformer import Transformer
 from scipy import stats
+from mcr_loss import MaximalCodingRateReduction
 
 print(sys.argv)
 parser = argparse.ArgumentParser()
@@ -516,11 +517,12 @@ class HDivergence():
 class GeneralizingHDivergence():
     # Idea is to train 3 vs 1 region and use that to evaluate whether to include
     # class from new region
-    def __init__(self, thresh=0.5, in_channels=9, *args, **kwargs):
+    def __init__(self, thresh=0.5, group_by_class=False, in_channels=9, *args, **kwargs):
         self.thresh = thresh
         self.transformer_constructor = lambda n: TransformerNN(num_classes=n,
                                                               in_channels=in_channels,
                                                               *args, **kwargs)
+        self.group_by_class = group_by_class
 
     def fit(self, train_x, train_y):
         # This gives region indices for each transformer
@@ -550,20 +552,120 @@ class GeneralizingHDivergence():
             # so be having 1/5 as targets they get casted properly
             y = np.concatenate([np.ones(used_train_x.shape[0]),
                                 5 * np.ones(test_x.shape[0])])
-            transformer.fit(x, y)
+            transformer.fit(x, y, silent=True)
             preds = transformer.predict(left_out_x, return_vec=True)
             print(preds.shape)
             probs = preds.softmax(dim=1)[:, 1].cpu()
             print(probs, probs.min(), probs.max(), probs.mean())
-            take_idx = np.argwhere((probs >= self.thresh).numpy()).squeeze()
-            classified_as_test_x.append(left_out_x[take_idx].squeeze())
-            classified_as_test_y.append(left_out_y[take_idx].squeeze())
+            if self.group_by_class:
+                # want to key on left_out_y
+                for class_i in set(list(left_out_y)):
+                    class_idx = (left_out_y == class_i).squeeze()
+                    class_probs = probs[class_idx]
+                    average_conf = class_probs.mean()
+                    print(class_i, average_conf)
+                    if average_conf >= self.thresh:
+                        classified_as_test_x.append(left_out_x[class_idx])
+                        classified_as_test_y.append(left_out_y[class_idx])
+                        print(class_idx.shape, left_out_x[class_idx].shape, left_out_y[class_idx].shape)
+            else:
+                take_idx = np.argwhere((probs >= self.thresh).numpy()).squeeze()
+                classified_as_test_x.append(left_out_x[take_idx])
+                classified_as_test_y.append(left_out_y[take_idx])
         new_train_x = np.concatenate(classified_as_test_x)
         new_train_y = np.concatenate(classified_as_test_y) %region_class_hash_increment
         print(new_train_x.shape, new_train_y.shape)
         new_transformer = self.transformer_constructor(len(interest_classes))
-        new_transformer.fit(new_train_x, new_train_y)
+        new_transformer.fit(new_train_x, new_train_y, silent=True)
         return new_transformer.score(test_x, test_y)
+
+class NTK():
+    # Idea is calculate gradient of MCR with respect to pseudoclusters and compare that
+    # to MCR with respect to true labels on source domain
+    def __init__(self, dimension=32, group_by_class_and_region=True):
+        self.dimension = dimension
+        self.transformer_constructor = lambda n: TransformerNN(num_classes=n)
+        self.group_by_class_and_region = group_by_class_and_region
+
+    def fit(self, train_x, train_y):
+        # not doing per-region stuff here
+        self.train_x = train_x
+        self.train_y = train_y
+        if self.group_by_class_and_region:
+            region_assignments = train_y // region_class_hash_increment
+            self.region_class_factors = sorted(set(list(region_assignments)))
+            self.num_regions = len(self.region_class_factors)
+            per_region_masks = [region_assignments==r for r in self.region_class_factors]
+            self.per_region_x = [train_x[mask] for mask in per_region_masks]
+            self.per_region_y = [train_y[mask] for mask in per_region_masks]
+
+
+    def get_grad_vec(self, net):
+        grad_list = []
+        for param in net.parameters():
+            grad = param.grad
+            print(param.grad1)
+            grad_list.append(param.grad.flatten())
+        return torch.cat(grad_list)
+
+    def score(self, test_x, test_y, bs=1024):
+        criterion = MaximalCodingRateReduction()
+        for net_i in range(5):
+            net = self.transformer_constructor(self.dimension)
+            net.mlp.eval()
+            print("Currently doing supervised transductive training with test_y, unacceptable long term")
+            dataset = torch.utils.data.TensorDataset(torch.Tensor(test_x), torch.Tensor(test_y))
+            loader = torch.utils.data.DataLoader(dataset, shuffle=False,
+                                                 batch_size=bs)
+            autograd_hacks.add_hooks(net.mlp)
+            for bi, (bx,by) in enumerate(loader):
+                bx = bx.cuda()
+                # by = by.cuda()
+                output = net.mlp(bx)
+                loss, _, _ = criterion(output, by)
+                loss.backward()
+            gen_region_grad = self.get_grad_vec(net.mlp)
+            print(gen_region_grad.shape)
+            ###### RESUME HERE #####
+            optim = torch.optim.Adam(net.mlp.parameters())
+            optim.zero_grad()
+            region_and_class_i_to_agreements = {}
+            if self.group_by_class_and_region:
+                # want to key on left_out_y
+                for region_i, (region_x, region_y) in enumerate(zip(self.per_region_x, self.per_region_y)):
+                    for class_i in set(list(region_y)):
+                        region_class_tuple = (region_i, class_i)
+                        if region_class_tuple not in region_and_class_i_to_agreements:
+                            region_and_class_i_to_agreements[region_class_tuple] = []
+
+                        class_idx = (region_y == class_i).squeeze()
+                        class_x = region_x[class_idx]
+                        class_y = region_y[class_idx]
+                        dataset = torch.utils.data.TensorDataset(torch.Tensor(class_x), torch.Tensor(class_y))
+                        loader = torch.utils.data.DataLoader(dataset, shuffle=False, batch_size=bs)
+                        for bi, (bx,by) in enumerate(loader):
+                            bx = bx.cuda()
+                            # by = by.cuda()
+                            output = net.mlp(bx)
+                            loss = criterion(output, by)
+                            loss.backward()
+                        grad = self.get_grad_vec(net.mlp)
+                        similarity = (gen_region_grad * grad).sum()
+                        region_and_class_i_to_agreements[region_class_tuple].append(similarity)
+            else:
+                raise NotImplementedError
+                take_idx = np.argwhere((probs >= self.thresh).numpy()).squeeze()
+                classified_as_test_x.append(left_out_x[take_idx].squeeze())
+                classified_as_test_y.append(left_out_y[take_idx].squeeze())
+        pprint(region_and_class_i_to_agreements)
+        asdf
+        new_train_x = np.concatenate(classified_as_test_x)
+        new_train_y = np.concatenate(classified_as_test_y) %region_class_hash_increment
+        print(new_train_x.shape, new_train_y.shape)
+        new_transformer = self.transformer_constructor(len(interest_classes))
+        new_transformer.fit(new_train_x, new_train_y, silent=True)
+        return new_transformer.score(test_x, test_y)
+
 
 class HDivergenceSorting():
     def __init__(self, num_training_trials=10, *args, **kwargs):
@@ -1109,8 +1211,15 @@ for clf_str in clf_strs:
             elif clf_str == 'h_div_select':
                 clf = HDivergenceSorting()
             elif clf_str == 'per_region_gen_h_div':
-                clf = GeneralizingHDivergence(thresh=args.thresh,
+                clf = GeneralizingHDivergence(thresh=args.thresh, group_by_class=False,
                                             in_channels=7 if 'ir_drop' in data_prep_list else 9)
+            elif clf_str == 'per_region_classwise_gen_h_div':
+                clf = GeneralizingHDivergence(thresh=args.thresh, group_by_class=True,
+                                            in_channels=7 if 'ir_drop' in data_prep_list else 9)
+            elif clf_str == 'ntk':
+                clf = NTK(group_by_class_and_region=False)
+            elif clf_str == 'per_region_ntk':
+                clf = NTK(group_by_class_and_region=True)
             else:
                 raise NotImplementedError
             clf.fit(train_x, train_y)

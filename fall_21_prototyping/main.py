@@ -262,21 +262,22 @@ class TorchNN():
         return new_targets
 
     def fit(self, train_x, train_y, bs=4096, return_best_val_acc=False,
-             silent=False):
+             silent=False, sample_weights=None):
         print_call = (lambda x: None) if silent else print
         self.mlp.train()
         x = torch.Tensor(train_x)
         n_train = x.shape[0]
         y = torch.LongTensor(self.cast_targets(train_y))
-        dataset = torch.utils.data.TensorDataset(x, y)
+        if sample_weights is None:
+            sample_weights = torch.ones(x.shape[0]).cuda()
+        dataset = torch.utils.data.TensorDataset(x, y, sample_weights)
         num_val_points = n_train // 10
         num_train_points = n_train - num_val_points
         train_set, val_set = torch.utils.data.random_split(dataset, [num_train_points, num_val_points])
-
         train_loader = torch.utils.data.DataLoader(train_set, batch_size=bs, shuffle=True)
         val_loader = torch.utils.data.DataLoader(val_set, batch_size=bs)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.opt, 'min', patience=5)
-        criterion = torch.nn.CrossEntropyLoss()
+        criterion = torch.nn.CrossEntropyLoss(reduction='none')
         epoch_i = 0
         lr_steps = 0
         best_val_loss = np.inf
@@ -286,7 +287,7 @@ class TorchNN():
             num_seen = 0
             num_correct = 0
             loss_sum = 0
-            for bi, (bx, by) in enumerate(train_loader):
+            for bi, (bx, by, batch_weights) in enumerate(train_loader):
                 bx = bx.cuda()
                 by = by.cuda()
                 curr_bs = bx.shape[0]
@@ -294,7 +295,7 @@ class TorchNN():
                 # if not bi%500: print_call(f"{num_seen} / {n_train}")
                 self.opt.zero_grad()
                 preds = self.mlp(bx)
-                loss = criterion(preds, by)
+                loss = (criterion(preds, by) * batch_weights).mean()
                 loss.backward()
                 self.opt.step()
                 num_correct += (preds.argmax(dim=1) == by).sum().item()
@@ -308,14 +309,14 @@ class TorchNN():
                 num_seen = 0
                 num_correct = 0
                 loss_sum = 0
-                for bi, (bx, by) in enumerate(val_loader):
+                for bi, (bx, by, batch_weights) in enumerate(val_loader):
                     bx = bx.cuda()
                     by = by.cuda()
                     curr_bs = bx.shape[0]
                     num_seen += curr_bs
                     # if not bi%500: print_call(f"{num_seen} / {n_train}")
                     preds = self.mlp(bx)
-                    loss = criterion(preds, by)
+                    loss = (criterion(preds, by) * batch_weights).mean()
                     num_correct += (preds.argmax(dim=1) == by).sum().item()
                     loss_sum += curr_bs * loss.item()
                 ave_loss = loss_sum / num_seen
@@ -620,14 +621,15 @@ class NTK():
         grad_list = []
         for param in net.parameters():
             grad = param.grad_sample
-            print(grad.shape)
             grad_list.append(grad.flatten(start_dim=1))
         return torch.cat(grad_list, dim=1)
     
 
-    def score(self, test_x, test_y, bs=1024):
+    def score(self, test_x, test_y, bs=1024, num_nets=2):
         criterion = MaximalCodingRateReduction()
-        for net_i in range(1):
+        weightings = []
+        for net_i in range(num_nets):
+            print(f"Net {net_i+1} / {num_nets}")
             net = self.transformer_constructor(self.dimension)
             print("Need to be in train mode b/c of privacy engine")
             net.mlp.train() # eval()
@@ -654,8 +656,8 @@ class NTK():
                                             noise_multiplier=0)
             privacy_engine.attach(optim)
             optim.zero_grad()
-            region_and_class_i_to_agreements = {}
             if self.group_by_class_and_region:
+                region_and_class_i_to_agreements = {}
                 # want to key on left_out_y
                 for region_i, (region_x, region_y) in enumerate(zip(self.per_region_x, self.per_region_y)):
                     for class_i in set(list(region_y)):
@@ -696,26 +698,44 @@ class NTK():
                 indiv_grads = torch.cat(grad_list)
                 print(indiv_grads.shape, gen_region_grad.shape)
                 print(indiv_grads.sum(), gen_region_grad.sum())
-        # gen_region_Grad is M
-        # indiv_grads is n x M
-        # Want to find vector v (n) s.t. v.sigmoid()* indiv_grads/n = gen_region_grad 
-        pre_sig_weights = torch.nn.Parameter(torch.zeros(indiv_grads.shape[0]).cuda())
-        optim = torch.optim.Adam([pre_sig_weights])
-        for linear_i in range(100):
-            print(linear_i)
-            optim.zero_grad()
-            reconstruction = torch.matmul(indiv_grads.t(), pre_sig_weights.sigmoid())
-            loss = ((reconstruction - gen_region_grad)**2).mean()
-            loss.backward()
-            optim.step()
-        # RESUME HERE IN AM, FIGURE OUT SCALING IN GRAD CALCULATION AND DO FOR MULTIPLE NETS
+            # gen_region_Grad is M
+            # indiv_grads is n x M
+            # Want to find vector v (n) s.t. v.sigmoid()* indiv_grads/n = gen_region_grad
+            # (changed ablove slightly, now have gen grad normalized and want to find
+            # positive coefficients
+            gen_region_grad = gen_region_grad / gen_region_grad.norm()
+            # Analysis: look at distribution of dot products of gen_region with indiv
+            #
+            # normed_indiv = indiv_grads / (indiv_grads.norm(dim=1, keepdim=True) + 1e-8)
+            # sims = torch.matmul(normed_indiv, gen_region_grad)
+            # print(sims.min(), sims.max(), sims.mean(), sims.std())
+            # example prints of this
+            # tensor(-0.5717, device='cuda:0') tensor(0.5315, device='cuda:0') tensor(-0.0019, device='cuda:0') tensor(0.1834, device='cuda:0')
+            # tensor(-0.7319, device='cuda:0') tensor(0.5516, device='cuda:0') tensor(-0.0118, device='cuda:0') tensor(0.1968, device='cuda:0')
+            # REALLY want to do version of this in reverse where we find points that by
+            # training incorrectly on can get non-trivial performance
+            pre_act_weights = torch.nn.Parameter(torch.ones(indiv_grads.shape[0]).cuda())
+            # optim = torch.optim.Adam([pre_act_weights])
+            optim = torch.optim.SGD([pre_act_weights], lr=10)
+            # below optimization sis slowing or more points
+            for linear_i in range(10000):
+                optim.zero_grad()
+                post_act_weights = pre_act_weights.relu()
+                reconstruction_unnormed = torch.matmul(indiv_grads.t(), post_act_weights)
+                reconstruction = reconstruction_unnormed / reconstruction_unnormed.norm()
+                loss = -1 * torch.dot(reconstruction, gen_region_grad)
+                loss.backward()
+                optim.step()
+                if not linear_i%1000: print(linear_i, loss)
+            print(post_act_weights.min(), post_act_weights.max(), post_act_weights.mean(), post_act_weights.std(), post_act_weights.sum())
+            weightings.append(post_act_weights)
+        weightings = torch.stack(weightings)
+        print(weightings.shape)
+        weightings = weightings.mean(dim=0)
+        print(weightings.min(), weightings.max(), weightings.mean(), weightings.std())
         # Then retrain
-        asdf
-        new_train_x = np.concatenate(classified_as_test_x)
-        new_train_y = np.concatenate(classified_as_test_y) %region_class_hash_increment
-        print(new_train_x.shape, new_train_y.shape)
         new_transformer = self.transformer_constructor(len(interest_classes))
-        new_transformer.fit(new_train_x, new_train_y, silent=True)
+        new_transformer.fit(self.train_x, self.train_y, silent=True, sample_weights=weightings)
         return new_transformer.score(test_x, test_y)
 
 

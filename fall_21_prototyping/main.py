@@ -34,6 +34,8 @@ parser.add_argument("--data-prep-strs", type=str, nargs='+', default=[''])
 parser.add_argument("--train-subsample-freq", type=int, default=1)
 parser.add_argument("--test-subsample-freq", type=int, default=1)
 parser.add_argument("--num-ntk-nets", type=int, default=1)
+parser.add_argument("--batch-size", type=int, default=1024)
+parser.add_argument("--mlp-width", type=int, default=256)
 parser.add_argument("--thresh", type=float, default=0.5, help="generic threshold")
 args = parser.parse_args()
 
@@ -296,6 +298,7 @@ class TorchNN():
                 # if not bi%500: print_call(f"{num_seen} / {n_train}")
                 self.opt.zero_grad()
                 preds = self.mlp(bx)
+                batch_weights = curr_bs * batch_weights / batch_weights.sum()
                 loss = (criterion(preds, by) * batch_weights).mean()
                 loss.backward()
                 self.opt.step()
@@ -317,6 +320,8 @@ class TorchNN():
                     num_seen += curr_bs
                     # if not bi%500: print_call(f"{num_seen} / {n_train}")
                     preds = self.mlp(bx)
+                    # get total weight equal to curr_bs
+                    batch_weights = curr_bs * batch_weights / batch_weights.sum()
                     loss = (criterion(preds, by) * batch_weights).mean()
                     num_correct += (preds.argmax(dim=1) == by).sum().item()
                     loss_sum += curr_bs * loss.item()
@@ -1307,7 +1312,7 @@ for clf_str in clf_strs:
             else:
                 raise NotImplementedError
             clf.fit(train_x, train_y)
-            gen_score = clf.transductive_score(train_x, train_y, test_x, test_y) if 'transductive' in clf_str else clf.score(test_x, test_y)
+            gen_score = clf.transductive_score(train_x, train_y, test_x, test_y) if 'transductive' in clf_str else clf.score(test_x, test_y, bs=args.batch_size)
             # metrics.plot_confusion_matrix(clf, test_x, test_y)
             # plt.savefig(f"{generalization_region}_{clf_str}_{data_prep}.png")
             # pred_test_y = clf.predict(test_x)

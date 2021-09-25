@@ -588,7 +588,7 @@ class NTK():
     def __init__(self, dimension=32, group_by_class_and_region=True):
         self.dimension = dimension
         print("Using MLP for now b/c transformer layers are incompatible")
-        self.transformer_constructor = lambda n: TorchNN(num_classes=n, use_bn=False)
+        self.transformer_constructor = lambda n, use_bn: TorchNN(num_classes=n, use_bn=use_bn)
         # self.transformer_constructor = lambda n: TransformerNN(num_classes=n)
         self.group_by_class_and_region = group_by_class_and_region
 
@@ -625,12 +625,12 @@ class NTK():
         return torch.cat(grad_list, dim=1)
     
 
-    def score(self, test_x, test_y, bs=1024, num_nets=2):
+    def score(self, test_x, test_y, bs=1024, num_nets=10):
         criterion = MaximalCodingRateReduction()
         weightings = []
         for net_i in range(num_nets):
             print(f"Net {net_i+1} / {num_nets}")
-            net = self.transformer_constructor(self.dimension)
+            net = self.transformer_constructor(self.dimension, False) # True)
             print("Need to be in train mode b/c of privacy engine")
             net.mlp.train() # eval()
             print("Currently doing supervised transductive training with test_y, unacceptable long term")
@@ -688,7 +688,7 @@ class NTK():
                                                      batch_size=bs)
                 grad_list = []
                 for bi, (bx,by) in enumerate(loader):
-                    print(f"{bi} / {len(loader)}")
+                    if not bi%10: print(f"{bi} / {len(loader)}")
                     bx = bx.cuda()
                     output = net.mlp(bx)
                     loss, _, _ = criterion(output, by)
@@ -696,8 +696,6 @@ class NTK():
                     grad_list.append(self.get_indiv_grad_vec(net.mlp))
                     optim.zero_grad()
                 indiv_grads = torch.cat(grad_list)
-                print(indiv_grads.shape, gen_region_grad.shape)
-                print(indiv_grads.sum(), gen_region_grad.sum())
             # gen_region_Grad is M
             # indiv_grads is n x M
             # Want to find vector v (n) s.t. v.sigmoid()* indiv_grads/n = gen_region_grad
@@ -714,27 +712,38 @@ class NTK():
             # tensor(-0.7319, device='cuda:0') tensor(0.5516, device='cuda:0') tensor(-0.0118, device='cuda:0') tensor(0.1968, device='cuda:0')
             # REALLY want to do version of this in reverse where we find points that by
             # training incorrectly on can get non-trivial performance
-            pre_act_weights = torch.nn.Parameter(torch.ones(indiv_grads.shape[0]).cuda())
-            # optim = torch.optim.Adam([pre_act_weights])
-            optim = torch.optim.SGD([pre_act_weights], lr=10)
-            # below optimization sis slowing or more points
-            for linear_i in range(10000):
-                optim.zero_grad()
-                post_act_weights = pre_act_weights.relu()
-                reconstruction_unnormed = torch.matmul(indiv_grads.t(), post_act_weights)
-                reconstruction = reconstruction_unnormed / reconstruction_unnormed.norm()
-                loss = -1 * torch.dot(reconstruction, gen_region_grad)
-                loss.backward()
-                optim.step()
-                if not linear_i%1000: print(linear_i, loss)
-            print(post_act_weights.min(), post_act_weights.max(), post_act_weights.mean(), post_act_weights.std(), post_act_weights.sum())
-            weightings.append(post_act_weights)
-        weightings = torch.stack(weightings)
-        print(weightings.shape)
-        weightings = weightings.mean(dim=0)
-        print(weightings.min(), weightings.max(), weightings.mean(), weightings.std())
+            if True:
+                normed_indiv = indiv_grads / (indiv_grads.norm(dim=1, keepdim=True) + 1e-8)
+                weighting = torch.matmul(normed_indiv, gen_region_grad).relu()
+            else:
+                # switched from this b/c optimal solution is just whichever
+                # vector is closest. Could do unscaled, but then have weird relationship
+                # between # of available points and recon acc, also slower
+                pre_act_weights = torch.nn.Parameter(torch.ones(indiv_grads.shape[0]).cuda())
+                # optim = torch.optim.Adam([pre_act_weights])
+                optim = torch.optim.SGD([pre_act_weights], lr=10)
+                # below optimization sis slowing or more points
+                for linear_i in range(10000):
+                    optim.zero_grad()
+                    post_act_weights = pre_act_weights.relu()
+                    reconstruction_unnormed = torch.matmul(indiv_grads.t(), post_act_weights)
+                    reconstruction = reconstruction_unnormed / reconstruction_unnormed.norm()
+                    loss = -1 * torch.dot(reconstruction, gen_region_grad)
+                    loss.backward()
+                    optim.step()
+                    if not linear_i%1000: print(linear_i, loss)
+                print(post_act_weights.min(), post_act_weights.max(), post_act_weights.mean(), post_act_weights.std(), post_act_weights.sum())
+                weighting = post_act_weights.data.detach()
+            weightings.append(weighting)
+        if weightings:
+            weightings = torch.stack(weightings)
+            print(weightings.shape)
+            weightings = weightings.mean(dim=0).detach()
+            print(weightings.min(), weightings.max(), weightings.mean(), weightings.std())
+        else:
+            weightings = None
         # Then retrain
-        new_transformer = self.transformer_constructor(len(interest_classes))
+        new_transformer = self.transformer_constructor(len(interest_classes), True)
         new_transformer.fit(self.train_x, self.train_y, silent=True, sample_weights=weightings)
         return new_transformer.score(test_x, test_y)
 
@@ -1256,6 +1265,8 @@ for clf_str in clf_strs:
                 clf = linear_model.LogisticRegression()
             elif clf_str == 'mlp':
                 clf = TorchNN()
+            elif clf_str == 'mlp_no_bn':
+                clf = TorchNN(use_bn=False)
             elif clf_str == 'mlp_wd':
                 clf = TorchNN(wd=1e-2)
             elif clf_str == 'transductive_startup_mlp':

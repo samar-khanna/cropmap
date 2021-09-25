@@ -33,6 +33,7 @@ parser.add_argument("--clf-strs", type=str, nargs='+', default=['euc_centroid'])
 parser.add_argument("--data-prep-strs", type=str, nargs='+', default=[''])
 parser.add_argument("--train-subsample-freq", type=int, default=1)
 parser.add_argument("--test-subsample-freq", type=int, default=1)
+parser.add_argument("--num-ntk-nets", type=int, default=1)
 parser.add_argument("--thresh", type=float, default=0.5, help="generic threshold")
 args = parser.parse_args()
 
@@ -585,7 +586,8 @@ class GeneralizingHDivergence():
 class NTK():
     # Idea is calculate gradient of MCR with respect to pseudoclusters and compare that
     # to MCR with respect to true labels on source domain
-    def __init__(self, dimension=32, group_by_class_and_region=True):
+    def __init__(self, num_ntk_nets, dimension=32, group_by_class_and_region=True):
+        self.num_ntk_nets = num_ntk_nets
         self.dimension = dimension
         print("Using MLP for now b/c transformer layers are incompatible")
         self.transformer_constructor = lambda n, use_bn: TorchNN(num_classes=n, use_bn=use_bn)
@@ -625,11 +627,11 @@ class NTK():
         return torch.cat(grad_list, dim=1)
     
 
-    def score(self, test_x, test_y, bs=1024, num_nets=10):
+    def score(self, test_x, test_y, bs=1024):
         criterion = MaximalCodingRateReduction()
         weightings = []
-        for net_i in range(num_nets):
-            print(f"Net {net_i+1} / {num_nets}")
+        for net_i in range(self.num_ntk_nets):
+            print(f"Net {net_i+1} / {self.num_ntk_nets}")
             net = self.transformer_constructor(self.dimension, False) # True)
             print("Need to be in train mode b/c of privacy engine")
             net.mlp.train() # eval()
@@ -649,7 +651,6 @@ class NTK():
                 # autograd_hacks.compute_grad1(net.mlp)
             gen_region_grad = self.get_ave_grad_vec(net.mlp)
             print(gen_region_grad.shape, gen_region_grad.sum())
-            ###### RESUME HERE #####
             optim = torch.optim.Adam(net.mlp.parameters())
             privacy_engine = PrivacyEngine(net.mlp, max_grad_norm=np.inf, batch_size=bs,
                                             sample_size=self.train_x.shape[0],
@@ -1300,9 +1301,9 @@ for clf_str in clf_strs:
                 clf = GeneralizingHDivergence(thresh=args.thresh, group_by_class=True,
                                             in_channels=7 if 'ir_drop' in data_prep_list else 9)
             elif clf_str == 'ntk':
-                clf = NTK(group_by_class_and_region=False)
+                clf = NTK(args.num_ntk_nets, group_by_class_and_region=False)
             elif clf_str == 'per_region_ntk':
-                clf = NTK(group_by_class_and_region=True)
+                clf = NTK(args.num_ntk_nets, group_by_class_and_region=True)
             else:
                 raise NotImplementedError
             clf.fit(train_x, train_y)

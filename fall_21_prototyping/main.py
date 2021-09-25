@@ -21,6 +21,7 @@ from transformer import Transformer
 from scipy import stats
 from mcr_loss import MaximalCodingRateReduction
 import autograd_hacks
+from opacus import PrivacyEngine
 
 print(sys.argv)
 parser = argparse.ArgumentParser()
@@ -223,7 +224,7 @@ print("Test data shapes", test_x.shape, test_y.shape)
 all_mean_reps = []
 
 class TorchNN():
-    def __init__(self, num_classes=len(interest_classes), num_hidden_layers=1, hidden_width=256, wd=0):
+    def __init__(self, num_classes=len(interest_classes), num_hidden_layers=1, hidden_width=256, wd=0, use_bn=True):
         input_dim = train_x.shape[1]
         
         self.orig_class_to_index = None
@@ -234,7 +235,7 @@ class TorchNN():
         curr_dim = input_dim
         layers = []
         for _ in range(num_hidden_layers):
-            layers.extend( [torch.nn.Linear(curr_dim, hidden_width), torch.nn.ReLU(), torch.nn.BatchNorm1d(hidden_width)])
+            layers.extend( [torch.nn.Linear(curr_dim, hidden_width), torch.nn.ReLU(), torch.nn.BatchNorm1d(hidden_width) if use_bn else torch.nn.Identity()])
             curr_dim = hidden_width
         layers.extend( [torch.nn.Linear(curr_dim, num_classes)] )
         mlp = torch.nn.Sequential(*layers)
@@ -585,7 +586,9 @@ class NTK():
     # to MCR with respect to true labels on source domain
     def __init__(self, dimension=32, group_by_class_and_region=True):
         self.dimension = dimension
-        self.transformer_constructor = lambda n: TransformerNN(num_classes=n)
+        print("Using MLP for now b/c transformer layers are incompatible")
+        self.transformer_constructor = lambda n: TorchNN(num_classes=n, use_bn=False)
+        # self.transformer_constructor = lambda n: TransformerNN(num_classes=n)
         self.group_by_class_and_region = group_by_class_and_region
 
     def fit(self, train_x, train_y):
@@ -601,24 +604,37 @@ class NTK():
             self.per_region_y = [train_y[mask] for mask in per_region_masks]
 
 
-    def get_grad_vec(self, net):
+    def get_ave_grad_vec(self, net):
         grad_list = []
         for param in net.parameters():
             grad = param.grad
             grad_list.append(param.grad.flatten())
+            if hasattr(param, 'grad_sample'):
+                print(param.grad_sample.shape)
+                # Note that this is off by factor of 1024
+                print(param.grad_sample.sum(), grad.sum())
+                # assert param.grad_sample.sum() == grad.sum()
         return torch.cat(grad_list)
 
+    def get_indiv_grad_vec(self, net):
+        grad_list = []
+        for param in net.parameters():
+            grad = param.grad_sample
+            print(grad.shape)
+            grad_list.append(grad.flatten(start_dim=1))
+        return torch.cat(grad_list, dim=1)
     
 
     def score(self, test_x, test_y, bs=1024):
         criterion = MaximalCodingRateReduction()
-        for net_i in range(5):
+        for net_i in range(1):
             net = self.transformer_constructor(self.dimension)
-            net.mlp.eval()
+            print("Need to be in train mode b/c of privacy engine")
+            net.mlp.train() # eval()
             print("Currently doing supervised transductive training with test_y, unacceptable long term")
             dataset = torch.utils.data.TensorDataset(torch.Tensor(test_x), torch.Tensor(test_y))
             loader = torch.utils.data.DataLoader(dataset, shuffle=False,
-                                                 batch_size=1024)
+                                                 batch_size=bs)
             # autograd hacks only is built for conv1d/linear so don't know how to go about transformer encoder
             # just doing incremental batch size for now, stupid slow but get things rolling
             # autograd_hacks.add_hooks(net.mlp)
@@ -629,10 +645,14 @@ class NTK():
                 loss, _, _ = criterion(output, by)
                 loss.backward()
                 # autograd_hacks.compute_grad1(net.mlp)
-            gen_region_grad = self.get_grad_vec(net.mlp)
+            gen_region_grad = self.get_ave_grad_vec(net.mlp)
             print(gen_region_grad.shape, gen_region_grad.sum())
             ###### RESUME HERE #####
             optim = torch.optim.Adam(net.mlp.parameters())
+            privacy_engine = PrivacyEngine(net.mlp, max_grad_norm=np.inf, batch_size=bs,
+                                            sample_size=self.train_x.shape[0],
+                                            noise_multiplier=0)
+            privacy_engine.attach(optim)
             optim.zero_grad()
             region_and_class_i_to_agreements = {}
             if self.group_by_class_and_region:
@@ -655,6 +675,7 @@ class NTK():
                             loss, _, _ = criterion(output, by)
                             loss.backward()
                             grad = self.get_grad_vec(net.mlp)
+                            optim.zero_grad()
                         similarity = (gen_region_grad * grad).sum()
                         region_and_class_i_to_agreements[region_class_tuple].append(similarity)
                         print("Ending here b/c switching to soft system idea")
@@ -662,7 +683,7 @@ class NTK():
             else:
                 dataset = torch.utils.data.TensorDataset(torch.Tensor(self.train_x), torch.Tensor(self.train_y))
                 loader = torch.utils.data.DataLoader(dataset, shuffle=False,
-                                                     batch_size=1)
+                                                     batch_size=bs)
                 grad_list = []
                 for bi, (bx,by) in enumerate(loader):
                     print(f"{bi} / {len(loader)}")
@@ -670,11 +691,25 @@ class NTK():
                     output = net.mlp(bx)
                     loss, _, _ = criterion(output, by)
                     loss.backward()
-                    grad_list.append(self.get_grad_vec(net.mlp))
+                    grad_list.append(self.get_indiv_grad_vec(net.mlp))
                     optim.zero_grad()
-                gen_region_grad = self.get_grad_vec(net.mlp)
-                
-        pprint(region_and_class_i_to_agreements)
+                indiv_grads = torch.cat(grad_list)
+                print(indiv_grads.shape, gen_region_grad.shape)
+                print(indiv_grads.sum(), gen_region_grad.sum())
+        # gen_region_Grad is M
+        # indiv_grads is n x M
+        # Want to find vector v (n) s.t. v.sigmoid()* indiv_grads/n = gen_region_grad 
+        pre_sig_weights = torch.nn.Parameter(torch.zeros(indiv_grads.shape[0]).cuda())
+        optim = torch.optim.Adam([pre_sig_weights])
+        for linear_i in range(100):
+            print(linear_i)
+            optim.zero_grad()
+            reconstruction = torch.matmul(indiv_grads.t(), pre_sig_weights.sigmoid())
+            loss = ((reconstruction - gen_region_grad)**2).mean()
+            loss.backward()
+            optim.step()
+        # RESUME HERE IN AM, FIGURE OUT SCALING IN GRAD CALCULATION AND DO FOR MULTIPLE NETS
+        # Then retrain
         asdf
         new_train_x = np.concatenate(classified_as_test_x)
         new_train_y = np.concatenate(classified_as_test_y) %region_class_hash_increment

@@ -642,7 +642,7 @@ class NTK():
             net.mlp.train() # eval()
             print("Currently doing supervised transductive training with test_y, unacceptable long term")
             dataset = torch.utils.data.TensorDataset(torch.Tensor(test_x), torch.Tensor(test_y))
-            loader = torch.utils.data.DataLoader(dataset, shuffle=False,
+            loader = torch.utils.data.DataLoader(dataset, shuffle=True,
                                                  batch_size=bs)
             # autograd hacks only is built for conv1d/linear so don't know how to go about transformer encoder
             # just doing incremental batch size for now, stupid slow but get things rolling
@@ -689,19 +689,29 @@ class NTK():
                         print("Ending here b/c switching to soft system idea")
                         raise NotImplementedError
             else:
-                dataset = torch.utils.data.TensorDataset(torch.Tensor(self.train_x), torch.Tensor(self.train_y))
-                loader = torch.utils.data.DataLoader(dataset, shuffle=False,
+                dataset = torch.utils.data.TensorDataset(torch.arange(self.train_x.shape[0]),
+                                                         torch.Tensor(self.train_x),
+                                                         torch.Tensor(self.train_y))
+                loader = torch.utils.data.DataLoader(dataset, shuffle=True,
                                                      batch_size=bs)
                 grad_list = []
-                for bi, (bx,by) in enumerate(loader):
+                idx_list = []
+                for bi, (data_idx, bx,by) in enumerate(loader):
                     if not bi%10: print(f"{bi} / {len(loader)}")
                     bx = bx.cuda()
                     output = net.mlp(bx)
                     loss, _, _ = criterion(output, by)
                     loss.backward()
                     grad_list.append(self.get_indiv_grad_vec(net.mlp))
+                    idx_list.append(data_idx)
                     optim.zero_grad()
                 indiv_grads = torch.cat(grad_list)
+                grads_order = torch.cat(idx_list)
+                # need to reverse intuition, doing indiv_grads[grads_order] would
+                # mess up b/c if idx 0 was the 100th point looked at then this
+                # would make the 100th entry of indiv_grads whatever the first one was
+                sort_idx = torch.argsort(grads_order)
+                indiv_grads = indiv_grads[sort_idx]
             # gen_region_Grad is M
             # indiv_grads is n x M
             # Want to find vector v (n) s.t. v.sigmoid()* indiv_grads/n = gen_region_grad

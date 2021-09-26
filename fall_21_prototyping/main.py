@@ -36,6 +36,7 @@ parser.add_argument("--test-subsample-freq", type=int, default=1)
 parser.add_argument("--num-ntk-nets", type=int, default=1)
 parser.add_argument("--batch-size", type=int, default=1024)
 parser.add_argument("--mlp-width", type=int, default=256)
+parser.add_argument("--dimension", type=int, default=32)
 parser.add_argument("--thresh", type=float, default=0.5, help="generic threshold")
 args = parser.parse_args()
 
@@ -730,7 +731,7 @@ class NTK():
             # training incorrectly on can get non-trivial performance
             if True:
                 normed_indiv = indiv_grads / (indiv_grads.norm(dim=1, keepdim=True) + 1e-8)
-                weighting = torch.matmul(normed_indiv, gen_region_grad).relu()
+                weighting = torch.matmul(normed_indiv, gen_region_grad).detach()# .relu()
             else:
                 # switched from this b/c optimal solution is just whichever
                 # vector is closest. Could do unscaled, but then have weird relationship
@@ -754,7 +755,7 @@ class NTK():
         if weightings:
             weightings = torch.stack(weightings)
             print(weightings.shape)
-            weightings = weightings.mean(dim=0).detach()
+            weightings = weightings.mean(dim=0).relu().detach()
             print(weightings.min(), weightings.max(), weightings.mean(), weightings.std())
         else:
             weightings = None
@@ -1316,7 +1317,8 @@ for clf_str in clf_strs:
                 clf = GeneralizingHDivergence(thresh=args.thresh, group_by_class=True,
                                             in_channels=7 if 'ir_drop' in data_prep_list else 9)
             elif clf_str == 'ntk':
-                clf = NTK(args.num_ntk_nets, group_by_class_and_region=False)
+                clf = NTK(args.num_ntk_nets, dimension=args.dimension,
+                            group_by_class_and_region=False)
             elif clf_str == 'per_region_ntk':
                 clf = NTK(args.num_ntk_nets, group_by_class_and_region=True)
             else:

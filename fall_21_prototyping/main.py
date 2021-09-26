@@ -38,6 +38,8 @@ parser.add_argument("--batch-size", type=int, default=1024)
 parser.add_argument("--mlp-width", type=int, default=256)
 parser.add_argument("--dimension", type=int, default=32)
 parser.add_argument("--thresh", type=float, default=0.5, help="generic threshold")
+parser.add_argument("--greedy-similarity", action='store_true', help='NTK sim vs linear combo')
+parser.add_argument("--norm-indivs", action='store_true', help='Normalize individual grads')
 args = parser.parse_args()
 
 class MaskCloudyTargetsTransform:
@@ -592,25 +594,19 @@ class GeneralizingHDivergence():
 class NTK():
     # Idea is calculate gradient of MCR with respect to pseudoclusters and compare that
     # to MCR with respect to true labels on source domain
-    def __init__(self, num_ntk_nets, dimension=32, group_by_class_and_region=True):
+    def __init__(self, num_ntk_nets, norm_indivs=False, greedy_similarity=True, dimension=32, optimize_distributional_average=False):
+        self.norm_indivs = norm_indivs
         self.num_ntk_nets = num_ntk_nets
         self.dimension = dimension
+        self.greedy_similarity = greedy_similarity
         print("Using MLP for now b/c transformer layers are incompatible")
         self.transformer_constructor = lambda n, use_bn: TorchNN(num_classes=n, use_bn=use_bn)
         # self.transformer_constructor = lambda n: TransformerNN(num_classes=n)
-        self.group_by_class_and_region = group_by_class_and_region
+        self.optimize_distributional_average = optimize_distributional_average
 
     def fit(self, train_x, train_y):
-        # not doing per-region stuff here
         self.train_x = train_x
         self.train_y = train_y
-        if self.group_by_class_and_region:
-            region_assignments = train_y // region_class_hash_increment
-            self.region_class_factors = sorted(set(list(region_assignments)))
-            self.num_regions = len(self.region_class_factors)
-            per_region_masks = [region_assignments==r for r in self.region_class_factors]
-            self.per_region_x = [train_x[mask] for mask in per_region_masks]
-            self.per_region_y = [train_y[mask] for mask in per_region_masks]
 
 
     def get_ave_grad_vec(self, net):
@@ -663,56 +659,29 @@ class NTK():
                                             noise_multiplier=0)
             privacy_engine.attach(optim)
             optim.zero_grad()
-            if self.group_by_class_and_region:
-                region_and_class_i_to_agreements = {}
-                # want to key on left_out_y
-                for region_i, (region_x, region_y) in enumerate(zip(self.per_region_x, self.per_region_y)):
-                    for class_i in set(list(region_y)):
-                        region_class_tuple = (region_i, class_i)
-                        if region_class_tuple not in region_and_class_i_to_agreements:
-                            region_and_class_i_to_agreements[region_class_tuple] = []
-
-                        class_idx = (region_y == class_i).squeeze()
-                        class_x = region_x[class_idx]
-                        class_y = region_y[class_idx]
-                        dataset = torch.utils.data.TensorDataset(torch.Tensor(class_x), torch.Tensor(class_y))
-                        loader = torch.utils.data.DataLoader(dataset, shuffle=False, batch_size=bs)
-                        for bi, (bx,by) in enumerate(loader):
-                            bx = bx.cuda()
-                            # by = by.cuda()
-                            output = net.mlp(bx)
-                            loss, _, _ = criterion(output, by)
-                            loss.backward()
-                            grad = self.get_grad_vec(net.mlp)
-                            optim.zero_grad()
-                        similarity = (gen_region_grad * grad).sum()
-                        region_and_class_i_to_agreements[region_class_tuple].append(similarity)
-                        print("Ending here b/c switching to soft system idea")
-                        raise NotImplementedError
-            else:
-                dataset = torch.utils.data.TensorDataset(torch.arange(self.train_x.shape[0]),
-                                                         torch.Tensor(self.train_x),
-                                                         torch.Tensor(self.train_y))
-                loader = torch.utils.data.DataLoader(dataset, shuffle=True,
-                                                     batch_size=bs)
-                grad_list = []
-                idx_list = []
-                for bi, (data_idx, bx,by) in enumerate(loader):
-                    if not bi%10: print(f"{bi} / {len(loader)}")
-                    bx = bx.cuda()
-                    output = net.mlp(bx)
-                    loss, _, _ = criterion(output, by)
-                    loss.backward()
-                    grad_list.append(self.get_indiv_grad_vec(net.mlp))
-                    idx_list.append(data_idx)
-                    optim.zero_grad()
-                indiv_grads = torch.cat(grad_list)
-                grads_order = torch.cat(idx_list)
-                # need to reverse intuition, doing indiv_grads[grads_order] would
-                # mess up b/c if idx 0 was the 100th point looked at then this
-                # would make the 100th entry of indiv_grads whatever the first one was
-                sort_idx = torch.argsort(grads_order)
-                indiv_grads = indiv_grads[sort_idx]
+            dataset = torch.utils.data.TensorDataset(torch.arange(self.train_x.shape[0]),
+                                                     torch.Tensor(self.train_x),
+                                                     torch.Tensor(self.train_y))
+            loader = torch.utils.data.DataLoader(dataset, shuffle=True,
+                                                 batch_size=bs)
+            grad_list = []
+            idx_list = []
+            for bi, (data_idx, bx,by) in enumerate(loader):
+                if not bi%10: print(f"{bi} / {len(loader)}")
+                bx = bx.cuda()
+                output = net.mlp(bx)
+                loss, _, _ = criterion(output, by)
+                loss.backward()
+                grad_list.append(self.get_indiv_grad_vec(net.mlp))
+                idx_list.append(data_idx)
+                optim.zero_grad()
+            indiv_grads = torch.cat(grad_list)
+            grads_order = torch.cat(idx_list)
+            # need to reverse intuition, doing indiv_grads[grads_order] would
+            # mess up b/c if idx 0 was the 100th point looked at then this
+            # would make the 100th entry of indiv_grads whatever the first one was
+            sort_idx = torch.argsort(grads_order)
+            indiv_grads = indiv_grads[sort_idx]
             # gen_region_Grad is M
             # indiv_grads is n x M
             # Want to find vector v (n) s.t. v.sigmoid()* indiv_grads/n = gen_region_grad
@@ -729,9 +698,9 @@ class NTK():
             # tensor(-0.7319, device='cuda:0') tensor(0.5516, device='cuda:0') tensor(-0.0118, device='cuda:0') tensor(0.1968, device='cuda:0')
             # REALLY want to do version of this in reverse where we find points that by
             # training incorrectly on can get non-trivial performance
-            if True:
-                normed_indiv = indiv_grads / (indiv_grads.norm(dim=1, keepdim=True) + 1e-8)
-                weighting = torch.matmul(normed_indiv, gen_region_grad).detach()# .relu()
+            if self.norm_indivs: indiv_grads = indiv_grads / (indiv_grads.norm(dim=1, keepdim=True) + 1e-8)
+            if self.greedy_similarity:
+                weighting = torch.matmul(indiv_grads, gen_region_grad).detach()# .relu()
             else:
                 # switched from this b/c optimal solution is just whichever
                 # vector is closest. Could do unscaled, but then have weird relationship
@@ -739,18 +708,62 @@ class NTK():
                 pre_act_weights = torch.nn.Parameter(torch.ones(indiv_grads.shape[0]).cuda())
                 # optim = torch.optim.Adam([pre_act_weights])
                 optim = torch.optim.SGD([pre_act_weights], lr=10)
-                # below optimization sis slowing or more points
-                for linear_i in range(10000):
-                    optim.zero_grad()
-                    post_act_weights = pre_act_weights.relu()
-                    reconstruction_unnormed = torch.matmul(indiv_grads.t(), post_act_weights)
-                    reconstruction = reconstruction_unnormed / reconstruction_unnormed.norm()
-                    loss = -1 * torch.dot(reconstruction, gen_region_grad)
-                    loss.backward()
-                    optim.step()
-                    if not linear_i%1000: print(linear_i, loss)
-                print(post_act_weights.min(), post_act_weights.max(), post_act_weights.mean(), post_act_weights.std(), post_act_weights.sum())
-                weighting = post_act_weights.data.detach()
+
+
+                if self.optimize_distributional_average:
+                    post_act_weights = torch.zeros(indiv_grads.shape[0]).cuda()
+                    idx = torch.arange(pre_act_weights.shape[0])
+                    loader = torch.utils.data.DataLoader(idx, shuffle=True,
+                                                         batch_size=bs)
+                    losses = []
+                    for batch_idx in loader:
+                        # A is n_param x bs
+                        # B is n_param x 1
+                        # X will be bs x 1
+                        return_tuple = torch.linalg.lstsq(indiv_grads[batch_idx].t().unsqueeze(0),
+                                                    gen_region_grad.unsqueeze(1).unsqueeze(0))
+                        coeffs, residuals, rank ,singular_values = return_tuple
+                        print(residuals, rank)
+                        print(coeffs.min(), coeffs.max(), coeffs.mean(), coeffs.std())
+                        reconstruction_unnormed = torch.matmul(indiv_grads[batch_idx].t(), coeffs).squeeze()
+                        reconstruction = reconstruction_unnormed / reconstruction_unnormed.norm()
+                        loss = -1 * torch.dot(reconstruction, gen_region_grad)
+                        losses.append(loss.item())
+                        print(coeffs.shape)
+                        post_act_weights[batch_idx] = coeffs.squeeze()
+                    print(f"Average Loss: {np.average(losses)}")
+                    """
+                    for epoch_i in range(100):
+                        print(epoch_i)
+                        losses = []
+                        for batch_idx in loader:
+                            optim.zero_grad()
+                            reconstruction_unnormed = torch.matmul(indiv_grads[batch_idx].t(), pre_act_weights[batch_idx].relu())
+                            reconstruction = reconstruction_unnormed / reconstruction_unnormed.norm()
+                            loss = -1 * torch.dot(reconstruction, gen_region_grad)
+                            loss.backward()
+                            optim.step()
+                            losses.append(loss.item())
+                        print(f"Average Loss: {np.average(losses)}")
+                    post_act_weights = pre_act_weights.data.relu().detach()
+                    """
+                else: # optimizing global
+                    # below optimization sis slowing or more points
+                    for linear_i in range(10000):
+                        optim.zero_grad()
+                        post_act_weights = pre_act_weights.relu()
+                        reconstruction_unnormed = torch.matmul(indiv_grads.t(), post_act_weights)
+                        reconstruction = reconstruction_unnormed / reconstruction_unnormed.norm()
+                        loss = -1 * torch.dot(reconstruction, gen_region_grad)
+                        loss.backward()
+                        optim.step()
+                        if not linear_i%1000: print(linear_i, loss)
+                    print(post_act_weights.min(), post_act_weights.max(), post_act_weights.mean(), post_act_weights.std(), post_act_weights.sum())
+                    post_act_weights = pre_act_weights.data.relu().detach()
+                weighting = post_act_weights
+
+
+
             weightings.append(weighting)
         if weightings:
             weightings = torch.stack(weightings)
@@ -1317,10 +1330,17 @@ for clf_str in clf_strs:
                 clf = GeneralizingHDivergence(thresh=args.thresh, group_by_class=True,
                                             in_channels=7 if 'ir_drop' in data_prep_list else 9)
             elif clf_str == 'ntk':
-                clf = NTK(args.num_ntk_nets, dimension=args.dimension,
-                            group_by_class_and_region=False)
-            elif clf_str == 'per_region_ntk':
-                clf = NTK(args.num_ntk_nets, group_by_class_and_region=True)
+                clf = NTK(args.num_ntk_nets,
+                            norm_indivs=args.norm_indivs,
+                            greedy_similarity=args.greedy_similarity,
+                            dimension=args.dimension,
+                            optimize_distributional_average=False)
+            elif clf_str == 'ntk_distributional':
+                clf = NTK(args.num_ntk_nets,
+                            norm_indivs=args.norm_indivs,
+                            greedy_similarity=args.greedy_similarity,
+                            dimension=args.dimension,
+                            optimize_distributional_average=True)
             else:
                 raise NotImplementedError
             clf.fit(train_x, train_y)

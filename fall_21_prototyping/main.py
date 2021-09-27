@@ -716,21 +716,21 @@ class NTK():
                     loader = torch.utils.data.DataLoader(idx, shuffle=True,
                                                          batch_size=bs)
                     losses = []
-                    for batch_idx in loader:
-                        # A is n_param x bs
-                        # B is n_param x 1
-                        # X will be bs x 1
-                        return_tuple = torch.linalg.lstsq(indiv_grads[batch_idx].t().unsqueeze(0),
-                                                    gen_region_grad.unsqueeze(1).unsqueeze(0))
-                        coeffs, residuals, rank ,singular_values = return_tuple
-                        print(residuals, rank)
-                        print(coeffs.min(), coeffs.max(), coeffs.mean(), coeffs.std())
-                        reconstruction_unnormed = torch.matmul(indiv_grads[batch_idx].t(), coeffs).squeeze()
-                        reconstruction = reconstruction_unnormed / reconstruction_unnormed.norm()
-                        loss = -1 * torch.dot(reconstruction, gen_region_grad)
-                        losses.append(loss.item())
-                        print(coeffs.shape)
-                        post_act_weights[batch_idx] = coeffs.squeeze()
+                    with torch.no_grad():
+                        for epoch_i in range(1):
+                            for batch_idx in loader:
+                                # A is n_param x bs
+                                # B is n_param x 1
+                                # X will be bs x 1
+                                return_tuple = torch.linalg.lstsq(indiv_grads[batch_idx].t().unsqueeze(0),
+                                                            10e5 * gen_region_grad.unsqueeze(1).unsqueeze(0))
+                                coeffs, residuals, rank ,singular_values = return_tuple
+                                # print(coeffs.min(), coeffs.max(), coeffs.mean(), coeffs.std())
+                                reconstruction_unnormed = torch.matmul(indiv_grads[batch_idx].t(), coeffs).squeeze()
+                                reconstruction = reconstruction_unnormed / reconstruction_unnormed.norm()
+                                loss = -1 * torch.dot(reconstruction, gen_region_grad)
+                                post_act_weights[batch_idx] += coeffs.squeeze()
+                            losses.append(loss.item())
                     print(f"Average Loss: {np.average(losses)}")
                     """
                     for epoch_i in range(100):

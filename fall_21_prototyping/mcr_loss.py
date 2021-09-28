@@ -77,7 +77,7 @@ class MaximalCodingRateReduction(torch.nn.Module):
         if num_classes is None:
             num_classes = Y.max() + 1
         W = X.T
-        Pi = tf.label_to_membership(Y.numpy(), num_classes)
+        Pi = label_to_membership(Y.cpu().numpy(), num_classes)
         Pi = torch.tensor(Pi, dtype=torch.float32).cuda()
 
         discrimn_loss_empi = self.compute_discrimn_loss_empirical(W)

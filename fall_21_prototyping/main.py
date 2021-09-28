@@ -717,7 +717,7 @@ class NTK():
                                                          batch_size=bs)
                     losses = []
                     with torch.no_grad():
-                        for epoch_i in range(1):
+                        for epoch_i in range(10):
                             for batch_idx in loader:
                                 # A is n_param x bs
                                 # B is n_param x 1
@@ -773,9 +773,13 @@ class NTK():
         else:
             weightings = None
         # Then retrain
-        new_transformer = self.transformer_constructor(len(interest_classes), True)
-        new_transformer.fit(self.train_x, self.train_y, silent=True, sample_weights=weightings)
-        return new_transformer.score(test_x, test_y)
+        num_fits = 10
+        accs = []
+        for fit_i in range(num_fits):
+            new_transformer = self.transformer_constructor(len(interest_classes), True)
+            new_transformer.fit(self.train_x, self.train_y, silent=True, sample_weights=weightings)
+            accs.append(new_transformer.score(test_x, test_y))
+        return np.average(accs)
 
 
 class HDivergenceSorting():

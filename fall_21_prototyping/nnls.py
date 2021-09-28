@@ -40,6 +40,7 @@ parser.add_argument("--batch-size", type=int, default=1024)
 parser.add_argument("--mlp-width", type=int, default=256)
 parser.add_argument("--dimension", type=int, default=32)
 parser.add_argument("--thresh", type=float, default=0.5, help="generic threshold")
+parser.add_argument("--ridge-weight", type=float, default=0.0, help="weight of ridge regression")
 parser.add_argument("--greedy-similarity", action='store_true', help='NTK sim vs linear combo')
 parser.add_argument("--norm-indivs", action='store_true', help='Normalize individual grads')
 args = parser.parse_args()
@@ -596,11 +597,12 @@ class GeneralizingHDivergence():
 class NTK():
     # Idea is calculate gradient of MCR with respect to pseudoclusters and compare that
     # to MCR with respect to true labels on source domain
-    def __init__(self, num_ntk_nets, norm_indivs=False, greedy_similarity=True, dimension=32, optimize_distributional_average=False):
+    def __init__(self, num_ntk_nets, norm_indivs=False, greedy_similarity=True, dimension=32, optimize_distributional_average=False, ridge_weight=0):
         self.norm_indivs = norm_indivs
         self.num_ntk_nets = num_ntk_nets
         self.dimension = dimension
         self.greedy_similarity = greedy_similarity
+        self.ridge_weight = ridge_weight
         print("Using MLP for now b/c transformer layers are incompatible")
         self.transformer_constructor = lambda n, use_bn: TorchNN(num_classes=n, use_bn=use_bn)
         # self.transformer_constructor = lambda n: TransformerNN(num_classes=n)
@@ -631,7 +633,7 @@ class NTK():
         return torch.cat(grad_list, dim=1)
     
 
-    def score(self, test_x, test_y, bs=1024):
+    def score(self, test_x, test_y, bs=512, grad_calc_bs=1024):
         criterion = MaximalCodingRateReduction()
         weightings = []
         for net_i in range(self.num_ntk_nets):
@@ -642,7 +644,7 @@ class NTK():
             print("Currently doing supervised transductive training with test_y, unacceptable long term")
             dataset = torch.utils.data.TensorDataset(torch.Tensor(test_x), torch.Tensor(test_y))
             loader = torch.utils.data.DataLoader(dataset, shuffle=True,
-                                                 batch_size=bs)
+                                                 batch_size=grad_calc_bs)
             # autograd hacks only is built for conv1d/linear so don't know how to go about transformer encoder
             # just doing incremental batch size for now, stupid slow but get things rolling
             # autograd_hacks.add_hooks(net.mlp)
@@ -656,7 +658,8 @@ class NTK():
             gen_region_grad = self.get_ave_grad_vec(net.mlp)
             print(gen_region_grad.shape, gen_region_grad.sum())
             optim = torch.optim.Adam(net.mlp.parameters())
-            privacy_engine = PrivacyEngine(net.mlp, max_grad_norm=np.inf, batch_size=bs,
+            privacy_engine = PrivacyEngine(net.mlp, max_grad_norm=np.inf,
+                                            batch_size=grad_calc_bs,
                                             sample_size=self.train_x.shape[0],
                                             noise_multiplier=0)
             privacy_engine.attach(optim)
@@ -665,7 +668,7 @@ class NTK():
                                                      torch.Tensor(self.train_x),
                                                      torch.Tensor(self.train_y))
             loader = torch.utils.data.DataLoader(dataset, shuffle=True,
-                                                 batch_size=bs)
+                                                 batch_size=grad_calc_bs)
             grad_list = []
             idx_list = []
             for bi, (data_idx, bx,by) in enumerate(loader):
@@ -716,7 +719,7 @@ class NTK():
                     post_act_weights = torch.zeros(indiv_grads.shape[0]).cuda()
                     idx = torch.arange(pre_act_weights.shape[0])
                     loader = torch.utils.data.DataLoader(idx, shuffle=True,
-                                                         batch_size=bs//2)
+                                                         batch_size=bs)
                     losses = []
                     with torch.no_grad():
                         for epoch_i in range(1):
@@ -726,15 +729,22 @@ class NTK():
                                 # B is n_param x 1
                                 # X will be bs x 1
                                 true_A = indiv_grads[batch_idx].t() # 1 x bs x n_param
+                                used_A = true_A / true_A.max()
                                 # multiplying for conditioning
-                                true_b = gen_region_grad * 10e4
+                                true_b = gen_region_grad * 10e2
                                 e = torch.Tensor() # the equalities (fed last) to qpth
                                 # inequality constraints is -I @ z <= 0  (z id nd)
                                 G = -1 * torch.eye(curr_bs, curr_bs).cuda()
                                 h = torch.zeros(curr_bs).cuda()
-                                Q = true_A.t() @ true_A
-                                c = (-1 * true_A.t() @ true_b)
-                                coeffs = QPFunction(check_Q_spd=False)(Q, c, G, h, e, e).squeeze()
+                                print(used_A.min(), used_A.max(), used_A.mean())
+                                Q = (used_A / used_A.max()).t() @ (used_A / used_A.max())
+                                print(Q.min(), Q.max(), Q.mean())
+                                print(torch.matrix_rank(Q))
+                                Q = Q + self.ridge_weight * torch.eye(Q.shape[0]).cuda()
+                                print(torch.matrix_rank(Q))
+                                c = (-1 * used_A.t() @ true_b)
+                                coeffs = QPFunction(maxIter=200, check_Q_spd=False,
+                                                    verbose=-1)(Q, c, G, h, e, e).squeeze()
                                 # coeffs, residuals, rank ,singular_values = return_tuple
                                 print(coeffs.min(), coeffs.max(), coeffs.mean(), coeffs.std())
                                 reconstruction_unnormed = torch.matmul(indiv_grads[batch_idx].t(), coeffs).squeeze()
@@ -1351,7 +1361,8 @@ for clf_str in clf_strs:
                             norm_indivs=args.norm_indivs,
                             greedy_similarity=args.greedy_similarity,
                             dimension=args.dimension,
-                            optimize_distributional_average=True)
+                            optimize_distributional_average=True,
+                            ridge_weight=args.ridge_weight)
             else:
                 raise NotImplementedError
             clf.fit(train_x, train_y)

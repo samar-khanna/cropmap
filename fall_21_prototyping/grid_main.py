@@ -36,6 +36,7 @@ parser.add_argument("--batch-size", type=int, default=1024)
 parser.add_argument("--mlp-width", type=int, default=256)
 parser.add_argument("--dimension", type=int, default=32)
 parser.add_argument("--thresh", type=float, default=0.5, help="generic threshold")
+parser.add_argument("--weight", type=float, default=0.0, help="generic weight")
 parser.add_argument("--greedy-similarity", action='store_true', help='NTK sim vs linear combo')
 parser.add_argument("--norm-indivs", action='store_true', help='Normalize individual grads')
 args = parser.parse_args()
@@ -292,8 +293,6 @@ class TorchNN():
                 preds_list.append(output)
             return torch.cat(preds_list)
 
-
-
 class TransformerNN(TorchNN):
     def __init__(self, num_classes=len(interest_classes), in_channels=9, t_len=8,
                  n_conv=2, **kwargs):
@@ -304,6 +303,162 @@ class TransformerNN(TorchNN):
         # print("Re-cudaing Transformer NN if needed")
         self.mlp = mlp.cuda()
         self.opt = torch.optim.Adam(self.mlp.parameters())
+
+
+
+class TransformerCorrelation(TransformerNN):
+    def __init__(self, weight, **kwargs):
+        self.weight = weight
+        super().__init__(**kwargs)
+
+    def fit(self, train_x, train_y, bs=4096, return_best_val_acc=False,
+             silent=False, sample_weights=None):
+        print_call = (lambda x: None) if silent else print
+        self.mlp.train()
+        x = torch.Tensor(train_x)
+        n_train = x.shape[0]
+        y = torch.LongTensor(self.cast_targets(train_y))
+        if sample_weights is None:
+            sample_weights = torch.ones(x.shape[0]).cuda()
+        dataset = torch.utils.data.TensorDataset(x, y, sample_weights)
+        num_val_points = n_train // 10
+        num_train_points = n_train - num_val_points
+        train_set, val_set = torch.utils.data.random_split(dataset, [num_train_points, num_val_points])
+        train_loader = torch.utils.data.DataLoader(train_set, batch_size=bs, shuffle=True)
+        val_loader = torch.utils.data.DataLoader(val_set, batch_size=bs)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.opt, 'min', patience=5)
+        criterion = torch.nn.CrossEntropyLoss(reduction='none')
+        epoch_i = 0
+        lr_steps = 0
+        best_val_loss = np.inf
+        best_val_acc = - np.inf
+        min_loss_epoch = None
+        while lr_steps <= 2:
+            num_seen = 0
+            num_correct = 0
+            loss_sum = 0
+            for bi, (bx, by, batch_weights) in enumerate(train_loader):
+                bx = bx.cuda()
+                N, num_channels = bx.shape
+                orig_bx = bx.clone()
+                bx = bx.view(N, -1, self.mlp.in_c+2)  # (N, t, in_c)
+                coords = bx[:, :, -2:].mean(dim=1) # all repeated anyways
+                centered_coords = coords - coords.mean(0, keepdim=True) # 
+                bx = bx[:, :, :-2].reshape(N, -1)
+                assert abs(orig_bx.view(N, -1, self.mlp.in_c+2)[:,:,:-2] - bx.view(N, -1, self.mlp.in_c)).sum() < 1e-8
+                by = by.cuda()
+                curr_bs = bx.shape[0]
+                num_seen += curr_bs
+                # if not bi%500: print_call(f"{num_seen} / {n_train}")
+                self.opt.zero_grad()
+                preds, feat = self.mlp(bx, return_final_feature=True)
+                coeffs = feat.pinverse() @ coords
+                recon = feat @ coeffs
+                res = (recon - coords).pow(2).mean()
+                # print(res)
+                # res = torch.linalg.lstsq(feat, coords).residuals.mean()
+                batch_weights = curr_bs * batch_weights / batch_weights.sum()
+                clf_loss =(criterion(preds, by) * batch_weights).mean()
+                # print(clf_loss, res, self.weight)
+                loss = clf_loss + self.weight * res
+                loss.backward()
+                self.opt.step()
+                num_correct += (preds.argmax(dim=1) == by).sum().item()
+                loss_sum += curr_bs * loss.item()
+            ave_loss = loss_sum / num_seen
+            if not epoch_i % 1:
+                print_call(f"Train Acc @ Epoch {epoch_i}: {num_correct / num_seen}")
+                print_call(f"Train Loss @ Epoch {epoch_i}: {ave_loss}")
+
+            with torch.no_grad():
+                num_seen = 0
+                num_correct = 0
+                loss_sum = 0
+                for bi, (bx, by, batch_weights) in enumerate(val_loader):
+                    bx = bx.cuda()
+                    N, num_channels = bx.shape
+                    orig_bx = bx.clone()
+                    bx = bx.view(N, -1, self.mlp.in_c+2)  # (N, t, in_c)
+                    coords = bx[:, :, -2:].mean(dim=1) # all repeated anyways
+                    centered_coords = coords - coords.mean(0, keepdim=True) # 
+                    bx = bx[:, :, :-2].reshape(N, -1)
+                    assert abs(orig_bx.view(N, -1, self.mlp.in_c+2)[:,:,:-2] - bx.view(N, -1, self.mlp.in_c)).sum() < 1e-8
+                    by = by.cuda()
+                    curr_bs = bx.shape[0]
+                    num_seen += curr_bs
+                    # if not bi%500: print_call(f"{num_seen} / {n_train}")
+                    preds, feat = self.mlp(bx, return_final_feature=True)
+                    coeffs = feat.pinverse() @ coords
+                    recon = feat @ coeffs
+                    res = (recon - coords).pow(2).mean()
+                    # get total weight equal to curr_bs
+                    batch_weights = curr_bs * batch_weights / batch_weights.sum()
+                    clf_loss =(criterion(preds, by) * batch_weights).mean()
+                    # print(clf_loss, res, self.weight)
+                    loss = clf_loss + self.weight * res
+                    num_correct += (preds.argmax(dim=1) == by).sum().item()
+                    loss_sum += curr_bs * loss.item()
+                ave_loss = loss_sum / num_seen
+                val_acc = num_correct / num_seen
+                if val_acc > best_val_acc: best_val_acc = val_acc
+                if not epoch_i % 1:
+                    print_call(f"Val Acc @ Epoch {epoch_i}: {val_acc}")
+                    print_call(f"Val Loss @ Epoch {epoch_i}: {ave_loss}")
+                    print_call(f"Best Val Loss was {best_val_loss} @ Epoch {min_loss_epoch}")
+
+                curr_lr = self.opt.state_dict()['param_groups'][0]['lr']
+                scheduler.step(ave_loss)
+                if curr_lr != self.opt.state_dict()['param_groups'][0]['lr']:
+                    print_call("Stepped LR")
+                    lr_steps += 1
+                if ave_loss < best_val_loss:
+                    best_sd = self.mlp.state_dict()
+                    best_val_loss = ave_loss
+                    min_loss_epoch = epoch_i
+
+            epoch_i += 1
+        self.mlp.load_state_dict(best_sd)
+
+    def score(self, test_x, test_y, bs=1024):
+        with torch.no_grad():
+            self.mlp.eval()
+            x = torch.Tensor(test_x)
+            n_train = x.shape[0]
+            y = torch.LongTensor(self.cast_targets(test_y))
+            dataset = torch.utils.data.TensorDataset(x, y)
+            loader = torch.utils.data.DataLoader(dataset, batch_size=bs)
+            criterion = torch.nn.CrossEntropyLoss()
+            num_seen = 0
+            num_correct = 0
+            for bi, (bx, by) in enumerate(loader):
+                bx = bx.cuda()
+                bx = bx.view(N, -1, self.mlp.in_c+2)  # (N, t, in_c)
+                bx = bx[:, :, :-2].reshape(N, -1)
+                by = by.cuda()
+                num_seen += bx.shape[0]
+                # if not bi%20: print(f"{num_seen} / {n_train}")
+                preds = self.mlp(bx)
+                loss = criterion(preds, by)
+                num_correct += (preds.argmax(dim=1) == by).sum().item()
+            return num_correct / num_seen
+
+    def predict(self, test_x, bs=1024, return_vec=False):
+        with torch.no_grad():
+            self.mlp.eval()
+            x = torch.Tensor(test_x)
+            n_train = x.shape[0]
+            dataset = torch.utils.data.TensorDataset(x)
+            loader = torch.utils.data.DataLoader(dataset, shuffle=False,
+                                                 batch_size=bs)
+            preds_list = []
+            for bi, (bx,) in enumerate(loader):
+                bx = bx.cuda()
+                bx = bx.view(N, -1, self.mlp.in_c+2)  # (N, t, in_c)
+                bx = bx[:, :, :-2].reshape(N, -1)
+                output = self.mlp(bx)
+                if not return_vec: output = output.argmax(dim=1)
+                preds_list.append(output)
+
 
 
 class TargetClassesTransformerNN():
@@ -1228,6 +1383,11 @@ for clf_str in clf_strs:
             elif clf_str == 'transformer':
                 in_channels = x_train.shape[-1]
                 clf = TransformerNN(in_channels=in_channels)
+            elif clf_str == 'transformer_correlation':
+                assert 'coords' in data_prep_list
+                in_channels = x_train.shape[-1] - 2
+                print("ATTENTION: Right now coords is needed in data prep list to give targets but it NOT used as input")
+                clf = TransformerCorrelation(args.weight, in_channels=in_channels)
             elif clf_str == 'retrain_transformer':
                 clf = RetrainTransformerNN()
             elif clf_str == 'transformer_target_classes_only':

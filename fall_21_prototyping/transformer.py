@@ -52,7 +52,7 @@ class Transformer(nn.Module):
         in_channels = config.get("input_shape", [9])[0]
         return cls(num_classes, in_channels, **config["classifier_kwargs"])
 
-    def forward(self, x):
+    def forward(self, x, return_final_feature=False):
         # TODO: Do we need to worry about padded sequences with -1s?
         # TODO: Worry about 0s interacting with LayerNorm?
         N, time_channel = x.shape
@@ -76,7 +76,11 @@ class Transformer(nn.Module):
         x = F.max_pool1d(x, kernel_size=x.shape[-1])  # (N, c, 1)
 
         out = self.final_conv(x)  # (N, num_classes, 1)
-        return out.squeeze(-1)  # (N, num_classes)
+        out = out.squeeze(-1)
+        if return_final_feature:
+            return out, x.squeeze()
+        else:
+            return out  # (N, num_classes)
 
 
 class PositionalEncoding(nn.Module):

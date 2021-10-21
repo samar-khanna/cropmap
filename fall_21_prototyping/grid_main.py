@@ -432,6 +432,7 @@ class TransformerCorrelation(TransformerNN):
             num_correct = 0
             for bi, (bx, by) in enumerate(loader):
                 bx = bx.cuda()
+                N, num_channels = bx.shape
                 bx = bx.view(N, -1, self.mlp.in_c+2)  # (N, t, in_c)
                 bx = bx[:, :, :-2].reshape(N, -1)
                 by = by.cuda()
@@ -453,6 +454,7 @@ class TransformerCorrelation(TransformerNN):
             preds_list = []
             for bi, (bx,) in enumerate(loader):
                 bx = bx.cuda()
+                N, num_channels = bx.shape
                 bx = bx.view(N, -1, self.mlp.in_c+2)  # (N, t, in_c)
                 bx = bx[:, :, :-2].reshape(N, -1)
                 output = self.mlp(bx)

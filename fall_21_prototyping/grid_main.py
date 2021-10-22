@@ -2,7 +2,8 @@ import rasterio
 from scipy import optimize, spatial
 from sklearn import neighbors, linear_model, metrics, cluster
 from tslearn.metrics import dtw, soft_dtw
-from tslearn.barycenters import dtw_barycenter_averaging, dtw_barycenter_averaging_subgradient, softdtw_barycenter, euclidean_barycenter
+from tslearn.barycenters import dtw_barycenter_averaging, dtw_barycenter_averaging_subgradient, softdtw_barycenter, \
+    euclidean_barycenter
 import os
 import numpy as np
 import pickle
@@ -11,6 +12,7 @@ from interest_classes import interest_classes
 import random
 from pprint import pprint
 import matplotlib
+
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
 import sys
@@ -44,14 +46,12 @@ args = parser.parse_args()
 # IDK
 region_class_hash_increment = 1e6
 
-
-
 basedir = "/share/bharath/sak296/grid_1609/"
 save_basedir = args.save_basedir
 
 regions = [f for f in os.listdir(basedir) if f.startswith('usa')]
 
-generalization_region = args.generalization_region # e.g. usa_g1
+generalization_region = args.generalization_region  # e.g. usa_g1
 generalization_region_i = regions.index(generalization_region)
 assert generalization_region in regions, "Need to specify gen region"
 
@@ -137,7 +137,7 @@ print("Test data shapes", test_x.shape, test_y.shape)
 class TorchNN():
     def __init__(self, num_classes=len(interest_classes), num_hidden_layers=1, hidden_width=256, wd=0, use_bn=True):
         input_dim = train_x.shape[1]
-        
+
         self.orig_class_to_index = None
         print("TODO: Dynamically adapt dimension of clf layer")
         self.num_classes = len(interest_classes)
@@ -146,9 +146,10 @@ class TorchNN():
         curr_dim = input_dim
         layers = []
         for _ in range(num_hidden_layers):
-            layers.extend( [torch.nn.Linear(curr_dim, hidden_width), torch.nn.ReLU(), torch.nn.BatchNorm1d(hidden_width) if use_bn else torch.nn.Identity()])
+            layers.extend([torch.nn.Linear(curr_dim, hidden_width), torch.nn.ReLU(),
+                           torch.nn.BatchNorm1d(hidden_width) if use_bn else torch.nn.Identity()])
             curr_dim = hidden_width
-        layers.extend( [torch.nn.Linear(curr_dim, num_classes)] )
+        layers.extend([torch.nn.Linear(curr_dim, num_classes)])
         mlp = torch.nn.Sequential(*layers)
         # print("Cudaing NN")
         self.mlp = mlp.cuda()
@@ -157,7 +158,7 @@ class TorchNN():
     def cast_targets(self, y):
         if self.orig_class_to_index is None:
             self.seen_classes = set(list(y))
-            self.orig_class_to_index = {int(c):i for i,c in enumerate(interest_classes)}
+            self.orig_class_to_index = {int(c): i for i, c in enumerate(interest_classes)}
             # print(self.orig_class_to_index)
         else:
             new_classes = set(y) - self.seen_classes
@@ -173,7 +174,7 @@ class TorchNN():
         return new_targets
 
     def fit(self, train_x, train_y, bs=4096, return_best_val_acc=False,
-             silent=False, sample_weights=None):
+            silent=False, sample_weights=None):
         print_call = (lambda x: None) if silent else print
         self.mlp.train()
         x = torch.Tensor(train_x)
@@ -255,7 +256,6 @@ class TorchNN():
         self.mlp.load_state_dict(best_sd)
         if return_best_val_acc: return best_val_acc
 
-
     def score(self, test_x, test_y, bs=1024):
         with torch.no_grad():
             self.mlp.eval()
@@ -293,6 +293,7 @@ class TorchNN():
                 preds_list.append(output)
             return torch.cat(preds_list)
 
+
 class TransformerNN(TorchNN):
     def __init__(self, num_classes=len(interest_classes), in_channels=9, t_len=8,
                  n_conv=2, **kwargs):
@@ -305,14 +306,13 @@ class TransformerNN(TorchNN):
         self.opt = torch.optim.Adam(self.mlp.parameters())
 
 
-
 class TransformerCorrelation(TransformerNN):
     def __init__(self, weight, **kwargs):
         self.weight = weight
         super().__init__(**kwargs)
 
     def fit(self, train_x, train_y, bs=4096, return_best_val_acc=False,
-             silent=False, sample_weights=None):
+            silent=False, sample_weights=None):
         print_call = (lambda x: None) if silent else print
         self.mlp.train()
         x = torch.Tensor(train_x)
@@ -341,11 +341,12 @@ class TransformerCorrelation(TransformerNN):
                 bx = bx.cuda()
                 N, num_channels = bx.shape
                 orig_bx = bx.clone()
-                bx = bx.view(N, -1, self.mlp.in_c+2)  # (N, t, in_c)
-                coords = bx[:, :, -2:].mean(dim=1) # all repeated anyways
-                centered_coords = coords - coords.mean(0, keepdim=True) # 
+                bx = bx.view(N, -1, self.mlp.in_c + 2)  # (N, t, in_c)
+                coords = bx[:, :, -2:].mean(dim=1)  # all repeated anyways
+                centered_coords = coords - coords.mean(0, keepdim=True)  #
                 bx = bx[:, :, :-2].reshape(N, -1)
-                assert abs(orig_bx.view(N, -1, self.mlp.in_c+2)[:,:,:-2] - bx.view(N, -1, self.mlp.in_c)).sum() < 1e-8
+                assert abs(
+                    orig_bx.view(N, -1, self.mlp.in_c + 2)[:, :, :-2] - bx.view(N, -1, self.mlp.in_c)).sum() < 1e-8
                 by = by.cuda()
                 curr_bs = bx.shape[0]
                 num_seen += curr_bs
@@ -358,7 +359,7 @@ class TransformerCorrelation(TransformerNN):
                 # print(res)
                 # res = torch.linalg.lstsq(feat, coords).residuals.mean()
                 batch_weights = curr_bs * batch_weights / batch_weights.sum()
-                clf_loss =(criterion(preds, by) * batch_weights).mean()
+                clf_loss = (criterion(preds, by) * batch_weights).mean()
                 # print(clf_loss, res, self.weight)
                 loss = clf_loss + self.weight * res
                 loss.backward()
@@ -366,7 +367,7 @@ class TransformerCorrelation(TransformerNN):
                 num_correct += (preds.argmax(dim=1) == by).sum().item()
                 loss_sum += curr_bs * loss.item()
             ave_loss = loss_sum / num_seen
-            if not epoch_i % 1:
+            if not epoch_i % 20:
                 print_call(f"Train Acc @ Epoch {epoch_i}: {num_correct / num_seen}")
                 print_call(f"Train Loss @ Epoch {epoch_i}: {ave_loss}")
 
@@ -378,11 +379,12 @@ class TransformerCorrelation(TransformerNN):
                     bx = bx.cuda()
                     N, num_channels = bx.shape
                     orig_bx = bx.clone()
-                    bx = bx.view(N, -1, self.mlp.in_c+2)  # (N, t, in_c)
-                    coords = bx[:, :, -2:].mean(dim=1) # all repeated anyways
-                    centered_coords = coords - coords.mean(0, keepdim=True) # 
+                    bx = bx.view(N, -1, self.mlp.in_c + 2)  # (N, t, in_c)
+                    coords = bx[:, :, -2:].mean(dim=1)  # all repeated anyways
+                    centered_coords = coords - coords.mean(0, keepdim=True)  #
                     bx = bx[:, :, :-2].reshape(N, -1)
-                    assert abs(orig_bx.view(N, -1, self.mlp.in_c+2)[:,:,:-2] - bx.view(N, -1, self.mlp.in_c)).sum() < 1e-8
+                    assert abs(
+                        orig_bx.view(N, -1, self.mlp.in_c + 2)[:, :, :-2] - bx.view(N, -1, self.mlp.in_c)).sum() < 1e-8
                     by = by.cuda()
                     curr_bs = bx.shape[0]
                     num_seen += curr_bs
@@ -393,7 +395,7 @@ class TransformerCorrelation(TransformerNN):
                     res = (recon - coords).pow(2).mean()
                     # get total weight equal to curr_bs
                     batch_weights = curr_bs * batch_weights / batch_weights.sum()
-                    clf_loss =(criterion(preds, by) * batch_weights).mean()
+                    clf_loss = (criterion(preds, by) * batch_weights).mean()
                     # print(clf_loss, res, self.weight)
                     loss = clf_loss + self.weight * res
                     num_correct += (preds.argmax(dim=1) == by).sum().item()
@@ -401,7 +403,7 @@ class TransformerCorrelation(TransformerNN):
                 ave_loss = loss_sum / num_seen
                 val_acc = num_correct / num_seen
                 if val_acc > best_val_acc: best_val_acc = val_acc
-                if not epoch_i % 1:
+                if not epoch_i % 20:
                     print_call(f"Val Acc @ Epoch {epoch_i}: {val_acc}")
                     print_call(f"Val Loss @ Epoch {epoch_i}: {ave_loss}")
                     print_call(f"Best Val Loss was {best_val_loss} @ Epoch {min_loss_epoch}")
@@ -433,7 +435,7 @@ class TransformerCorrelation(TransformerNN):
             for bi, (bx, by) in enumerate(loader):
                 bx = bx.cuda()
                 N, num_channels = bx.shape
-                bx = bx.view(N, -1, self.mlp.in_c+2)  # (N, t, in_c)
+                bx = bx.view(N, -1, self.mlp.in_c + 2)  # (N, t, in_c)
                 bx = bx[:, :, :-2].reshape(N, -1)
                 by = by.cuda()
                 num_seen += bx.shape[0]
@@ -455,17 +457,16 @@ class TransformerCorrelation(TransformerNN):
             for bi, (bx,) in enumerate(loader):
                 bx = bx.cuda()
                 N, num_channels = bx.shape
-                bx = bx.view(N, -1, self.mlp.in_c+2)  # (N, t, in_c)
+                bx = bx.view(N, -1, self.mlp.in_c + 2)  # (N, t, in_c)
                 bx = bx[:, :, :-2].reshape(N, -1)
                 output = self.mlp(bx)
                 if not return_vec: output = output.argmax(dim=1)
                 preds_list.append(output)
 
 
-
 class TargetClassesTransformerNN():
     def __init__(self, *args, **kwargs):
-        self.transformer_constructor = lambda : TransformerNN(*args, **kwargs)
+        self.transformer_constructor = lambda: TransformerNN(*args, **kwargs)
 
     def fit(self, train_x, train_y):
         self.train_x = train_x
@@ -483,7 +484,7 @@ class TargetClassesTransformerNN():
 
 class RetrainTransformerNN():
     def __init__(self, *args, **kwargs):
-        self.transformer_constructor = lambda : TransformerNN(*args, **kwargs)
+        self.transformer_constructor = lambda: TransformerNN(*args, **kwargs)
 
     def fit(self, train_x, train_y):
         self.train_x = train_x
@@ -511,7 +512,7 @@ class RetrainTransformerNN():
 class TransformerEnsemble():
     def __init__(self, method='average', *args, **kwargs):
         self.method = method
-        self.transformer_constructor = lambda : TransformerNN(*args, **kwargs)
+        self.transformer_constructor = lambda: TransformerNN(*args, **kwargs)
 
     def fit(self, train_x, train_y):
         # This gives region indices for each transformer
@@ -521,7 +522,7 @@ class TransformerEnsemble():
         self.transformers = [self.transformer_constructor() for _ in range(self.num_regions)]
         for net in self.transformers: net.mlp.train()
         print(self.region_class_factors)
-        per_region_masks = [region_assignments==r for r in self.region_class_factors]
+        per_region_masks = [region_assignments == r for r in self.region_class_factors]
         per_region_x = [train_x[mask] for mask in per_region_masks]
         per_region_y = [train_y[mask] for mask in per_region_masks]
         for region_i, (region_x, region_y, net) in enumerate(zip(per_region_x, per_region_y, self.transformers)):
@@ -558,19 +559,19 @@ class TransformerEnsemble():
                 num_correct += (preds.argmax(dim=1) == by).sum().item()
             return num_correct / num_seen
 
+
 class HDivergence():
     def __init__(self, *args, **kwargs):
-        self.transformer_constructor = lambda : TransformerNN(num_classes=2, *args, **kwargs)
+        self.transformer_constructor = lambda: TransformerNN(num_classes=2, *args, **kwargs)
 
     def fit(self, train_x, train_y):
         # This gives region indices for each transformer
         region_assignments = train_y // region_class_hash_increment
         self.region_class_factors = sorted(set(list(region_assignments)))
         self.num_regions = len(self.region_class_factors)
-        per_region_masks = [region_assignments==r for r in self.region_class_factors]
+        per_region_masks = [region_assignments == r for r in self.region_class_factors]
         self.per_region_x = [train_x[mask] for mask in per_region_masks]
         self.per_region_y = [train_y[mask] for mask in per_region_masks]
-
 
     def score(self, test_x, test_y):
         h_div_accs = []
@@ -581,12 +582,13 @@ class HDivergence():
             # so be having 1/5 as targets they get casted properly
             y = np.concatenate([np.ones(region_train_x.shape[0]),
                                 5 * np.ones(test_x.shape[0])])
-            h_div_acc = transformer.fit(x, y, return_best_val_acc = True)
+            h_div_acc = transformer.fit(x, y, return_best_val_acc=True)
             h_div_accs.append(h_div_acc)
         selected_region_i = np.argmin(h_div_accs)
         print("Use score to figure out which was selected")
         # print(train_regions[selected_region_i])
         # return self.clfs[selected_region_i].score(test_x, test_y)
+
 
 class GeneralizingHDivergence():
     # Idea is to train 3 vs 1 region and use that to evaluate whether to include
@@ -594,8 +596,8 @@ class GeneralizingHDivergence():
     def __init__(self, thresh=0.5, group_by_class=False, in_channels=9, *args, **kwargs):
         self.thresh = thresh
         self.transformer_constructor = lambda n: TransformerNN(num_classes=n,
-                                                              in_channels=in_channels,
-                                                              *args, **kwargs)
+                                                               in_channels=in_channels,
+                                                               *args, **kwargs)
         self.group_by_class = group_by_class
 
     def fit(self, train_x, train_y):
@@ -603,10 +605,9 @@ class GeneralizingHDivergence():
         region_assignments = train_y // region_class_hash_increment
         self.region_class_factors = sorted(set(list(region_assignments)))
         self.num_regions = len(self.region_class_factors)
-        per_region_masks = [region_assignments==r for r in self.region_class_factors]
+        per_region_masks = [region_assignments == r for r in self.region_class_factors]
         self.per_region_x = [train_x[mask] for mask in per_region_masks]
         self.per_region_y = [train_y[mask] for mask in per_region_masks]
-
 
     def score(self, test_x, test_y):
         # doing this per-point right now instead of per-class
@@ -616,7 +617,7 @@ class GeneralizingHDivergence():
             print(train_region_i)
             left_out_x = self.per_region_x[train_region_i]
             left_out_y = self.per_region_y[train_region_i]
-            included_x = self.per_region_x[:train_region_i] + self.per_region_x[train_region_i+1:]
+            included_x = self.per_region_x[:train_region_i] + self.per_region_x[train_region_i + 1:]
             used_train_x = np.concatenate(included_x)
             transformer = self.transformer_constructor(2)
             # print(train_regions[train_region_i])
@@ -647,16 +648,18 @@ class GeneralizingHDivergence():
                 classified_as_test_x.append(left_out_x[take_idx])
                 classified_as_test_y.append(left_out_y[take_idx])
         new_train_x = np.concatenate(classified_as_test_x)
-        new_train_y = np.concatenate(classified_as_test_y) %region_class_hash_increment
+        new_train_y = np.concatenate(classified_as_test_y) % region_class_hash_increment
         print(new_train_x.shape, new_train_y.shape)
         new_transformer = self.transformer_constructor(len(interest_classes))
         new_transformer.fit(new_train_x, new_train_y, silent=True)
         return new_transformer.score(test_x, test_y)
 
+
 class NTK():
     # Idea is calculate gradient of MCR with respect to pseudoclusters and compare that
     # to MCR with respect to true labels on source domain
-    def __init__(self, num_ntk_nets, norm_indivs=False, greedy_similarity=True, dimension=32, optimize_distributional_average=False):
+    def __init__(self, num_ntk_nets, norm_indivs=False, greedy_similarity=True, dimension=32,
+                 optimize_distributional_average=False):
         self.norm_indivs = norm_indivs
         self.num_ntk_nets = num_ntk_nets
         self.dimension = dimension
@@ -669,7 +672,6 @@ class NTK():
     def fit(self, train_x, train_y):
         self.train_x = train_x
         self.train_y = train_y
-
 
     def get_ave_grad_vec(self, net):
         grad_list = []
@@ -689,17 +691,16 @@ class NTK():
             grad = param.grad_sample
             grad_list.append(grad.flatten(start_dim=1))
         return torch.cat(grad_list, dim=1)
-    
 
     def score(self, test_x, test_y, bs=1024):
         from opacus import PrivacyEngine
         criterion = MaximalCodingRateReduction()
         weightings = []
         for net_i in range(self.num_ntk_nets):
-            print(f"Net {net_i+1} / {self.num_ntk_nets}")
-            net = self.transformer_constructor(self.dimension, False) # True)
+            print(f"Net {net_i + 1} / {self.num_ntk_nets}")
+            net = self.transformer_constructor(self.dimension, False)  # True)
             print("Need to be in train mode b/c of privacy engine")
-            net.mlp.train() # eval()
+            net.mlp.train()  # eval()
             print("Currently doing supervised transductive training with test_y, unacceptable long term")
             dataset = torch.utils.data.TensorDataset(torch.Tensor(test_x), torch.Tensor(test_y))
             loader = torch.utils.data.DataLoader(dataset, shuffle=True,
@@ -707,7 +708,7 @@ class NTK():
             # autograd hacks only is built for conv1d/linear so don't know how to go about transformer encoder
             # just doing incremental batch size for now, stupid slow but get things rolling
             # autograd_hacks.add_hooks(net.mlp)
-            for bi, (bx,by) in enumerate(loader):
+            for bi, (bx, by) in enumerate(loader):
                 bx = bx.cuda()
                 # by = by.cuda()
                 output = net.mlp(bx)
@@ -718,8 +719,8 @@ class NTK():
             print(gen_region_grad.shape, gen_region_grad.sum())
             optim = torch.optim.Adam(net.mlp.parameters())
             privacy_engine = PrivacyEngine(net.mlp, max_grad_norm=np.inf, batch_size=bs,
-                                            sample_size=self.train_x.shape[0],
-                                            noise_multiplier=0)
+                                           sample_size=self.train_x.shape[0],
+                                           noise_multiplier=0)
             privacy_engine.attach(optim)
             optim.zero_grad()
             dataset = torch.utils.data.TensorDataset(torch.arange(self.train_x.shape[0]),
@@ -729,8 +730,8 @@ class NTK():
                                                  batch_size=bs)
             grad_list = []
             idx_list = []
-            for bi, (data_idx, bx,by) in enumerate(loader):
-                if not bi%10: print(f"{bi} / {len(loader)}")
+            for bi, (data_idx, bx, by) in enumerate(loader):
+                if not bi % 10: print(f"{bi} / {len(loader)}")
                 bx = bx.cuda()
                 output = net.mlp(bx)
                 loss, _, _ = criterion(output, by)
@@ -763,7 +764,7 @@ class NTK():
             # training incorrectly on can get non-trivial performance
             if self.norm_indivs: indiv_grads = indiv_grads / (indiv_grads.norm(dim=1, keepdim=True) + 1e-8)
             if self.greedy_similarity:
-                weighting = torch.matmul(indiv_grads, gen_region_grad).detach()# .relu()
+                weighting = torch.matmul(indiv_grads, gen_region_grad).detach()  # .relu()
             else:
                 # switched from this b/c optimal solution is just whichever
                 # vector is closest. Could do unscaled, but then have weird relationship
@@ -771,7 +772,6 @@ class NTK():
                 pre_act_weights = torch.nn.Parameter(torch.ones(indiv_grads.shape[0]).cuda())
                 # optim = torch.optim.Adam([pre_act_weights])
                 optim = torch.optim.SGD([pre_act_weights], lr=10)
-
 
                 if self.optimize_distributional_average:
                     post_act_weights = torch.zeros(indiv_grads.shape[0]).cuda()
@@ -786,8 +786,8 @@ class NTK():
                                 # B is n_param x 1
                                 # X will be bs x 1
                                 return_tuple = torch.linalg.lstsq(indiv_grads[batch_idx].t().unsqueeze(0),
-                                                            10e5 * gen_region_grad.unsqueeze(1).unsqueeze(0))
-                                coeffs, residuals, rank ,singular_values = return_tuple
+                                                                  10e5 * gen_region_grad.unsqueeze(1).unsqueeze(0))
+                                coeffs, residuals, rank, singular_values = return_tuple
                                 # print(coeffs.min(), coeffs.max(), coeffs.mean(), coeffs.std())
                                 reconstruction_unnormed = torch.matmul(indiv_grads[batch_idx].t(), coeffs).squeeze()
                                 reconstruction = reconstruction_unnormed / reconstruction_unnormed.norm()
@@ -810,7 +810,7 @@ class NTK():
                         print(f"Average Loss: {np.average(losses)}")
                     post_act_weights = pre_act_weights.data.relu().detach()
                     """
-                else: # optimizing global
+                else:  # optimizing global
                     # below optimization sis slowing or more points
                     for linear_i in range(10000):
                         optim.zero_grad()
@@ -820,12 +820,11 @@ class NTK():
                         loss = -1 * torch.dot(reconstruction, gen_region_grad)
                         loss.backward()
                         optim.step()
-                        if not linear_i%1000: print(linear_i, loss)
-                    print(post_act_weights.min(), post_act_weights.max(), post_act_weights.mean(), post_act_weights.std(), post_act_weights.sum())
+                        if not linear_i % 1000: print(linear_i, loss)
+                    print(post_act_weights.min(), post_act_weights.max(), post_act_weights.mean(),
+                          post_act_weights.std(), post_act_weights.sum())
                     post_act_weights = pre_act_weights.data.relu().detach()
                 weighting = post_act_weights
-
-
 
             weightings.append(weighting)
         if weightings:
@@ -847,13 +846,12 @@ class NTK():
 
 class HDivergenceSorting():
     def __init__(self, num_training_trials=10, *args, **kwargs):
-        self.num_training_trials =  num_training_trials
-        self.transformer_constructor = lambda : TransformerNN(num_classes=2, *args, **kwargs)
+        self.num_training_trials = num_training_trials
+        self.transformer_constructor = lambda: TransformerNN(num_classes=2, *args, **kwargs)
 
     def fit(self, train_x, train_y):
         self.train_x = train_x
         self.train_y = train_y
-
 
     def score(self, test_x, test_y):
         transformer = self.transformer_constructor()
@@ -900,7 +898,7 @@ class HDivergenceSorting():
 
 class KMeansEvaluation():
     def __init__(self, n_clusters, *args, **kwargs):
-        self.kmeans_constructor = lambda : cluster.KMeans(n_clusters=n_clusters, *args, **kwargs)
+        self.kmeans_constructor = lambda: cluster.KMeans(n_clusters=n_clusters, *args, **kwargs)
         self.n_clusters = n_clusters
 
     def fit(self, train_x, train_y):
@@ -913,7 +911,7 @@ class KMeansEvaluation():
         print(assignments.min(), assignments.max())
         assignment_to_class = {}
         for assignment_i in range(self.n_clusters):
-            assigned_data_mask = (assignments==assignment_i)
+            assigned_data_mask = (assignments == assignment_i)
             true_labels = test_y[assigned_data_mask]
             cluster_label = stats.mode(true_labels)[0][0]
             assignment_to_class[assignment_i] = cluster_label
@@ -927,7 +925,7 @@ class KMeansEvaluation():
 
 class KMeansMatching():
     def __init__(self, *args, **kwargs):
-        self.kmeans_constructor = lambda : cluster.KMeans(*args, **kwargs)
+        self.kmeans_constructor = lambda: cluster.KMeans(*args, **kwargs)
 
     def fit(self, train_x, train_y):
         # This gives region indices for each transformer
@@ -935,7 +933,7 @@ class KMeansMatching():
         self.region_class_factors = sorted(set(list(region_assignments)))
         self.num_regions = len(self.region_class_factors)
         self.clfs = [self.kmeans_constructor() for _ in range(self.num_regions)]
-        per_region_masks = [region_assignments==r for r in self.region_class_factors]
+        per_region_masks = [region_assignments == r for r in self.region_class_factors]
         per_region_x = [train_x[mask] for mask in per_region_masks]
         per_region_y = [train_y[mask] for mask in per_region_masks]
         self.centers_list = []
@@ -943,7 +941,6 @@ class KMeansMatching():
             print(region_i, region_x.shape, region_y.shape, clf)
             clf.fit(region_x, region_y % region_class_hash_increment)
             self.centers_list.append(clf.cluster_centers_)
-
 
     def score(self, test_x, test_y):
         test_kmeans = self.kmeans_constructor()
@@ -961,12 +958,10 @@ class KMeansMatching():
         # return self.clfs[selected_region_i].score(test_x, test_y)
 
 
-
 class TransductiveStartupNN(TorchNN):
 
     def __init__(self, *args, **kwargs):
         super(TransductiveStartupNN, self).__init__(*args, **kwargs)
-
 
     def transductive_fit(self, train_x, train_y, test_x, trans_y, bs=4096):
         # startup doesn't use any weighting between two losses
@@ -991,8 +986,8 @@ class TransductiveStartupNN(TorchNN):
         trans_dataset = torch.utils.data.TensorDataset(trans_x, trans_y)
         num_trans_val_points = n_trans // 10
         num_trans_train_points = n_trans - num_trans_val_points
-        trans_train_set, trans_val_set = torch.utils.data.random_split(trans_dataset, [num_trans_train_points, num_trans_val_points])
-
+        trans_train_set, trans_val_set = torch.utils.data.random_split(trans_dataset,
+                                                                       [num_trans_train_points, num_trans_val_points])
 
         train_loader = torch.utils.data.DataLoader(train_set, batch_size=bs, shuffle=True)
         trans_train_loader = torch.utils.data.DataLoader(trans_train_set, batch_size=bs, shuffle=True)
@@ -1000,7 +995,6 @@ class TransductiveStartupNN(TorchNN):
         # shuffling val so can match to length of trans data
         val_loader = torch.utils.data.DataLoader(val_set, batch_size=bs, shuffle=True)
         trans_val_loader = torch.utils.data.DataLoader(trans_val_set, batch_size=bs, shuffle=True)
-
 
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.opt, 'min', patience=5)
         criterion = torch.nn.CrossEntropyLoss()
@@ -1091,6 +1085,7 @@ class TransductiveStartupNN(TorchNN):
         #
         return self.score(test_x, test_y)
 
+
 class TransductiveHardNN(TorchNN):
 
     def __init__(self, confidence_threshold=0, *args, **kwargs):
@@ -1115,8 +1110,8 @@ class TransductiveHardNN(TorchNN):
         num_trans_train_points = n_trans - num_trans_val_points
         print(len(trans_dataset))
         print(n_trans, num_trans_val_points, num_trans_train_points)
-        trans_train_set, trans_val_set = torch.utils.data.random_split(trans_dataset, [num_trans_train_points, num_trans_val_points])
-
+        trans_train_set, trans_val_set = torch.utils.data.random_split(trans_dataset,
+                                                                       [num_trans_train_points, num_trans_val_points])
 
         train_loader = torch.utils.data.DataLoader(train_set, batch_size=bs, shuffle=True)
         trans_train_loader = torch.utils.data.DataLoader(trans_train_set, batch_size=bs, shuffle=True)
@@ -1124,7 +1119,6 @@ class TransductiveHardNN(TorchNN):
         # shuffling val so can match to length of trans data
         val_loader = torch.utils.data.DataLoader(val_set, batch_size=bs, shuffle=True)
         trans_val_loader = torch.utils.data.DataLoader(trans_val_set, batch_size=bs, shuffle=True)
-
 
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.opt, 'min', patience=5)
         criterion = torch.nn.CrossEntropyLoss()
@@ -1201,12 +1195,10 @@ class TransductiveHardNN(TorchNN):
             epoch_i += 1
         self.mlp.load_state_dict(best_sd)
 
-
     def transductive_score(self, train_x, train_y, test_x, test_y, bs=4096):
         print(f"Initial score {self.score(test_x, test_y)}")
         self.transductive_fit(train_x, train_y, test_x, bs=4096)
         return self.score(test_x, test_y)
-
 
 
 class DTWBarycenter():
@@ -1224,8 +1216,7 @@ class DTWBarycenter():
     def reshape_dtw(self, s1, s2, n_time_points=8):
         feed1 = s1.reshape(n_time_points, -1)
         feed2 = s2.reshape(n_time_points, -1)
-        return soft_dtw(feed1, feed2) if self.barycenter_method=='soft' else dtw(feed1, feed2)
-
+        return soft_dtw(feed1, feed2) if self.barycenter_method == 'soft' else dtw(feed1, feed2)
 
     def fit(self, train_x, train_y):
         centroids = []
@@ -1233,7 +1224,7 @@ class DTWBarycenter():
         self.seen_classes = set()
         for class_i in interest_classes:
             print(f"Fitting class {class_i}")
-            matching_idx = np.argwhere(train_y==class_i)
+            matching_idx = np.argwhere(train_y == class_i)
             if not len(matching_idx): continue
             self.seen_classes.add(class_i)
             matching_x = train_x[matching_idx].reshape(matching_idx.shape[0], 8, -1)
@@ -1242,7 +1233,6 @@ class DTWBarycenter():
             centroid_labels.append(class_i)
         self.clf = neighbors.KNeighborsClassifier(metric=self.reshape_dtw)
         self.clf.fit(np.array(centroids).reshape(len(self.seen_classes), -1), centroid_labels)
-
 
     def score(self, test_x, test_y):
         new_classes = set(test_y) - self.seen_classes
@@ -1255,7 +1245,6 @@ class DTWBarycenter():
             print(f"These account for {frac_unseen} of testing data")
         return self.clf.score(test_x, test_y)
 
-
     def transductive_fit(self, train_x, train_y, test_x, test_y, num_iter=100):
         for iter_i in range(num_iter):
             print(f"Iteration {iter_i}")
@@ -1265,18 +1254,15 @@ class DTWBarycenter():
             clf.fit(concat_x, concat_y)
             print(self.score(test_x, test_y))
 
-
     def transductive_score(self, train_x, train_y, test_x, test_y):
         self.transductive_fit(train_x, train_y, test_x, test_y)
         return self.score(test_x, test_y)
-
 
 
 class TransductiveEucCentroid(neighbors.NearestCentroid):
 
     def __init__(self, *args, **kwargs):
         super(TransductiveEucCentroid, self).__init__(*args, **kwargs)
-
 
     def transductive_fit(self, train_x, train_y, test_x, test_y, num_iter=100):
         for iter_i in range(num_iter):
@@ -1315,124 +1301,126 @@ clf_strs = args.clf_strs
 data_prep_strs = args.data_prep_strs
 for clf_str in clf_strs:
     for data_prep in data_prep_strs:
-            print(clf_str, data_prep)
-            data_prep_list = data_prep.split('+')
-            if 'normalize' in data_prep_list:
-                train_x = (train_x - train_x.mean(axis=(0,1))) / train_x.std(axis=(0,1))
-                test_x = (test_x - test_x.mean(axis=(0,1))) / train_x.std(axis=(0,1))
-            if 'clean_drop' in data_prep_list:
-                train_x = np.delete(train_x, clean_drop_channels, axis=2)
-                test_x = np.delete(test_x, clean_drop_channels, axis=2)
-            if 'ir_drop' in data_prep_list:
-                train_x = np.delete(train_x, IR_channels, axis=2)
-                test_x = np.delete(test_x, IR_channels, axis=2)
-            if 'ndvi' in data_prep_list:
-                def ndvi(x):
-                    nir = x[:, :, 4]
-                    r = x[:, :, 3]
-                    return (nir - r) / (nir + r)
-                train_x = ndvi(train_x)
-                test_x = ndvi(test_x)
-            if 'coords' in data_prep_list:
-                x_coords_train = np.tile(coords_train, (1, t))  # (N, t*2)
-                x_coords_train = x_coords_train.reshape((train_x.shape[0], t, -1))  # (N, t, 2)
-                train_x = np.concatenate((train_x, x_coords_train), axis=-1)  # (N, t, c+2)
+        print(clf_str, data_prep)
+        data_prep_list = data_prep.split('+')
+        if 'normalize' in data_prep_list:
+            train_x = (train_x - train_x.mean(axis=(0, 1))) / train_x.std(axis=(0, 1))
+            test_x = (test_x - test_x.mean(axis=(0, 1))) / train_x.std(axis=(0, 1))
+        if 'clean_drop' in data_prep_list:
+            train_x = np.delete(train_x, clean_drop_channels, axis=2)
+            test_x = np.delete(test_x, clean_drop_channels, axis=2)
+        if 'ir_drop' in data_prep_list:
+            train_x = np.delete(train_x, IR_channels, axis=2)
+            test_x = np.delete(test_x, IR_channels, axis=2)
+        if 'ndvi' in data_prep_list:
+            def ndvi(x):
+                nir = x[:, :, 4]
+                r = x[:, :, 3]
+                return (nir - r) / (nir + r)
 
-                x_coords_test = np.tile(coords_test, (1, t))  # (Nte, t*2)
-                x_coords_test = x_coords_test.reshape((test_x.shape[0], t, -1))  # (Nte, t, 2)
-                test_x = np.concatenate((test_x, x_coords_test), axis=-1)  # (Nte, t, c+2)
 
-            train_x = train_x.reshape(train_x.shape[0], -1)
-            test_x = test_x.reshape(test_x.shape[0], -1)
+            train_x = ndvi(train_x)
+            test_x = ndvi(test_x)
+        if 'coords' in data_prep_list:
+            x_coords_train = np.tile(coords_train, (1, t))  # (N, t*2)
+            x_coords_train = x_coords_train.reshape((train_x.shape[0], t, -1))  # (N, t, 2)
+            train_x = np.concatenate((train_x, x_coords_train), axis=-1)  # (N, t, c+2)
 
-            print("Initializing classifier")
-            if 'knn' in clf_str:
-                n_neighbors = int(clf_str.split('knn_')[1])
-                weights = 'distance'
-                if 'euc_knn' in clf_str:
-                    clf = neighbors.KNeighborsClassifier(n_neighbors=n_neighbors,
-                                                         weights=weights)
-                if 'dtw_knn' in clf_str:
-                    clf = neighbors.KNeighborsClassifier(metric=reshape_dtw,
-                                                         n_neighbors=n_neighbors,
-                                                          weights=weights)
-            elif 'softdtw_centroid' in clf_str:# might have _transducitve at front
-                clf =  DTWBarycenter('soft')
-            elif 'SGdtw_centroid' in clf_str:# might have _transducitve at front
-                clf =  DTWBarycenter('SG')
-            elif clf_str == 'euc_centroid':
-                clf = neighbors.NearestCentroid()
-            elif clf_str == 'per_region_euc_centroid':
-                clf = PerRegionNearestCentroid()
-            elif clf_str == 'hybrid_barycenter':
-                clf = DTWBarycenter('hybrid')
-            elif clf_str == 'transductive_euc_centroid':
-                clf = TransductiveEucCentroid()
-            elif clf_str == 'logistic':
-                clf = linear_model.LogisticRegression()
-            elif clf_str == 'mlp':
-                clf = TorchNN()
-            elif clf_str == 'mlp_no_bn':
-                clf = TorchNN(use_bn=False)
-            elif clf_str == 'mlp_wd':
-                clf = TorchNN(wd=1e-2)
-            elif clf_str == 'transductive_startup_mlp':
-                clf = TransductiveStartupNN()
-            elif clf_str == 'transductive_hard_mlp':
-                clf = TransductiveHardNN()
-            elif clf_str == 'linear':
-                clf = TorchNN(num_hidden_layers=0)
-            elif clf_str == 'transformer':
-                in_channels = x_train.shape[-1]
-                clf = TransformerNN(in_channels=in_channels)
-            elif clf_str == 'transformer_correlation':
-                assert 'coords' in data_prep_list
-                in_channels = x_train.shape[-1] - 2
-                print("ATTENTION: Right now coords is needed in data prep list to give targets but it NOT used as input")
-                clf = TransformerCorrelation(args.weight, in_channels=in_channels)
-            elif clf_str == 'retrain_transformer':
-                clf = RetrainTransformerNN()
-            elif clf_str == 'transformer_target_classes_only':
-                clf = TargetClassesTransformerNN()
-            elif clf_str == 'kmeans_eval':
-                clf = KMeansEvaluation(n_clusters=len(interest_classes))
-            elif clf_str == 'per_region_transformer_average_ensemble':
-                clf = TransformerEnsemble()
-            elif clf_str == 'per_region_transformer_confidence_ensemble':
-                clf = TransformerEnsemble(method='highest_confidence')
-            elif clf_str == 'per_region_kmeans_matching':
-                clf = KMeansMatching(n_clusters=50)
-            elif clf_str == 'per_region_h_div':
-                clf = HDivergence()
-            elif clf_str == 'h_div_select':
-                clf = HDivergenceSorting()
-            elif clf_str == 'per_region_gen_h_div':
-                clf = GeneralizingHDivergence(thresh=args.thresh, group_by_class=False,
-                                            in_channels=7 if 'ir_drop' in data_prep_list else 9)
-            elif clf_str == 'per_region_classwise_gen_h_div':
-                clf = GeneralizingHDivergence(thresh=args.thresh, group_by_class=True,
-                                            in_channels=7 if 'ir_drop' in data_prep_list else 9)
-            elif clf_str == 'ntk':
-                clf = NTK(args.num_ntk_nets,
-                            norm_indivs=args.norm_indivs,
-                            greedy_similarity=args.greedy_similarity,
-                            dimension=args.dimension,
-                            optimize_distributional_average=False)
-            elif clf_str == 'ntk_distributional':
-                clf = NTK(args.num_ntk_nets,
-                            norm_indivs=args.norm_indivs,
-                            greedy_similarity=args.greedy_similarity,
-                            dimension=args.dimension,
-                            optimize_distributional_average=True)
-            else:
-                raise NotImplementedError
-            clf.fit(train_x, train_y)
-            gen_score = clf.transductive_score(train_x, train_y, test_x, test_y) \
-                if 'transductive' in clf_str else clf.score(test_x, test_y)
-            # metrics.plot_confusion_matrix(clf, test_x, test_y)
-            # plt.savefig(f"{generalization_region}_{clf_str}_{data_prep}.png")
-            # pred_test_y = clf.predict(test_x)
-            # confusion_matrix = metrics.confusion_matrix(test_y, pred_test_y, labels=interest_classes)
-            # np.save(f"{generalization_region}_{clf_str}_{data_prep}.npy", confusion_matrix)
-            print(clf_str, data_prep, gen_score)
-            sys.stdout.flush()
+            x_coords_test = np.tile(coords_test, (1, t))  # (Nte, t*2)
+            x_coords_test = x_coords_test.reshape((test_x.shape[0], t, -1))  # (Nte, t, 2)
+            test_x = np.concatenate((test_x, x_coords_test), axis=-1)  # (Nte, t, c+2)
+
+        train_x = train_x.reshape(train_x.shape[0], -1)
+        test_x = test_x.reshape(test_x.shape[0], -1)
+
+        print("Initializing classifier")
+        if 'knn' in clf_str:
+            n_neighbors = int(clf_str.split('knn_')[1])
+            weights = 'distance'
+            if 'euc_knn' in clf_str:
+                clf = neighbors.KNeighborsClassifier(n_neighbors=n_neighbors,
+                                                     weights=weights)
+            if 'dtw_knn' in clf_str:
+                clf = neighbors.KNeighborsClassifier(metric=reshape_dtw,
+                                                     n_neighbors=n_neighbors,
+                                                     weights=weights)
+        elif 'softdtw_centroid' in clf_str:  # might have _transducitve at front
+            clf = DTWBarycenter('soft')
+        elif 'SGdtw_centroid' in clf_str:  # might have _transducitve at front
+            clf = DTWBarycenter('SG')
+        elif clf_str == 'euc_centroid':
+            clf = neighbors.NearestCentroid()
+        elif clf_str == 'per_region_euc_centroid':
+            clf = PerRegionNearestCentroid()
+        elif clf_str == 'hybrid_barycenter':
+            clf = DTWBarycenter('hybrid')
+        elif clf_str == 'transductive_euc_centroid':
+            clf = TransductiveEucCentroid()
+        elif clf_str == 'logistic':
+            clf = linear_model.LogisticRegression()
+        elif clf_str == 'mlp':
+            clf = TorchNN()
+        elif clf_str == 'mlp_no_bn':
+            clf = TorchNN(use_bn=False)
+        elif clf_str == 'mlp_wd':
+            clf = TorchNN(wd=1e-2)
+        elif clf_str == 'transductive_startup_mlp':
+            clf = TransductiveStartupNN()
+        elif clf_str == 'transductive_hard_mlp':
+            clf = TransductiveHardNN()
+        elif clf_str == 'linear':
+            clf = TorchNN(num_hidden_layers=0)
+        elif clf_str == 'transformer':
+            in_channels = x_train.shape[-1]
+            clf = TransformerNN(in_channels=in_channels)
+        elif clf_str == 'transformer_correlation':
+            assert 'coords' in data_prep_list
+            in_channels = x_train.shape[-1] - 2
+            print("ATTENTION: Right now coords is needed in data prep list to give targets but it NOT used as input")
+            clf = TransformerCorrelation(args.weight, in_channels=in_channels)
+        elif clf_str == 'retrain_transformer':
+            clf = RetrainTransformerNN()
+        elif clf_str == 'transformer_target_classes_only':
+            clf = TargetClassesTransformerNN()
+        elif clf_str == 'kmeans_eval':
+            clf = KMeansEvaluation(n_clusters=len(interest_classes))
+        elif clf_str == 'per_region_transformer_average_ensemble':
+            clf = TransformerEnsemble()
+        elif clf_str == 'per_region_transformer_confidence_ensemble':
+            clf = TransformerEnsemble(method='highest_confidence')
+        elif clf_str == 'per_region_kmeans_matching':
+            clf = KMeansMatching(n_clusters=50)
+        elif clf_str == 'per_region_h_div':
+            clf = HDivergence()
+        elif clf_str == 'h_div_select':
+            clf = HDivergenceSorting()
+        elif clf_str == 'per_region_gen_h_div':
+            clf = GeneralizingHDivergence(thresh=args.thresh, group_by_class=False,
+                                          in_channels=7 if 'ir_drop' in data_prep_list else 9)
+        elif clf_str == 'per_region_classwise_gen_h_div':
+            clf = GeneralizingHDivergence(thresh=args.thresh, group_by_class=True,
+                                          in_channels=7 if 'ir_drop' in data_prep_list else 9)
+        elif clf_str == 'ntk':
+            clf = NTK(args.num_ntk_nets,
+                      norm_indivs=args.norm_indivs,
+                      greedy_similarity=args.greedy_similarity,
+                      dimension=args.dimension,
+                      optimize_distributional_average=False)
+        elif clf_str == 'ntk_distributional':
+            clf = NTK(args.num_ntk_nets,
+                      norm_indivs=args.norm_indivs,
+                      greedy_similarity=args.greedy_similarity,
+                      dimension=args.dimension,
+                      optimize_distributional_average=True)
+        else:
+            raise NotImplementedError
+        clf.fit(train_x, train_y)
+        gen_score = clf.transductive_score(train_x, train_y, test_x, test_y) \
+            if 'transductive' in clf_str else clf.score(test_x, test_y)
+        # metrics.plot_confusion_matrix(clf, test_x, test_y)
+        # plt.savefig(f"{generalization_region}_{clf_str}_{data_prep}.png")
+        # pred_test_y = clf.predict(test_x)
+        # confusion_matrix = metrics.confusion_matrix(test_y, pred_test_y, labels=interest_classes)
+        # np.save(f"{generalization_region}_{clf_str}_{data_prep}.npy", confusion_matrix)
+        print(clf_str, data_prep, gen_score)
+        sys.stdout.flush()

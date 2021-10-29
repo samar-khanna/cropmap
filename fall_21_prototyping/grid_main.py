@@ -1378,11 +1378,11 @@ for clf_str in clf_strs:
         elif clf_str == 'linear':
             clf = TorchNN(num_hidden_layers=0)
         elif clf_str == 'transformer':
-            in_channels = c
+            in_channels = train_x.shape[-1]/t
             clf = TransformerNN(in_channels=in_channels)
         elif clf_str == 'transformer_correlation':
             assert 'coords' in data_prep_list
-            in_channels = c - 2
+            in_channels = train_x.shape[-1]/t - 2
             print("ATTENTION: Right now coords is needed in data prep list to give targets but it NOT used as input")
             clf = TransformerCorrelation(args.weight, in_channels=in_channels)
         elif clf_str == 'retrain_transformer':

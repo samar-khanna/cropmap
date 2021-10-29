@@ -1337,6 +1337,7 @@ for clf_str in clf_strs:
             x_coords_test = x_coords_test.reshape((test_x.shape[0], t, -1))  # (Nte, t, 2)
             test_x = np.concatenate((test_x, x_coords_test), axis=-1)  # (Nte, t, c+2)
 
+        _, t, in_c = train_x.shape
         train_x = train_x.reshape(train_x.shape[0], -1)
         test_x = test_x.reshape(test_x.shape[0], -1)
 
@@ -1378,13 +1379,11 @@ for clf_str in clf_strs:
         elif clf_str == 'linear':
             clf = TorchNN(num_hidden_layers=0)
         elif clf_str == 'transformer':
-            in_channels = train_x.shape[-1]/t
-            clf = TransformerNN(in_channels=in_channels)
+            clf = TransformerNN(in_channels=in_c)
         elif clf_str == 'transformer_correlation':
             assert 'coords' in data_prep_list
-            in_channels = train_x.shape[-1]/t - 2
             print("ATTENTION: Right now coords is needed in data prep list to give targets but it NOT used as input")
-            clf = TransformerCorrelation(args.weight, in_channels=in_channels)
+            clf = TransformerCorrelation(args.weight, in_channels=in_c)
         elif clf_str == 'retrain_transformer':
             clf = RetrainTransformerNN()
         elif clf_str == 'transformer_target_classes_only':

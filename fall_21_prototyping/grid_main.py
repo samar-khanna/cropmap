@@ -27,7 +27,7 @@ print(sys.argv)
 parser = argparse.ArgumentParser()
 parser.add_argument("--generalization-region", type=str, default='')
 parser.add_argument("--source-region", type=str, default='')
-parser.add_argument("--save-basedir", type=str, default="/share/bharath/sak296/caching/")
+parser.add_argument("--save-basedir", type=str, default="/share/bharath/sak296/grid_1609/experiments")
 parser.add_argument("--data-mode", type=str, default="generalization")
 parser.add_argument("--clf-strs", type=str, nargs='+', default=['euc_centroid'])
 parser.add_argument("--data-prep-strs", type=str, nargs='+', default=[''])
@@ -48,6 +48,10 @@ region_class_hash_increment = 1e6
 
 basedir = "/share/bharath/sak296/grid_1609/"
 save_basedir = args.save_basedir
+exp_save_dir = f"{'_'.join(args.clf_strs)}_{'_'.join(args.data_prep_strs)}" + \
+                f"_te-{args.generalization_region}_tr-{args.source_region if args.source_region else 'all'}"
+exp_save_dir = os.path.join(save_basedir, exp_save_dir)
+os.makedirs(exp_save_dir, exist_ok=True)
 
 regions = [f for f in os.listdir(basedir) if f.startswith('usa')]
 
@@ -251,6 +255,9 @@ class TorchNN():
                     best_sd = self.mlp.state_dict()
                     best_val_loss = ave_loss
                     min_loss_epoch = epoch_i
+
+                    # TODO: Some logic to not always save?
+                    torch.save(best_sd, os.path.join(exp_save_dir, 'checkpoint.bin'))
 
             epoch_i += 1
         self.mlp.load_state_dict(best_sd)
@@ -1423,4 +1430,5 @@ for clf_str in clf_strs:
         # confusion_matrix = metrics.confusion_matrix(test_y, pred_test_y, labels=interest_classes)
         # np.save(f"{generalization_region}_{clf_str}_{data_prep}.npy", confusion_matrix)
         print(clf_str, data_prep, gen_score)
+        print()
         sys.stdout.flush()

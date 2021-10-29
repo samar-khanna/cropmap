@@ -1383,7 +1383,7 @@ for clf_str in clf_strs:
         elif clf_str == 'transformer_correlation':
             assert 'coords' in data_prep_list
             print("ATTENTION: Right now coords is needed in data prep list to give targets but it NOT used as input")
-            clf = TransformerCorrelation(args.weight, in_channels=in_c)
+            clf = TransformerCorrelation(args.weight, in_channels=in_c-2)
         elif clf_str == 'retrain_transformer':
             clf = RetrainTransformerNN()
         elif clf_str == 'transformer_target_classes_only':

@@ -372,15 +372,17 @@ class TransformerCorrelation(TransformerNN):
                 # if not bi%500: print_call(f"{num_seen} / {n_train}")
                 self.opt.zero_grad()
                 preds, feat = self.mlp(bx, return_final_feature=True)
-                coeffs = feat.pinverse() @ reg_t
+                coeffs = feat.pinverse() @ centered_reg_t
                 recon = feat @ coeffs
-                res = (recon - reg_t).pow(2).mean()
+                res = (centered_reg_t - recon).pow(2).mean()
+                corr_loss = self.weight * res / (centered_reg_t.pow(2).mean())
                 # print(res)
                 # res = torch.linalg.lstsq(feat, coords).residuals.mean()
                 batch_weights = curr_bs * batch_weights / batch_weights.sum()
                 clf_loss = (criterion(preds, by) * batch_weights).mean()
                 # print(clf_loss, res, self.weight)
-                loss = clf_loss + self.weight * res
+                # print(clf_loss, corr_loss)
+                loss = clf_loss + corr_loss
                 loss.backward()
                 self.opt.step()
                 num_correct += (preds.argmax(dim=1) == by).sum().item()
@@ -410,14 +412,15 @@ class TransformerCorrelation(TransformerNN):
                     num_seen += curr_bs
                     # if not bi%500: print_call(f"{num_seen} / {n_train}")
                     preds, feat = self.mlp(bx, return_final_feature=True)
-                    coeffs = feat.pinverse() @ reg_t
+                    coeffs = feat.pinverse() @ centered_reg_t
                     recon = feat @ coeffs
-                    res = (recon - reg_t).pow(2).mean()
+                    res = (recon - centered_reg_t).pow(2).mean()
+                    corr_loss = self.weight * res / (centered_reg_t.pow(2).mean())
                     # get total weight equal to curr_bs
                     batch_weights = curr_bs * batch_weights / batch_weights.sum()
                     clf_loss = (criterion(preds, by) * batch_weights).mean()
                     # print(clf_loss, res, self.weight)
-                    loss = clf_loss + self.weight * res
+                    loss = clf_loss + corr_loss
                     num_correct += (preds.argmax(dim=1) == by).sum().item()
                     loss_sum += curr_bs * loss.item()
                 ave_loss = loss_sum / num_seen

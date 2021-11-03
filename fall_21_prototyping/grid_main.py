@@ -398,12 +398,13 @@ class TransformerCorrelation(TransformerNN):
                     bx = bx.cuda()
                     N, num_channels = bx.shape
                     orig_bx = bx.clone()
-                    bx = bx.view(N, -1, self.mlp.in_c + 2)  # (N, t, in_c)
-                    reg_t = bx[:, :, -2:].mean(dim=1)  # all repeated anyways
+                    bx = bx.view(N, -1, self.mlp.in_c + self.reg_c)  # (N, t, in_c)
+                    reg_t = bx[:, :, -self.reg_c:].mean(dim=1)  # all repeated anyways
                     centered_reg_t = reg_t - reg_t.mean(0, keepdim=True)  #
-                    bx = bx[:, :, :-2].reshape(N, -1)
+                    bx = bx[:, :, :-self.reg_c].reshape(N, -1)
                     assert abs(
-                        orig_bx.view(N, -1, self.mlp.in_c + 2)[:, :, :-2] - bx.view(N, -1, self.mlp.in_c)).sum() < 1e-8
+                        orig_bx.view(N, -1, self.mlp.in_c + self.reg_c)[:, :, :-self.reg_c] -
+                        bx.view(N, -1, self.mlp.in_c)).sum() < 1e-8
                     by = by.cuda()
                     curr_bs = bx.shape[0]
                     num_seen += curr_bs

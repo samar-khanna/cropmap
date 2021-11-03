@@ -455,8 +455,8 @@ class TransformerCorrelation(TransformerNN):
             for bi, (bx, by) in enumerate(loader):
                 bx = bx.cuda()
                 N, num_channels = bx.shape
-                bx = bx.view(N, -1, self.mlp.in_c + 2)  # (N, t, in_c)
-                bx = bx[:, :, :-2].reshape(N, -1)
+                bx = bx.view(N, -1, self.mlp.in_c + self.reg_c)  # (N, t, in_c)
+                bx = bx[:, :, :-self.reg_c].reshape(N, -1)
                 by = by.cuda()
                 num_seen += bx.shape[0]
                 # if not bi%20: print(f"{num_seen} / {n_train}")

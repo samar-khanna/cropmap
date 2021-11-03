@@ -1401,7 +1401,7 @@ for clf_str in clf_strs:
         elif clf_str == 'transformer':
             clf = TransformerNN(in_channels=in_c)
         elif clf_str == 'transformer_correlation':
-            assert 'coords' in data_prep_list
+            assert 'coords' in data_prep_list or 'climate' in data_prep_list
             print("ATTENTION: Right now coords is needed in data prep list to give targets but it NOT used as input")
             reg_c = in_c - c  # (9 + x - 9)
             print(f"Regression channels: {reg_c}")

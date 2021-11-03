@@ -73,59 +73,69 @@ def load_data_from_pickle(path_dir):
         y = pickle.load(f)
     with open(os.path.join(path_dir, 'coords.pkl'), 'rb') as f:
         coords = pickle.load(f)
-    return x, y, coords
+    with open(os.path.join(path_dir, 'climate.pkl'), 'rb') as f:
+        climate = pickle.load(f)
+    return x, y, coords, climate
 
 
-x_train, y_train, coords_train = [], [], []
-x_test, y_test, coords_test = [], [], []
+def load_and_append(region_dir, *buffers):
+    load_out = load_data_from_pickle(region_dir)
+
+    assert len(load_out) == len(buffers), "Provide same #args as pickle load items"
+    for buffer, array in zip(buffers, load_out):
+        buffer.append(array)
+
+
+x_train, y_train, coords_train, climate_train = [], [], [], []
+x_test, y_test, coords_test, climate_test = [], [], [], []
 for i, region in enumerate(regions):
+    region_dir = os.path.join(basedir, region)
     if i == generalization_region_i:
-        x, y, coords = load_data_from_pickle(os.path.join(basedir, region))
-        x_test.append(x)
-        y_test.append(y)
-        coords_test.append(coords)
+        load_and_append(region_dir, x_test, y_test, coords_test, climate_test)
+        # x, y, coords, climate = load_data_from_pickle(os.path.join(basedir, region))
+        # x_test.append(x)
+        # y_test.append(y)
+        # coords_test.append(coords)
     elif source_region is not None:
         # Specific source region in x_train
         if i == source_region_i:
-            x, y, coords = load_data_from_pickle(os.path.join(basedir, region))
-            x_train.append(x)
-            y_train.append(y)
-            coords_train.append(coords)
+            load_and_append(region_dir, x_train, y_train, coords_train, climate_train)
     else:
         # All source regions in x_train
-        x, y, coords = load_data_from_pickle(os.path.join(basedir, region))
-        x_train.append(x)
-        y_train.append(y)
-        coords_train.append(coords)
+        load_and_append(region_dir, x_train, y_train, coords_train, climate_train)
 
 x_train = np.concatenate(x_train, axis=0)  # (N, c, t)
 y_train = np.concatenate(y_train, axis=0)  # (N,)
 coords_train = np.concatenate(coords_train, axis=0)  # (N, 2)  fmt: (lon, lat)
+climate_train = np.concatenate(climate_train, axis=0)  # (N, 19)
 
 x_test = np.concatenate(x_test, axis=0)  # (Nte, c, t)
 y_test = np.concatenate(y_test, axis=0)  # (Nte,)
-coords_test = np.concatenate(coords_test, axis=0)  # (N, 2)  fmt: (lon, lat)
+coords_test = np.concatenate(coords_test, axis=0)  # (Nte, 2)  fmt: (lon, lat)
+climate_test = np.concatenate(climate_test, axis=0)  # (Nte, 19)
 
-interest_train_mask = np.isin(y_train, interest_classes)
-x_train = x_train[interest_train_mask]
-y_train = y_train[interest_train_mask]
-coords_train = coords_train[interest_train_mask]
-
-interest_test_mask = np.isin(y_test, interest_classes)
-x_test = x_test[interest_test_mask]
-y_test = y_test[interest_test_mask]
-coords_test = coords_test[interest_test_mask]
+# interest_train_mask = np.isin(y_train, interest_classes)
+# x_train = x_train[interest_train_mask]
+# y_train = y_train[interest_train_mask]
+# coords_train = coords_train[interest_train_mask]
+#
+# interest_test_mask = np.isin(y_test, interest_classes)
+# x_test = x_test[interest_test_mask]
+# y_test = y_test[interest_test_mask]
+# coords_test = coords_test[interest_test_mask]
 
 # TODO: Clear idx (filter away clouds)
 cloud_train_mask = np.any(x_train.reshape(x_train.shape[0], -1) > 0, axis=-1)  # (N,)
 x_train = x_train[cloud_train_mask]  # (N, c, t)
 y_train = y_train[cloud_train_mask]
 coords_train = coords_train[cloud_train_mask]
+climate_train = climate_train[cloud_train_mask]
 
 cloud_test_mask = np.any(x_test.reshape(x_test.shape[0], -1) > 0, axis=-1)  # (Nte,)
 x_test = x_test[cloud_test_mask]
 y_test = y_test[cloud_test_mask]
 coords_test = coords_test[cloud_test_mask]
+climate_test = climate_test[cloud_test_mask]
 
 train_x = x_train.transpose(0, 2, 1)  # (N, t, c)
 train_y = y_train
@@ -1336,6 +1346,14 @@ for clf_str in clf_strs:
             x_coords_test = np.tile(coords_test, (1, t))  # (Nte, t*2)
             x_coords_test = x_coords_test.reshape((test_x.shape[0], t, -1))  # (Nte, t, 2)
             test_x = np.concatenate((test_x, x_coords_test), axis=-1)  # (Nte, t, c+2)
+        if 'climate' in data_prep_list:
+            x_climate_train = np.tile(climate_train, (1, t))  # (N, t*19)
+            x_climate_train = x_climate_train.reshape((train_x.shape[0], t, -1))  # (N, t, 19)
+            train_x = np.concatenate((train_x, x_climate_train), axis=-1)  # (N, t, c+19)
+
+            x_climate_test = np.tile(climate_test, (1, t))  # (Nte, t*19)
+            x_climate_test = x_climate_test.reshape((test_x.shape[0], t, -1))  # (Nte, t, 2)
+            test_x = np.concatenate((test_x, x_climate_test), axis=-1)  # (Nte, t, c+19)
 
         _, t, in_c = train_x.shape
         train_x = train_x.reshape(train_x.shape[0], -1)

@@ -324,8 +324,9 @@ class TransformerNN(TorchNN):
 
 
 class TransformerCorrelation(TransformerNN):
-    def __init__(self, weight, **kwargs):
+    def __init__(self, weight, reg_c, **kwargs):
         self.weight = weight
+        self.reg_c = reg_c
         super().__init__(**kwargs)
 
     def fit(self, train_x, train_y, bs=4096, return_best_val_acc=False,
@@ -358,21 +359,22 @@ class TransformerCorrelation(TransformerNN):
                 bx = bx.cuda()
                 N, num_channels = bx.shape
                 orig_bx = bx.clone()
-                bx = bx.view(N, -1, self.mlp.in_c + 2)  # (N, t, in_c)
-                coords = bx[:, :, -2:].mean(dim=1)  # all repeated anyways
-                centered_coords = coords - coords.mean(0, keepdim=True)  #
-                bx = bx[:, :, :-2].reshape(N, -1)
+                bx = bx.view(N, -1, self.mlp.in_c + self.reg_c)  # (N, t, in_c)
+                reg_t = bx[:, :, -self.reg_c:].mean(dim=1)  # all repeated anyways
+                centered_reg_t = reg_t - reg_t.mean(0, keepdim=True)  #
+                bx = bx[:, :, :-self.reg_c].reshape(N, -1)
                 assert abs(
-                    orig_bx.view(N, -1, self.mlp.in_c + 2)[:, :, :-2] - bx.view(N, -1, self.mlp.in_c)).sum() < 1e-8
+                    orig_bx.view(N, -1, self.mlp.in_c + self.reg_c)[:, :, :-self.reg_c] -
+                    bx.view(N, -1, self.mlp.in_c)).sum() < 1e-8
                 by = by.cuda()
                 curr_bs = bx.shape[0]
                 num_seen += curr_bs
                 # if not bi%500: print_call(f"{num_seen} / {n_train}")
                 self.opt.zero_grad()
                 preds, feat = self.mlp(bx, return_final_feature=True)
-                coeffs = feat.pinverse() @ coords
+                coeffs = feat.pinverse() @ reg_t
                 recon = feat @ coeffs
-                res = (recon - coords).pow(2).mean()
+                res = (recon - reg_t).pow(2).mean()
                 # print(res)
                 # res = torch.linalg.lstsq(feat, coords).residuals.mean()
                 batch_weights = curr_bs * batch_weights / batch_weights.sum()
@@ -397,8 +399,8 @@ class TransformerCorrelation(TransformerNN):
                     N, num_channels = bx.shape
                     orig_bx = bx.clone()
                     bx = bx.view(N, -1, self.mlp.in_c + 2)  # (N, t, in_c)
-                    coords = bx[:, :, -2:].mean(dim=1)  # all repeated anyways
-                    centered_coords = coords - coords.mean(0, keepdim=True)  #
+                    reg_t = bx[:, :, -2:].mean(dim=1)  # all repeated anyways
+                    centered_reg_t = reg_t - reg_t.mean(0, keepdim=True)  #
                     bx = bx[:, :, :-2].reshape(N, -1)
                     assert abs(
                         orig_bx.view(N, -1, self.mlp.in_c + 2)[:, :, :-2] - bx.view(N, -1, self.mlp.in_c)).sum() < 1e-8
@@ -407,9 +409,9 @@ class TransformerCorrelation(TransformerNN):
                     num_seen += curr_bs
                     # if not bi%500: print_call(f"{num_seen} / {n_train}")
                     preds, feat = self.mlp(bx, return_final_feature=True)
-                    coeffs = feat.pinverse() @ coords
+                    coeffs = feat.pinverse() @ reg_t
                     recon = feat @ coeffs
-                    res = (recon - coords).pow(2).mean()
+                    res = (recon - reg_t).pow(2).mean()
                     # get total weight equal to curr_bs
                     batch_weights = curr_bs * batch_weights / batch_weights.sum()
                     clf_loss = (criterion(preds, by) * batch_weights).mean()
@@ -1401,7 +1403,9 @@ for clf_str in clf_strs:
         elif clf_str == 'transformer_correlation':
             assert 'coords' in data_prep_list
             print("ATTENTION: Right now coords is needed in data prep list to give targets but it NOT used as input")
-            clf = TransformerCorrelation(args.weight, in_channels=in_c-2)
+            reg_c = in_c - c  # (9 + x - 9)
+            print(f"Regression channels: {reg_c}")
+            clf = TransformerCorrelation(args.weight, reg_c, in_channels=in_c-reg_c)
         elif clf_str == 'retrain_transformer':
             clf = RetrainTransformerNN()
         elif clf_str == 'transformer_target_classes_only':

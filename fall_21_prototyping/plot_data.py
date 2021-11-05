@@ -5,6 +5,7 @@ import argparse
 import numpy as np
 from scipy.spatial.distance import cdist
 from sklearn.metrics import pairwise_distances
+from sklearn.preprocessing import StandardScaler
 import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.cm import get_cmap
@@ -144,7 +145,7 @@ def coords_to_colors(coords):
     hsv_vals = np.stack([theta, 1 * np.ones(N), normed_r], axis=1)
     return matplotlib.colors.hsv_to_rgb(hsv_vals)
 
-def plot_transformer_feat(nearest, coords, target_inds, source_inds, k=1, savepath='tmp.png'):
+def plot_transformer_feat(nearest, coords, target_inds, source_inds, target_region_i, k=1, save_dir='plots/'):
     pix = mercator(coords, 200, 100).T  # (N, 2)
 
     # anchors = np.arange(target_feats.shape[0])
@@ -174,13 +175,61 @@ def plot_transformer_feat(nearest, coords, target_inds, source_inds, k=1, savepa
 
     target_pix = pix[target_inds]
     # plt.scatter(target_pix[:, 1], target_pix[:, 0], c=target_anchors, cmap=cmap, s=1, alpha=1)
-    plt.scatter(target_pix[:, 1], target_pix[:, 0], c=coord_colors[source_inds][nearest[:,0]], cmap=cmap, s=1, alpha=1)
+    plt.scatter(target_pix[:, 1], target_pix[:, 0], c=coord_colors[source_inds][nearest[:,0]], s=1, alpha=1)
 
     # plt.show()
-    plt.savefig(savepath)
+    plt.savefig(f"{save_dir}/knn_transformer_feats_{target_region_i}.png")
+
+def plot_nearest_climate(coords, target_inds, source_inds, climates, target_region_i,
+                         normalize=True, save_dir='plots/', k=1):
+    normed_climates = StandardScaler().fit_transform(climates) if normalize else climates
+    source_climates = normed_climates[source_inds]
+    target_climates = normed_climates[target_inds]
+
+
+    print("Computing climate nearest neighbors")
+    dist = cdist(target_climates, source_climates)  # (Nt, Ns)
+    nearest = np.argsort(dist, axis=-1)[:, :1]  # (Nt, k)
+
+    pix = mercator(coords, 200, 100).T  # (N, 2)
+
+    coord_colors = coords_to_colors(coords)
+
+    source_pix = pix[source_inds]
+    plt.scatter(source_pix[:, 1], source_pix[:, 0], c=coord_colors[source_inds], s=1, alpha=1)
+
+    target_pix = pix[target_inds]
+    plt.scatter(target_pix[:, 1], target_pix[:, 0], c=coord_colors[source_inds][nearest[:,0]], s=1, alpha=1)
+
+    # plt.show()
+    normalization_str = "normed" if normalize else "raw"
+    plt.savefig(f"{save_dir}/knn_climate_{normalization_str}_{target_region_i}.png")
+
+def plot_nearest_x(coords, target_inds, source_inds, X, target_region_i,
+                         normalize=True, save_dir='plots/', k=1):
+    normed_X = StandardScaler().fit_transform(X) if normalize else X
+    source_X = normed_X[source_inds]
+    target_X = normed_X[target_inds]
+
+    print("Computing X data nearest neighbors")
+    dist = cdist(target_X, source_X)  # (Nt, Ns)
+    nearest = np.argsort(dist, axis=-1)[:, :1]  # (Nt, k)
+
+    pix = mercator(coords, 200, 100).T  # (N, 2)
+
+    coord_colors = coords_to_colors(coords)
+
+    source_pix = pix[source_inds]
+    plt.scatter(source_pix[:, 1], source_pix[:, 0], c=coord_colors[source_inds], s=1, alpha=1)
+
+    target_pix = pix[target_inds]
+    plt.scatter(target_pix[:, 1], target_pix[:, 0], c=coord_colors[source_inds][nearest[:,0]], s=1, alpha=1)
+
+    # plt.show()
+    normalization_str = "normed" if normalize else "raw"
+    plt.savefig(f"{save_dir}/knn_X_{normalization_str}_{target_region_i}.png")
 
     return nearest
-
 
 def load_data_from_pickle(path_dir):
     with open(os.path.join(path_dir, 'values.pkl'), 'rb') as f:
@@ -198,7 +247,7 @@ def passed_args():
     parser = argparse.ArgumentParser(description="Plot stuff")
     parser.add_argument('--data_path', type=str, default='../data_grid/grid_10000', help='Path to data')
     parser.add_argument('--checkpoint', type=str, help='Path to checkpoint dir')
-    parser.add_argument('--save-path', type=str, help='Path to save resulting image to ')
+    parser.add_argument('--save-dir', type=str, default='plots/', help='Dir to save resulting image(s) to')
     return parser.parse_args()
 
 
@@ -262,7 +311,15 @@ if __name__ == "__main__":
     #
     # # feats[lat_lon_inds] = feats[source_inds]
     # nearest = map[nearest]
-    plot_transformer_feat(nearest, coords, target_inds, source_inds, k=1, savepath=args.save_path)
+    #
     # plot_transformer_loss(losses, coords)
+    plot_nearest_climate(coords, target_inds, source_inds, climates, target_region_i, save_dir=args.save_dir)
+    plot_nearest_climate(coords, target_inds, source_inds, climates, target_region_i,
+                         normalize=False, save_dir=args.save_dir)
+    plot_nearest_x(coords, target_inds, source_inds, climates, target_region_i, save_dir=args.save_dir)
+    plot_nearest_x(coords, target_inds, source_inds, climates, target_region_i,
+                   normalize=False, save_dir=args.save_dir)
+    ###### BELOW THIS LINE IS COMPLETED ####
+    plot_transformer_feat(nearest, coords, target_inds, source_inds, target_region_i, k=1, save_dir=args.save_dir)
 
 

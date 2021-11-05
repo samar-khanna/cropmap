@@ -469,7 +469,7 @@ class TransformerCorrelation(TransformerNN):
                 bx = bx.view(N, -1, self.in_c)  # (N, t, in_c)
 
                 # (N, t*in_c*reg_c) if keep_reg else  (N, t*in_c)
-                bx = bx.reshape(N, -1) if self.keep_reg else bx = bx[:, :, :-self.reg_c].reshape(N, -1)
+                bx = bx.reshape(N, -1) if self.keep_reg else bx[:, :, :-self.reg_c].reshape(N, -1)
 
                 by = by.cuda()
                 num_seen += bx.shape[0]
@@ -494,7 +494,7 @@ class TransformerCorrelation(TransformerNN):
                 bx = bx.view(N, -1, self.in_c)  # (N, t, in_c + extra_c)
 
                 # (N, t*in_c*reg_c) if keep_reg else  (N, t*in_c)
-                bx = bx.reshape(N, -1) if self.keep_reg else bx = bx[:, :, :-self.reg_c].reshape(N, -1)
+                bx = bx.reshape(N, -1) if self.keep_reg else bx[:, :, :-self.reg_c].reshape(N, -1)
                 output = self.mlp(bx)
                 if not return_vec: output = output.argmax(dim=1)
                 preds_list.append(output)

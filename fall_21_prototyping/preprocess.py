@@ -8,8 +8,11 @@ import pandas as pd
 
 from collections import defaultdict
 
+from interest_classes import interest_classes
+
 
 BANDS = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'B11']
+CLIMATE_BANDS = ['bio' + (f'0{n}' if n < 10 else f'{n}') for n in range(1, 20)]
 
 
 def preprocess_separate_bands(paths_to_csvs, out_path):
@@ -36,6 +39,9 @@ def preprocess_dates(paths_to_csvs, out_path):
     time_df = None
     for i, p in enumerate(paths_to_csvs):
         df = pd.read_csv(p)
+        if 'coords' not in df.columns:
+            df['coords'] = df['.geo'].apply(lambda v: str(tuple(json.loads(v)['coordinates'])))
+            df.drop(['system:index', '.geo'], axis=1, inplace=True)
 
         if time_df is None:
             time_df = df
@@ -65,6 +71,21 @@ def preprocess_labels(time_df, path_to_gt, out_path):
 
     time_df = time_df.merge(gt, how='left', on='coords')
     # time_df.rename({'cropland': 'y'}, inplace=True)
+
+    time_df.dropna(inplace=True)
+    time_df.reset_index(drop=True, inplace=True)
+
+    time_df.to_csv(out_path, index=False)
+    return time_df
+
+
+def preprocess_climate(time_df, path_to_climate, out_path):
+    climate = pd.read_csv(path_to_climate)
+
+    climate['coords'] = climate['.geo'].apply(lambda v: str(tuple(json.loads(v)['coordinates'])))
+    climate.drop(['system:index', '.geo'], axis=1, inplace=True)
+
+    time_df = time_df.merge(climate, how='left', on='coords')
 
     time_df.dropna(inplace=True)
     time_df.reset_index(drop=True, inplace=True)
@@ -137,7 +158,7 @@ def tile_df(full_df, n=2):
     return groups
 
 
-def df_to_array(df):
+def df_to_array(df, class_filter=False, cloud_filter=False):
     X = df[BANDS].values
     X = np.array([[ast.literal_eval(ts) for ts in row] for row in X])  # (N, c, t)
 
@@ -145,7 +166,21 @@ def df_to_array(df):
     coords = np.array([ast.literal_eval(lon_lat) for lon_lat in coords])
 
     y = np.array(df['cropland'].values)
-    return X, y, coords
+
+    climate = np.array(df[CLIMATE_BANDS].values)
+
+    def apply_mask(mask, *arrs):
+        return [arr[mask] for arr in arrs]
+
+    # if class_filter:
+    #     interest_mask = np.isin(y, interest_classes)
+    #     X, y, coords, climate = apply_mask(interest_mask, X, y, coords, climate)
+
+    if cloud_filter:
+        cloud_mask = np.any(X.reshape(X.shape[0], -1) > 0, axis=-1)  # (N,)
+        X, y, coords, climate = apply_mask(cloud_mask, X, y, coords, climate)
+
+    return X, y, coords, climate
 
 
 def passed_arguments():
@@ -165,14 +200,15 @@ if __name__ == "__main__":
     out_path = os.path.join(abs_path, f'landsat_2017.csv')
 
     ## Once df is already created
-    n = 2
     df = pd.read_csv(out_path)
+
+    n = 2
     df_groups = tile_df(df, n)
     for g, gdf in df_groups.items():
         gstring = f'g{int(g[0]*n + g[1])}'
         print(g, gstring)
 
-        X, y, coords = df_to_array(gdf)
+        X, y, coords, climate = df_to_array(gdf, class_filter=False, cloud_filter=True)
 
         dest_dir = os.path.join(abs_path, 'usa_' + gstring)
         os.makedirs(dest_dir, exist_ok=True)
@@ -183,6 +219,8 @@ if __name__ == "__main__":
             pickle.dump(coords, f)
         with open(os.path.join(dest_dir, 'labels.pkl'), 'wb') as f:
             pickle.dump(y, f)
+        with open(os.path.join(dest_dir, 'climate.pkl'), 'wb') as f:
+            pickle.dump(climate, f)
 
         gdf.to_csv(os.path.join(dest_dir, f'landsat_2017_{gstring}.csv'), index=False)
 
@@ -208,10 +246,13 @@ if __name__ == "__main__":
     #
     #         time_df = preprocess_labels(time_df, path_to_gt, out_path)
 
+    ## Run below to start from separate dates
     # date_paths = [os.path.join(abs_path, f'landsat_2017_{mo}_{day}.csv') for mo, day in
     #               [('04', '07'), ('04', '23'), ('05', '09'), ('05', '25'),
     #                ('06', '10'), ('06', '26'), ('07', '12'), ('07', '28')]]
     # time_df = preprocess_dates(date_paths, out_path)
+    # time_df = preprocess_labels(time_df, os.path.join(abs_path, 'cdl_2017.csv'), out_path)
+    # time_df = preprocess_climate(time_df, os.path.join(abs_path, 'climate.csv'), out_path)
 
     # time_df = pd.read_csv(os.path.join(abs_path, 'landsat_2017_x.csv'))
     # time_df = preprocess_labels(time_df, os.path.join(abs_path, 'cdl_2017.csv'), out_path)

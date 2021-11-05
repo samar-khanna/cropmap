@@ -317,17 +317,17 @@ class TransformerNN(TorchNN):
         super().__init__(num_classes=num_classes)
         mlp = Transformer(num_classes=num_classes, in_channels=in_channels, n_conv=n_conv, **kwargs)
 
-        # print(f"CUDA there?: {torch.cuda.is_available()}")
-        # print("Re-cudaing Transformer NN if needed")
         self.mlp = mlp.cuda()
         self.opt = torch.optim.Adam(self.mlp.parameters())
 
 
 class TransformerCorrelation(TransformerNN):
-    def __init__(self, weight, reg_c, **kwargs):
+    def __init__(self, weight, reg_c, keep_reg, **kwargs):
+        super().__init__(**kwargs)
         self.weight = weight
         self.reg_c = reg_c
-        super().__init__(**kwargs)
+        self.keep_reg = keep_reg
+        self.in_c = self.mlp.in_c if keep_reg else self.mlp.in_c + reg_c
 
     def fit(self, train_x, train_y, bs=4096, return_best_val_acc=False,
             silent=False, sample_weights=None):
@@ -359,17 +359,21 @@ class TransformerCorrelation(TransformerNN):
                 bx = bx.cuda()
                 N, num_channels = bx.shape
                 orig_bx = bx.clone()
-                bx = bx.view(N, -1, self.mlp.in_c + self.reg_c)  # (N, t, in_c)
+                bx = bx.view(N, -1, self.in_c)  # (N, t, in_c + extra_c)
                 reg_t = bx[:, :, -self.reg_c:].mean(dim=1)  # all repeated anyways
                 centered_reg_t = reg_t - reg_t.mean(0, keepdim=True)  #
-                bx = bx[:, :, :-self.reg_c].reshape(N, -1)
-                assert abs(
-                    orig_bx.view(N, -1, self.mlp.in_c + self.reg_c)[:, :, :-self.reg_c] -
-                    bx.view(N, -1, self.mlp.in_c)).sum() < 1e-8
+
+                if self.keep_reg:
+                    bx = bx.reshape(N, -1)  # (N, t*in_c*reg_c)
+                else:
+                    bx = bx[:, :, :-self.reg_c].reshape(N, -1)
+                    assert abs(orig_bx.view(N, -1, self.in_c)[:, :, :-self.reg_c] -
+                               bx.view(N, -1, self.mlp.in_c)).sum() < 1e-8
+
                 by = by.cuda()
                 curr_bs = bx.shape[0]
                 num_seen += curr_bs
-                # if not bi%500: print_call(f"{num_seen} / {n_train}")
+
                 self.opt.zero_grad()
                 preds, feat = self.mlp(bx, return_final_feature=True)
                 coeffs = feat.pinverse() @ centered_reg_t
@@ -400,13 +404,17 @@ class TransformerCorrelation(TransformerNN):
                     bx = bx.cuda()
                     N, num_channels = bx.shape
                     orig_bx = bx.clone()
-                    bx = bx.view(N, -1, self.mlp.in_c + self.reg_c)  # (N, t, in_c)
+                    bx = bx.view(N, -1, self.in_c)  # (N, t, in_c + extra_c)
                     reg_t = bx[:, :, -self.reg_c:].mean(dim=1)  # all repeated anyways
                     centered_reg_t = reg_t - reg_t.mean(0, keepdim=True)  #
-                    bx = bx[:, :, :-self.reg_c].reshape(N, -1)
-                    assert abs(
-                        orig_bx.view(N, -1, self.mlp.in_c + self.reg_c)[:, :, :-self.reg_c] -
-                        bx.view(N, -1, self.mlp.in_c)).sum() < 1e-8
+
+                    if self.keep_reg:
+                        bx = bx.reshape(N, -1)  # (N, t*in_c*reg_c)
+                    else:
+                        bx = bx[:, :, :-self.reg_c].reshape(N, -1)
+                        assert abs(orig_bx.view(N, -1, self.in_c)[:, :, :-self.reg_c] -
+                                   bx.view(N, -1, self.mlp.in_c)).sum() < 1e-8
+
                     by = by.cuda()
                     curr_bs = bx.shape[0]
                     num_seen += curr_bs
@@ -458,8 +466,11 @@ class TransformerCorrelation(TransformerNN):
             for bi, (bx, by) in enumerate(loader):
                 bx = bx.cuda()
                 N, num_channels = bx.shape
-                bx = bx.view(N, -1, self.mlp.in_c + self.reg_c)  # (N, t, in_c)
-                bx = bx[:, :, :-self.reg_c].reshape(N, -1)
+                bx = bx.view(N, -1, self.in_c)  # (N, t, in_c)
+
+                # (N, t*in_c*reg_c) if keep_reg else  (N, t*in_c)
+                bx = bx.reshape(N, -1) if self.keep_reg else bx = bx[:, :, :-self.reg_c].reshape(N, -1)
+
                 by = by.cuda()
                 num_seen += bx.shape[0]
                 # if not bi%20: print(f"{num_seen} / {n_train}")
@@ -480,8 +491,10 @@ class TransformerCorrelation(TransformerNN):
             for bi, (bx,) in enumerate(loader):
                 bx = bx.cuda()
                 N, num_channels = bx.shape
-                bx = bx.view(N, -1, self.mlp.in_c + 2)  # (N, t, in_c)
-                bx = bx[:, :, :-2].reshape(N, -1)
+                bx = bx.view(N, -1, self.in_c)  # (N, t, in_c + extra_c)
+
+                # (N, t*in_c*reg_c) if keep_reg else  (N, t*in_c)
+                bx = bx.reshape(N, -1) if self.keep_reg else bx = bx[:, :, :-self.reg_c].reshape(N, -1)
                 output = self.mlp(bx)
                 if not return_vec: output = output.argmax(dim=1)
                 preds_list.append(output)
@@ -1409,7 +1422,12 @@ for clf_str in clf_strs:
             print("ATTENTION: Right now coords is needed in data prep list to give targets but it NOT used as input")
             reg_c = in_c - c  # (9 + x - 9)
             print(f"Regression channels: {reg_c}")
-            clf = TransformerCorrelation(args.weight, reg_c, in_channels=in_c-reg_c)
+            clf = TransformerCorrelation(args.weight, reg_c, False, in_channels=in_c-reg_c)
+        elif clf_str == 'transformer_correlation_input':
+            assert 'coords' in data_prep_list or 'climate' in data_prep_list
+            print("ATTENTION: Right now coords/climate is used as input and target")
+            reg_c = in_c - c  # (9 + x - 9)
+            clf = TransformerCorrelation(args.weight, reg_c, True, in_channels=in_c)
         elif clf_str == 'retrain_transformer':
             clf = RetrainTransformerNN()
         elif clf_str == 'transformer_target_classes_only':

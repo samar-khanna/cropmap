@@ -111,12 +111,12 @@ def plot_transformer_loss(losses, coords,):
 
     losses = (losses - np.min(losses)) / (np.max(losses) - np.min(losses))
 
-    cmap = get_cmap('viridis', 100)
+    cmap = get_cmap('viridis', 1000)
     colors = cmap(losses)
 
     merc = mercator(coords, 200, 100)
     pix = merc.T  # (N, 2)
-    plot = plt.scatter(pix[:, 1], pix[:, 0], c=losses, cmap=cmap)
+    plot = plt.scatter(pix[:, 1], pix[:, 0], c=losses, cmap=cmap, s=1)
 
     plt.colorbar(plot)
     plt.show()
@@ -159,7 +159,9 @@ def load_data_from_pickle(path_dir):
         y = pickle.load(f)
     with open(os.path.join(path_dir, 'coords.pkl'), 'rb') as f:
         coords = pickle.load(f)
-    return x, y, coords
+    with open(os.path.join(path_dir, 'climate.pkl'), 'rb') as f:
+        climate = pickle.load(f)
+    return x, y, coords, climate
 
 
 def passed_args():
@@ -173,13 +175,13 @@ if __name__ == "__main__":
     args = passed_args()
 
     regions = sorted([f for f in os.listdir(args.data_path) if f.startswith('usa')])
-    source_regions = [regions[0], regions[1], regions[2]]
-    target_regions = [regions[3]]
+    source_regions = [regions[1], regions[2], regions[3]]
+    target_regions = [regions[0]]
 
-    X, Y, coords = [], [], []
+    X, Y, coords, climates = [], [], [], []
     last_ind, source_inds, target_inds = 0, [], []
     for r in regions:
-        x, y, coord = load_data_from_pickle(os.path.join(args.data_path, r))
+        x, y, coord, climate = load_data_from_pickle(os.path.join(args.data_path, r))
 
         inds = list(range(last_ind, last_ind + x.shape[0]))
         if r in source_regions:
@@ -191,12 +193,14 @@ if __name__ == "__main__":
         X.append(x)
         Y.append(y)
         coords.append(coord)
+        climates.append(climate)
 
         print(f"Region {r} shape: {x.shape}")
 
     X = np.concatenate(X, axis=0)  # (N, c, t)
     Y = np.concatenate(Y, axis=0)  # (N,)
     coords = np.concatenate(coords, axis=0)  # (N, 2)  fmt: (lon, lat)
+    climates = np.concatenate(climates, axis=0)  # (N, 19)
     orig_source_inds = np.array(source_inds)  # (Ns,)
     target_inds = np.array(target_inds)  # (Nt,)
     print(X.shape)
@@ -222,5 +226,6 @@ if __name__ == "__main__":
     # # feats[lat_lon_inds] = feats[source_inds]
     # nearest = map[nearest]
     plot_transformer_feat(nearest, coords, target_inds, source_inds, k=1)
+    # plot_transformer_loss(losses, coords)
 
 

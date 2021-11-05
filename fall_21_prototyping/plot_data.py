@@ -5,6 +5,7 @@ import argparse
 import numpy as np
 from scipy.spatial.distance import cdist
 from sklearn.metrics import pairwise_distances
+import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.cm import get_cmap
 from matplotlib.colors import ListedColormap
@@ -119,10 +120,31 @@ def plot_transformer_loss(losses, coords,):
     plot = plt.scatter(pix[:, 1], pix[:, 0], c=losses, cmap=cmap, s=1)
 
     plt.colorbar(plot)
-    plt.show()
+    # plt.show()
+    plt.savefig('tmp.png')
 
+def coords_to_colors(coords):
+    N = coords.shape[0]
+    min_x, min_y = np.min(coords, axis=0)
+    max_x, max_y = np.max(coords, axis=0)
+    mid_x = (min_x + max_x) / 2
+    mid_y = (min_y + max_y) / 2
+    min_arr = np.array([min_x, min_y])
+    max_arr = np.array([max_x, max_y])
+    mid_arr = np.array([mid_x, mid_y])
+    # these are coords in [-1,1]^2 box
+    normed_coords = (coords - mid_arr) / (0.5 * (max_arr - min_arr))
+    # print(normed_coords.min(axis=0), normed_coords.max(axis=0))
+    # want to calculate r and theta for
+    raw_r = np.sqrt( (normed_coords**2).sum(axis=1))
+    normed_r = raw_r / raw_r.max()
+    theta = (np.arctan2(normed_coords[:,1], normed_coords[:,0]) / (2 * np.pi)) + 0.5
+    print(normed_r.min(), normed_r.max(), theta.min(), theta.max())
+    # hsv_vals = np.concatenate([normed_coords[:,:1], 0.8 * np.ones((N, 1)), normed_coords[:,1:]], axis=1)
+    hsv_vals = np.stack([theta, 1 * np.ones(N), normed_r], axis=1)
+    return matplotlib.colors.hsv_to_rgb(hsv_vals)
 
-def plot_transformer_feat(nearest, coords, target_inds, source_inds, k=20):
+def plot_transformer_feat(nearest, coords, target_inds, source_inds, k=1, savepath='tmp.png'):
     pix = mercator(coords, 200, 100).T  # (N, 2)
 
     # anchors = np.arange(target_feats.shape[0])
@@ -134,20 +156,28 @@ def plot_transformer_feat(nearest, coords, target_inds, source_inds, k=20):
     # nearest = np.argmax(-dist, axis=-1)  # (Ns,)
     # source_anchors = anchors[nearest]  # (Ns, )
 
+    # below is 0 to 1 indexing of source
     source_anchors = np.arange(source_inds.shape[0])
     source_anchors = source_anchors / np.max(source_anchors)
     cmap = get_cmap('RdYlGn', len(source_anchors))
     # cmap = get_cmap('viridis', len(source_anchors))
 
-    target_anchors = np.mean(source_anchors[nearest[:, :k]], axis=-1)  # (Nt,)
+    # these are 0 to 1 of matching color
+    # commented out below line b/c not using for for polar heatmap
+    # target_anchors = np.mean(source_anchors[nearest[:, :k]], axis=-1)  # (Nt,)
+
+    coord_colors = coords_to_colors(coords)
 
     source_pix = pix[source_inds]
-    plt.scatter(source_pix[:, 1], source_pix[:, 0], c=source_anchors, cmap=cmap, s=1, alpha=1)
+    # plt.scatter(source_pix[:, 1], source_pix[:, 0], c=source_anchors, cmap=cmap, s=1, alpha=1)
+    plt.scatter(source_pix[:, 1], source_pix[:, 0], c=coord_colors[source_inds], s=1, alpha=1)
 
     target_pix = pix[target_inds]
-    plt.scatter(target_pix[:, 1], target_pix[:, 0], c=target_anchors, cmap=cmap, s=1, alpha=1)
+    # plt.scatter(target_pix[:, 1], target_pix[:, 0], c=target_anchors, cmap=cmap, s=1, alpha=1)
+    plt.scatter(target_pix[:, 1], target_pix[:, 0], c=coord_colors[source_inds][nearest[:,0]], cmap=cmap, s=1, alpha=1)
 
-    plt.show()
+    # plt.show()
+    plt.savefig(savepath)
 
     return nearest
 
@@ -168,6 +198,7 @@ def passed_args():
     parser = argparse.ArgumentParser(description="Plot stuff")
     parser.add_argument('--data_path', type=str, default='../data_grid/grid_10000', help='Path to data')
     parser.add_argument('--checkpoint', type=str, help='Path to checkpoint dir')
+    parser.add_argument('--save-path', type=str, help='Path to save resulting image to ')
     return parser.parse_args()
 
 
@@ -175,8 +206,14 @@ if __name__ == "__main__":
     args = passed_args()
 
     regions = sorted([f for f in os.listdir(args.data_path) if f.startswith('usa')])
-    source_regions = [regions[1], regions[2], regions[3]]
-    target_regions = [regions[0]]
+
+    target_region_i = int(args.checkpoint.split('transformer_g')[1][0])
+    print(target_region_i)
+    source_regions = [regions[i] for i in range(4) if i!=target_region_i]
+    target_regions = [regions[i] for i in range(4) if i==target_region_i]
+    print(source_regions, target_regions)
+    # source_regions = [regions[1], regions[2], regions[3]]
+    # target_regions = [regions[0]]
 
     X, Y, coords, climates = [], [], [], []
     last_ind, source_inds, target_inds = 0, [], []
@@ -225,7 +262,7 @@ if __name__ == "__main__":
     #
     # # feats[lat_lon_inds] = feats[source_inds]
     # nearest = map[nearest]
-    plot_transformer_feat(nearest, coords, target_inds, source_inds, k=1)
+    plot_transformer_feat(nearest, coords, target_inds, source_inds, k=1, savepath=args.save_path)
     # plot_transformer_loss(losses, coords)
 
 

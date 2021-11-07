@@ -125,6 +125,7 @@ climate_test = np.concatenate(climate_test, axis=0)  # (Nte, 19)
 # coords_test = coords_test[interest_test_mask]
 
 # TODO: Clear idx (filter away clouds)
+# NOTE: Below clears away only FULLY clouded pixels (as we want)
 cloud_train_mask = np.any(x_train.reshape(x_train.shape[0], -1) > 0, axis=-1)  # (N,)
 x_train = x_train[cloud_train_mask]  # (N, c, t)
 y_train = y_train[cloud_train_mask]

@@ -49,7 +49,8 @@ region_class_hash_increment = 1e6
 basedir = "/share/bharath/sak296/grid_1609/"
 save_basedir = args.save_basedir
 exp_save_dir = f"{'_'.join(args.clf_strs)}_{'_'.join(args.data_prep_strs)}" + \
-                f"_te-{args.generalization_region}_tr-{args.source_region if args.source_region else 'all'}"
+                f"_te-{args.generalization_region}_tr-{args.source_region if args.source_region else 'all'}" + \
+                (f"w{args.weight}" if args.weight != 0.0 else '')
 exp_save_dir = os.path.join(save_basedir, exp_save_dir)
 os.makedirs(exp_save_dir, exist_ok=True)
 

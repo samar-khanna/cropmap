@@ -183,6 +183,7 @@ def plot_transformer_feat(nearest, coords, target_inds, source_inds, target_regi
 
 def plot_nearest_climate(coords, target_inds, source_inds, climates, target_region_i,
                          normalize=True, save_dir='plots/', k=1):
+    normalization_str = "normed" if normalize else "raw"
     normed_climates = StandardScaler().fit_transform(climates) if normalize else climates
     source_climates = normed_climates[source_inds]
     target_climates = normed_climates[target_inds]
@@ -190,21 +191,23 @@ def plot_nearest_climate(coords, target_inds, source_inds, climates, target_regi
 
     print("Computing climate nearest neighbors")
     dist = cdist(target_climates, source_climates)  # (Nt, Ns)
-    nearest = np.argsort(dist, axis=-1)[:, :1]  # (Nt, k)
-
     pix = mercator(coords, 200, 100).T  # (N, 2)
-
     coord_colors = coords_to_colors(coords)
-
     source_pix = pix[source_inds]
-    plt.scatter(source_pix[:, 1], source_pix[:, 0], c=coord_colors[source_inds], s=1, alpha=1)
-
     target_pix = pix[target_inds]
-    plt.scatter(target_pix[:, 1], target_pix[:, 0], c=coord_colors[source_inds][nearest[:,0]], s=1, alpha=1)
 
-    # plt.show()
-    normalization_str = "normed" if normalize else "raw"
+    nearest = np.argsort(dist, axis=-1)[:, :1]  # (Nt, k)
+    plt.scatter(source_pix[:, 1], source_pix[:, 0], c=coord_colors[source_inds], s=1, alpha=1)
+    plt.scatter(target_pix[:, 1], target_pix[:, 0], c=coord_colors[source_inds][nearest[:,0]], s=1, alpha=1)
     plt.savefig(f"{save_dir}/knn_climate_{normalization_str}_{target_region_i}.png")
+
+    nearest_distances = np.min(dist, axis=1) # (Nt,)
+    cmap = get_cmap('coolwarm')
+    m, M = nearest_distances.min(), nearest_distances.max()
+    colors = cmap( (nearest_distances - m) / (M - m))
+    # plt.scatter(source_pix[:, 1], source_pix[:, 0], c=coord_colors[source_inds], s=1, alpha=1)
+    plt.scatter(target_pix[:, 1], target_pix[:, 0], c=colors, s=1, alpha=1)
+    plt.savefig(f"{save_dir}/knn_distance_climate_{normalization_str}_{target_region_i}.png")
 
 def plot_nearest_x(coords, target_inds, source_inds, X, target_region_i,
                          normalize=True, save_dir='plots/', k=1):
@@ -255,8 +258,7 @@ def plot_labels(coords, Y, n_classes=None, save_dir='plots/'):
     most_common = counter.most_common(n_classes)
     most_common_classes, most_common_counts = zip(*most_common)
 
-    fig, ax = plt.subplots(figsize=(5, 5), dpi=1200)
-    # doing below to see if sequential plotting is making weird
+    fig, ax = plt.subplots(figsize=(5, 5))
     plotting_points = []
     plotting_colors = []
     cm = plt.get_cmap('gist_rainbow')
@@ -328,7 +330,7 @@ def plot_all_climate_bands(coords, climates, save_dir='plots/'):
         plt.close('all')
 
 
-climate_band_to_name = {'1':'Ultra blue',
+landsat_band_to_name = {'1':'Ultra blue',
                         '2':'Blue',
                         '3':'Green',
                         '4':'Red',
@@ -365,7 +367,7 @@ def plot_timeseries_X_bands(coords, X, save_dir='plots/'):
             sc = ax.scatter(pix[:, 1], pix[:, 0], c=colors[:, ax_i], s=1)
             if not ax_i:
                 band_id = f"{band_i+1 if band_i<7 else band_i+3}"
-                ax.set_title(f"Band {band_id}: {climate_band_to_name[band_id]}")
+                ax.set_title(f"Band {band_id}: {landsat_band_to_name[band_id]}")
             else:
                 ax.set_title(f"Timepoint: {ax_i}")
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=0, vmax=1))
@@ -392,7 +394,7 @@ def load_data_from_pickle(path_dir):
 def passed_args():
     parser = argparse.ArgumentParser(description="Plot stuff")
     parser.add_argument('--data_path', type=str, default='../data_grid/grid_10000', help='Path to data')
-    parser.add_argument('--checkpoint', type=str, help='Path to checkpoint dir')
+    parser.add_argument('--checkpoint', type=str, help='Path to checkpoint dir', default='')
     parser.add_argument('--save-dir', type=str, default='plots/', help='Dir to save resulting image(s) to')
     return parser.parse_args()
 
@@ -402,7 +404,7 @@ if __name__ == "__main__":
 
     regions = sorted([f for f in os.listdir(args.data_path) if f.startswith('usa')])
 
-    target_region_i = int(args.checkpoint.split('transformer_g')[1][0])
+    target_region_i = int(args.checkpoint.split('_g')[1][0]) if args.checkpoint else None
     print(target_region_i)
     source_regions = [regions[i] for i in range(4) if i!=target_region_i]
     target_regions = [regions[i] for i in range(4) if i==target_region_i]
@@ -445,9 +447,10 @@ if __name__ == "__main__":
     # Y[source_inds] = Y[source_inds][sorted_coords]
     # coords[source_inds] = coords[source_inds][sorted_coords]
 
-    transformer, losses, feats, nearest = get_transformer_loss_feats(
-        args.checkpoint, X, Y, target_inds, source_inds, get_feats=True
-    )
+    if 'transformer' in args.checkpoint:
+        transformer, losses, feats, nearest = get_transformer_loss_feats(
+            args.checkpoint, X, Y, target_inds, source_inds, get_feats=True
+        )
 
     # lat_lon = np.lexsort((source_coords[:, 0], source_coords[:, 1]))
     # lat_lon_inds = orig_source_inds[lat_lon]
@@ -462,15 +465,15 @@ if __name__ == "__main__":
 
 
     ###### IN PROGRESS ####
-    plot_labels(coords, Y)
+    # plot_labels(coords, Y)
     ###### BELOW THIS LINE IS COMPLETED ####
     # plot_timeseries_X_bands(coords, X)
     # plot_all_climate_bands(coords, climates)
     # plot_nearest_x(coords, target_inds, source_inds, X, target_region_i, save_dir=args.save_dir)
     # plot_nearest_x(coords, target_inds, source_inds, X, target_region_i,
     #                normalize=False, save_dir=args.save_dir)
-    # plot_nearest_climate(coords, target_inds, source_inds, climates, target_region_i,
-    #                       save_dir=args.save_dir)
+    plot_nearest_climate(coords, target_inds, source_inds, climates, target_region_i,
+                          save_dir=args.save_dir)
     # plot_nearest_climate(coords, target_inds, source_inds, climates, target_region_i,
     #                      normalize=False, save_dir=args.save_dir)
     # plot_transformer_feat(nearest, coords, target_inds, source_inds, target_region_i, k=1, save_dir=args.save_dir)

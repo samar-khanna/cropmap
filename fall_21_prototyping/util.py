@@ -14,7 +14,7 @@ def get_accuracies(class_seen, class_correct):
     class_probs = softmax(class_seen.values())
     for i, (c, c_seen) in enumerate(class_seen.items()):
         avg_class_acc += (1/len(class_seen)) * class_correct[c] / c_seen
-        w_class_acc += class_probs * class_correct[c] / c_seen
+        w_class_acc += class_probs[i] * class_correct[c] / c_seen
 
     return {'accuracy': accuracy,
             'average class accuracy': avg_class_acc,

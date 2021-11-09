@@ -11,7 +11,8 @@ def get_accuracies(class_seen, class_correct):
     w_class_acc = 0.
 
     # python order of values guaranteed
-    class_probs = softmax(class_seen.values())
+    inv_freq = [1/v for v in class_seen.values()]
+    class_probs = np.array(inv_freq)/sum(inv_freq)
     for i, (c, c_seen) in enumerate(class_seen.items()):
         avg_class_acc += (1/len(class_seen)) * class_correct[c] / c_seen
         w_class_acc += class_probs[i] * class_correct[c] / c_seen

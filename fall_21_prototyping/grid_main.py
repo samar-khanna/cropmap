@@ -58,6 +58,7 @@ os.makedirs(exp_save_dir, exist_ok=True)
 prev_checkpoints = [int(n) for n in os.listdir(exp_save_dir) if n.isdigit()]
 exp_save_dir = os.path.join(exp_save_dir, '0' if len(prev_checkpoints) == 0
                             else str(max(prev_checkpoints)+1))
+os.makedirs(exp_save_dir, exist_ok=True)
 
 regions = [f for f in os.listdir(basedir) if f.startswith('usa')]
 

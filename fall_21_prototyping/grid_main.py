@@ -55,6 +55,9 @@ exp_save_dir = f"{'_'.join(args.clf_strs)}_{'_'.join(args.data_prep_strs)}" + \
                 (f"w{args.weight}" if args.weight != 0.0 else '')
 exp_save_dir = os.path.join(save_basedir, exp_save_dir)
 os.makedirs(exp_save_dir, exist_ok=True)
+prev_checkpoints = [int(n) for n in os.listdir(exp_save_dir)]
+exp_save_dir = os.path.join(exp_save_dir, '0' if len(prev_checkpoints) == 0
+                            else str(max(prev_checkpoints)+1))
 
 regions = [f for f in os.listdir(basedir) if f.startswith('usa')]
 

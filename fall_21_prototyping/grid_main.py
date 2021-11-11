@@ -40,7 +40,7 @@ parser.add_argument("--mlp-width", type=int, default=256)
 parser.add_argument("--dimension", type=int, default=32)
 parser.add_argument("--thresh", type=float, default=0.5, help="generic threshold")
 parser.add_argument("--weight", type=float, default=0.0, help="generic weight")
-parser.add_argument("--sample_weight", action='store_true', help="Reweight loss on source domain inv freq")
+parser.add_argument("--sample-weight", action='store_true', help="Reweight loss on source domain inv freq")
 parser.add_argument("--weight-decay", type=float, default=0.0, help="weight decay value")
 parser.add_argument("--greedy-similarity", action='store_true', help='NTK sim vs linear combo')
 parser.add_argument("--norm-indivs", action='store_true', help='Normalize individual grads')
@@ -178,6 +178,7 @@ class TorchNN():
         layers.extend([torch.nn.Linear(curr_dim, num_classes)])
         mlp = torch.nn.Sequential(*layers)
         # print("Cudaing NN")
+        self.wd = wd
         self.mlp = mlp.cuda()
         self.opt = torch.optim.Adam(self.mlp.parameters(), lr=1e-2, weight_decay=wd)
 
@@ -403,7 +404,8 @@ class TransformerCorrelation(TransformerNN):
 
                 self.opt.zero_grad()
                 preds, feat = self.mlp(bx, return_final_feature=True)
-                coeffs = feat.pinverse() @ centered_reg_t
+                feat_m = (feat.T @ feat) + self.wd * torch.eye(feat.shape[-1]) @ feat
+                coeffs = torch.cholesky_inverse(torch.cholesky(feat_m)) @ centered_reg_t
                 recon = feat @ coeffs
                 res = (centered_reg_t - recon).pow(2).mean()
                 corr_loss = self.weight * res / (centered_reg_t.pow(2).mean())
@@ -448,7 +450,8 @@ class TransformerCorrelation(TransformerNN):
                     num_seen += curr_bs
                     # if not bi%500: print_call(f"{num_seen} / {n_train}")
                     preds, feat = self.mlp(bx, return_final_feature=True)
-                    coeffs = feat.pinverse() @ centered_reg_t
+                    feat_m = (feat.T @ feat) + self.wd * torch.eye(feat.shape[-1]) @ feat
+                    coeffs = torch.cholesky_inverse(torch.cholesky(feat_m)) @ centered_reg_t
                     recon = feat @ coeffs
                     res = (recon - centered_reg_t).pow(2).mean()
                     corr_loss = self.weight * res / (centered_reg_t.pow(2).mean())
@@ -717,6 +720,7 @@ for clf_str in clf_strs:
                 for c, inv_f in zip(classes, inv_freq):
                     class_weights[int(c)] = inv_f
                 sample_weights = class_weights[train_y.astype(np.long)]
+                print(sample_weights)
 
             clf.fit(train_x, train_y, sample_weights=sample_weights)
         else:

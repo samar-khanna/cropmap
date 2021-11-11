@@ -38,6 +38,6 @@ with open('classes.json', 'r') as f:
     class_name_to_class_id = json.load(f)
 
 all_classes = list(class_name_to_class_id.values())
-# interest_classes = [class_name_to_class_id[c] for c in interest_class_names]
-interest_classes = all_classes
+interest_classes = [class_name_to_class_id[c] for c in interest_class_names]
+# interest_classes = all_classes
 class_id_to_class_name = {v: k for k, v in class_name_to_class_id.items()}

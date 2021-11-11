@@ -404,9 +404,10 @@ class TransformerCorrelation(TransformerNN):
 
                 self.opt.zero_grad()
                 preds, feat = self.mlp(bx, return_final_feature=True)
-                feat_m = (feat.T @ feat) + self.wd * torch.eye(feat.shape[-1])
-                coeffs = torch.cholesky_inverse(torch.cholesky(feat_m)) @ feat.T @ centered_reg_t
-                recon = feat @ coeffs
+                feat_m = (feat.T @ feat) + self.wd * torch.eye(feat.shape[-1]).cuda()  # (cxn @ nxc) + cxc = cxc
+                inv_feat_m = torch.cholesky_inverse(torch.cholesky(feat_m))  # (cxc)
+                coeffs = inv_feat_m @ feat.T @ centered_reg_t  # cxc @ cxn @ nxclim = cxclim
+                recon = feat @ coeffs  # nxc X cxclim = nxclim
                 res = (centered_reg_t - recon).pow(2).mean()
                 corr_loss = self.weight * res / (centered_reg_t.pow(2).mean())
                 # print(res)
@@ -450,9 +451,10 @@ class TransformerCorrelation(TransformerNN):
                     num_seen += curr_bs
                     # if not bi%500: print_call(f"{num_seen} / {n_train}")
                     preds, feat = self.mlp(bx, return_final_feature=True)
-                    feat_m = (feat.T @ feat) + self.wd * torch.eye(feat.shape[-1])
-                    coeffs = torch.cholesky_inverse(torch.cholesky(feat_m)) @ feat.T @ centered_reg_t
-                    recon = feat @ coeffs
+                    feat_m = (feat.T @ feat) + self.wd * torch.eye(feat.shape[-1]).cuda()  # (cxn @ nxc) + cxc = cxc
+                    inv_feat_m = torch.cholesky_inverse(torch.cholesky(feat_m))  # (cxc)
+                    coeffs = inv_feat_m @ feat.T @ centered_reg_t  # cxc @ cxn @ nxclim = cxclim
+                    recon = feat @ coeffs  # nxc X cxclim = nxclim
                     res = (recon - centered_reg_t).pow(2).mean()
                     corr_loss = self.weight * res / (centered_reg_t.pow(2).mean())
                     # get total weight equal to curr_bs

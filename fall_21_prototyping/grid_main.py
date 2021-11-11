@@ -373,7 +373,7 @@ class TransformerCorrelation(TransformerNN):
         best_val_loss = np.inf
         best_val_acc = - np.inf
         min_loss_epoch = None
-        report_interval = 1
+        report_interval = 20
         while lr_steps <= 2:
             num_seen = 0
             num_correct = 0

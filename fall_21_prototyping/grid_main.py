@@ -713,7 +713,7 @@ for clf_str in clf_strs:
                 classes, counts = np.unique(train_y, return_counts=True)
                 inv_counts = 1/counts
                 inv_freq = inv_counts/sum(inv_counts)
-                class_weights = np.zeros(max(classes) + 1, dtype=np.float32)
+                class_weights = np.zeros(int(max(classes) + 1), dtype=np.float32)
                 for c, inv_f in zip(classes, inv_freq):
                     class_weights[c] = inv_f
                 sample_weights = class_weights[train_y.astype(np.long)]

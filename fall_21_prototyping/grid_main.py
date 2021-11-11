@@ -715,6 +715,7 @@ for clf_str in clf_strs:
         if args.checkpoint is None:
             sample_weights = None
             if args.sample_weight:
+                print('Using class inverse frequency for sample weights')
                 classes, counts = np.unique(train_y, return_counts=True)
                 inv_counts = 1/counts
                 inv_freq = inv_counts/sum(inv_counts)

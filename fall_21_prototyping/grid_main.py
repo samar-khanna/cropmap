@@ -339,7 +339,7 @@ class TorchNN():
 class TransformerNN(TorchNN):
     def __init__(self, num_classes=len(interest_classes), in_channels=9, t_len=8,
                  n_conv=2, wd=0, **kwargs):
-        super().__init__(num_classes=num_classes)
+        super().__init__(num_classes=num_classes, wd=wd)
         mlp = Transformer(num_classes=num_classes, in_channels=in_channels, n_conv=n_conv, **kwargs)
 
         self.mlp = mlp.cuda()

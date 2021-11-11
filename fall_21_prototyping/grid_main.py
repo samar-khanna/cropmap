@@ -404,7 +404,7 @@ class TransformerCorrelation(TransformerNN):
 
                 self.opt.zero_grad()
                 preds, feat = self.mlp(bx, return_final_feature=True)
-                feat_m = (feat.T @ feat) + self.wd * torch.eye(feat.shape[-1]) @ feat
+                feat_m = ((feat.T @ feat) + self.wd * torch.eye(feat.shape[-1])) @ feat
                 coeffs = torch.cholesky_inverse(torch.cholesky(feat_m)) @ centered_reg_t
                 recon = feat @ coeffs
                 res = (centered_reg_t - recon).pow(2).mean()
@@ -450,7 +450,7 @@ class TransformerCorrelation(TransformerNN):
                     num_seen += curr_bs
                     # if not bi%500: print_call(f"{num_seen} / {n_train}")
                     preds, feat = self.mlp(bx, return_final_feature=True)
-                    feat_m = (feat.T @ feat) + self.wd * torch.eye(feat.shape[-1]) @ feat
+                    feat_m = ((feat.T @ feat) + self.wd * torch.eye(feat.shape[-1])) @ feat
                     coeffs = torch.cholesky_inverse(torch.cholesky(feat_m)) @ centered_reg_t
                     recon = feat @ coeffs
                     res = (recon - centered_reg_t).pow(2).mean()

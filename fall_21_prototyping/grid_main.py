@@ -122,15 +122,17 @@ y_test = np.concatenate(y_test, axis=0)  # (Nte,)
 coords_test = np.concatenate(coords_test, axis=0)  # (Nte, 2)  fmt: (lon, lat)
 climate_test = np.concatenate(climate_test, axis=0)  # (Nte, 19)
 
-# interest_train_mask = np.isin(y_train, interest_classes)
-# x_train = x_train[interest_train_mask]
-# y_train = y_train[interest_train_mask]
-# coords_train = coords_train[interest_train_mask]
-#
-# interest_test_mask = np.isin(y_test, interest_classes)
-# x_test = x_test[interest_test_mask]
-# y_test = y_test[interest_test_mask]
-# coords_test = coords_test[interest_test_mask]
+interest_train_mask = np.isin(y_train, interest_classes)
+x_train = x_train[interest_train_mask]
+y_train = y_train[interest_train_mask]
+coords_train = coords_train[interest_train_mask]
+climate_train = climate_train[interest_train_mask]
+
+interest_test_mask = np.isin(y_test, interest_classes)
+x_test = x_test[interest_test_mask]
+y_test = y_test[interest_test_mask]
+coords_test = coords_test[interest_test_mask]
+climate_test = climate_test[interest_test_mask]
 
 # TODO: Clear idx (filter away clouds)
 # NOTE: Below clears away only FULLY clouded pixels (as we want)

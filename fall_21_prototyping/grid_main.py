@@ -715,7 +715,7 @@ for clf_str in clf_strs:
                 inv_freq = inv_counts/sum(inv_counts)
                 class_weights = np.zeros(int(max(classes) + 1), dtype=np.float32)
                 for c, inv_f in zip(classes, inv_freq):
-                    class_weights[c] = inv_f
+                    class_weights[int(c)] = inv_f
                 sample_weights = class_weights[train_y.astype(np.long)]
 
             clf.fit(train_x, train_y, sample_weights=sample_weights)

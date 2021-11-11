@@ -40,6 +40,7 @@ parser.add_argument("--mlp-width", type=int, default=256)
 parser.add_argument("--dimension", type=int, default=32)
 parser.add_argument("--thresh", type=float, default=0.5, help="generic threshold")
 parser.add_argument("--weight", type=float, default=0.0, help="generic weight")
+parser.add_argument("--sample_weight", action='store_true', help="Reweight loss on source domain inv freq")
 parser.add_argument("--weight-decay", type=float, default=0.0, help="weight decay value")
 parser.add_argument("--greedy-similarity", action='store_true', help='NTK sim vs linear combo')
 parser.add_argument("--norm-indivs", action='store_true', help='Normalize individual grads')
@@ -205,8 +206,9 @@ class TorchNN():
         x = torch.Tensor(train_x)
         n_train = x.shape[0]
         y = torch.LongTensor(self.cast_targets(train_y))
-        if sample_weights is None:
-            sample_weights = torch.ones(x.shape[0]).cuda()
+        sample_weights = torch.as_tensor(sample_weights).cuda() \
+            if sample_weights is not None else torch.ones(x.shape[0]).cuda()
+
         dataset = torch.utils.data.TensorDataset(x, y, sample_weights)
         num_val_points = n_train // 10
         num_train_points = n_train - num_val_points
@@ -358,8 +360,9 @@ class TransformerCorrelation(TransformerNN):
         x = torch.Tensor(train_x)
         n_train = x.shape[0]
         y = torch.LongTensor(self.cast_targets(train_y))
-        if sample_weights is None:
-            sample_weights = torch.ones(x.shape[0]).cuda()
+        sample_weights = torch.as_tensor(sample_weights).cuda() \
+            if sample_weights is not None else torch.ones(x.shape[0]).cuda()
+        
         dataset = torch.utils.data.TensorDataset(x, y, sample_weights)
         num_val_points = n_train // 10
         num_train_points = n_train - num_val_points
@@ -705,7 +708,17 @@ for clf_str in clf_strs:
             raise NotImplementedError
 
         if args.checkpoint is None:
-            clf.fit(train_x, train_y)
+            sample_weights = None
+            if args.sample_weight:
+                classes, counts = np.unique(train_y, return_counts=True)
+                inv_counts = 1/counts
+                inv_freq = inv_counts/sum(inv_counts)
+                class_weights = np.zeros(max(classes) + 1, dtype=np.float32)
+                for c, inv_f in zip(classes, inv_freq):
+                    class_weights[c] = inv_f
+                sample_weights = class_weights[train_y.astype(np.long)]
+
+            clf.fit(train_x, train_y, sample_weights=sample_weights)
         else:
             use_cuda = torch.cuda.is_available()
             device = torch.device("cuda:0" if use_cuda else "cpu")

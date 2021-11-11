@@ -362,7 +362,7 @@ class TransformerCorrelation(TransformerNN):
         y = torch.LongTensor(self.cast_targets(train_y))
         sample_weights = torch.as_tensor(sample_weights).cuda() \
             if sample_weights is not None else torch.ones(x.shape[0]).cuda()
-        
+
         dataset = torch.utils.data.TensorDataset(x, y, sample_weights)
         num_val_points = n_train // 10
         num_train_points = n_train - num_val_points

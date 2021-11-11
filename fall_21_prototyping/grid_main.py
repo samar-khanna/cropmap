@@ -663,13 +663,13 @@ for clf_str in clf_strs:
         elif clf_str == 'linear':
             clf = TorchNN(num_hidden_layers=0)
         elif clf_str == 'transformer':
-            clf = TransformerNN(in_channels=in_c)
+            clf = TransformerNN(in_channels=in_c, wd=args.weight_decay)
         elif clf_str == 'transformer_correlation':
             assert 'coords' in data_prep_list or 'climate' in data_prep_list
             print("ATTENTION: Right now coords is needed in data prep list to give targets but it NOT used as input")
             reg_c = in_c - c  # (9 + x - 9)
             print(f"Regression channels: {reg_c}")
-            clf = TransformerCorrelation(args.weight, reg_c, False, in_channels=in_c-reg_c)
+            clf = TransformerCorrelation(args.weight, reg_c, False, in_channels=in_c-reg_c, wd=args.weight_decay)
         elif clf_str == 'transformer_correlation_input':
             assert 'coords' in data_prep_list or 'climate' in data_prep_list
             print("ATTENTION: Right now coords/climate is used as input and target")

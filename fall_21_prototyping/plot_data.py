@@ -11,9 +11,10 @@ import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.cm import get_cmap
 from matplotlib.colors import ListedColormap
-
+import json
 from interest_classes import interest_classes, interest_class_names
 
+matplotlib.rcParams['font.family'] = 'serif'
 
 def mercator(coords, w, h):
     x = (coords[:, 0] + 180) * (w/360)
@@ -197,17 +198,28 @@ def plot_nearest_climate(coords, target_inds, source_inds, climates, target_regi
     target_pix = pix[target_inds]
 
     nearest = np.argsort(dist, axis=-1)[:, :1]  # (Nt, k)
+    plt.axis('off')
     plt.scatter(source_pix[:, 1], source_pix[:, 0], c=coord_colors[source_inds], s=1, alpha=1)
     plt.scatter(target_pix[:, 1], target_pix[:, 0], c=coord_colors[source_inds][nearest[:,0]], s=1, alpha=1)
+    print(pix.mean(axis=0))
+    plt.axhline(y=pix[:,0].mean(), color='white')
+    plt.axvline(x=pix[:,1].mean(), color='white')
     plt.savefig(f"{save_dir}/knn_climate_{normalization_str}_{target_region_i}.png")
+    plt.close("all")
 
     nearest_distances = np.min(dist, axis=1) # (Nt,)
     cmap = get_cmap('coolwarm')
     m, M = nearest_distances.min(), nearest_distances.max()
     colors = cmap( (nearest_distances - m) / (M - m))
     # plt.scatter(source_pix[:, 1], source_pix[:, 0], c=coord_colors[source_inds], s=1, alpha=1)
+    plt.axis('off')
+    plt.scatter(source_pix[:, 1], source_pix[:, 0], c='gray', s=1, alpha=1)
     plt.scatter(target_pix[:, 1], target_pix[:, 0], c=colors, s=1, alpha=1)
     plt.savefig(f"{save_dir}/knn_distance_climate_{normalization_str}_{target_region_i}.png")
+
+
+
+
 
 def plot_nearest_x(coords, target_inds, source_inds, X, target_region_i,
                          normalize=True, save_dir='plots/', k=1):
@@ -249,21 +261,24 @@ def plot_nearest_x(coords, target_inds, source_inds, X, target_region_i,
 
     return nearest
 
-def plot_labels(coords, Y, n_classes=None, save_dir='plots/'):
+def plot_labels(coords, Y, n_classes=None, num_to_plot=18, save_dir='plots/'):
+
     print(coords.shape, Y.shape)
     pix = mercator(coords, 200, 100).T  # (N, 2)
     coord_colors = Y # coords_to_colors(coords)
     counter = Counter(Y)
-    print(counter)
+    if n_classes is None: n_classes = len(counter)
+    print(counter, n_classes)
     most_common = counter.most_common(n_classes)
     most_common_classes, most_common_counts = zip(*most_common)
 
     fig, ax = plt.subplots(figsize=(5, 5))
+    ax.set_axis_off()
     plotting_points = []
     plotting_colors = []
     cm = plt.get_cmap('gist_rainbow')
-    if n_classes is None: n_classes = len(counter.keys())
-    colors = [cm(i/n_classes) for i in np.random.permutation(n_classes)]
+    colors = [cm(i/n_classes) for i in range(num_to_plot)]
+    """
     for i, (class_i, class_count) in enumerate(most_common):
         class_pix = pix[Y==class_i]
         plotting_points.append(class_pix)
@@ -275,34 +290,60 @@ def plot_labels(coords, Y, n_classes=None, save_dir='plots/'):
     plotting_colors = [plotting_colors[i] for i in idx]
     ax.scatter(plotting_points[:, 1], plotting_points[:, 0], s=0.01, color=plotting_colors, alpha=1)
     """
-    for class_i, class_count in most_common:
+    class_name_to_id = json.load(open('classes.json'))
+    class_id_to_name = {v:k for k,v in class_name_to_id.items()}
+    plotted_names = []
+    for rank, (class_i, class_count) in enumerate(most_common):
         class_pix = pix[Y==class_i]
-        ax.scatter(class_pix[:, 1], class_pix[:, 0], s=1, alpha=0.1, label=class_i)
-    plt.legend()
-    """
-    # plt.tight_layout()
+        ax.scatter(class_pix[:, 1], class_pix[:, 0], s=1,
+                    alpha=1, label=class_id_to_name[class_i] if rank<num_to_plot else None,
+                    color=colors[int(rank)] if rank<num_to_plot else 'gray')
+        if rank<num_to_plot: plotted_names.append(class_id_to_name[class_i])
+    plotted_names.append('Other')
+    # l = ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    l = ax.legend(loc='lower center', bbox_to_anchor=(0.5, -0.65), ncol=2)
+    plt.subplots_adjust(bottom=0.3)
+    for text,c in zip(l.get_texts(), colors):
+        text.set_color(c)
+    plt.tight_layout()
     plt.savefig(f"{save_dir}/labels.png")
+    plt.close('all')
+
+    fig, ax = plt.subplots()
+    # ax.hist(Y.flatten())
+    xticklocs = np.arange(num_to_plot+1)
+    heights= np.array(list(most_common_counts[:num_to_plot]) + [sum(most_common_counts[num_to_plot:])])
+    ax.bar(xticklocs,
+            100 * heights / heights.sum(),
+            color=colors + ['gray'])
+    ax.set_ylabel("% of Targets")
+    ax.set_xticks(xticklocs)
+    ax.set_xticklabels(plotted_names, rotation=45, ha='right')
+    print(len(xticklocs), len(plotted_names))
+    plt.tight_layout()
+    plt.savefig(f"{save_dir}/labels_hist.png")
+    plt.close('all')
 
 
-climate_band_to_name = {'01':'Annual Mean Temp',
+climate_band_to_name = {'01':'Mean Temperature',
                         '02':'Mean diurnal range',
                         '03':'Isothermality (diurnal range / annual range)',
                         '04':'Temperature seasonality',
                         '05':'Max temp of warmest month',
                         '06':'Min temp of coldest month',
-                        '07':'Temp annual range',
+                        '07':'Annual Temperature Range',
                         '08':'Mean temp of wettest quarter',
                         '09':'Mean temp of driest quarter',
                         '10':'Mean temp of warmest quarter',
                         '11':'Mean temp of coldest quarter',
-                        '12':'Annual precip',
-                        '13':'Precip of wettest month',
-                        '14':'Precip of driest month',
-                        '15':'Precipitation seasonality (?)',
-                        '16':'Precip of wettest quarter',
-                        '17':'Precip of driest quarter',
-                        '18':'Precip of warmest quarter',
-                        '19':'Precip of coldest quarter',
+                        '12':'Annual Rainfall',
+                        '13':'Rainfall of wettest month',
+                        '14':'Rainfall of driest month',
+                        '15':'Rainfallitation seasonality (?)',
+                        '16':'Rainfall of wettest quarter',
+                        '17':'Rainfall of driest quarter',
+                        '18':'Rainfall of Warmest Quarter',
+                        '19':'Rainfall of coldest quarter',
                         }
 
 def plot_all_climate_bands(coords, climates, save_dir='plots/'):
@@ -329,6 +370,34 @@ def plot_all_climate_bands(coords, climates, save_dir='plots/'):
         plt.savefig(f"{save_dir}/climate_band_{band_i}.png")
         plt.close('all')
 
+def plot_chosen_climate_bands(coords, climates, save_dir='plots/'):
+    pix = mercator(coords, 200, 100).T  # (N, 2)
+    # climates is N x 19
+
+    cmap = get_cmap('coolwarm')
+    chosen_band_ids = [1, 7, 12, 18]
+    subplot_indices = [(0,0), (0,1), (1,0), (1,1)]
+
+    fig, axes = plt.subplots(2, 2)
+    for band_id, subplot_idx in zip(chosen_band_ids, subplot_indices):
+        ax = axes[subplot_idx[0], subplot_idx[1]]
+        band_i = band_id - 1
+        print(f"Plotting band {band_i}")
+        raw_band = climates[:, band_i]
+        band = (raw_band - np.min(raw_band)) / (np.max(raw_band) - np.min(raw_band))
+        colors = cmap(band)
+        ax.scatter(pix[:, 1], pix[:, 0], c=colors, s=1, cmap=cmap)
+        ax.set_axis_off()
+        # cbar = plt.colorbar(plot, ticks=[0, 0.5, 1])
+        ax.set_title(climate_band_to_name[f"{band_id:02d}"])
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=0, vmax=1))
+    plt.subplots_adjust(right=0.75)
+    cbar_ax = fig.add_axes([0.8, 0.1, 0.05, 0.8])
+    cbar = fig.colorbar(sm, ticks=[0, 0.5, 1], cax=cbar_ax)
+    cbar_labels = ["Lowest", "Mean", "Highest"]
+    cbar.ax.set_yticklabels(cbar_labels)
+    plt.savefig(f"{save_dir}/climate_samples.png")
+    plt.close("all")
 
 landsat_band_to_name = {'1':'Ultra blue',
                         '2':'Blue',
@@ -341,7 +410,7 @@ landsat_band_to_name = {'1':'Ultra blue',
                         '11':'Brightness temp (also?)',
                         }
 
-def plot_timeseries_X_bands(coords, X, save_dir='plots/'):
+def ORIG_plot_timeseries_X_bands(coords, X, save_dir='plots/'):
     pix = mercator(coords, 200, 100).T  # (N, 2)
     # data is N x 9 x 8
     cmap = get_cmap('coolwarm')
@@ -378,6 +447,51 @@ def plot_timeseries_X_bands(coords, X, save_dir='plots/'):
         plt.savefig(f"{save_dir}/X_band_{band_i}.png")
         plt.close('all')
 
+def plot_timeseries_X_bands(coords, X, save_dir='plots/'):
+    pix = mercator(coords, 200, 100).T  # (N, 2)
+    # data is N x 9 x 8
+    cmap = get_cmap('coolwarm')
+
+    for band_i in range(X.shape[1]): # traversing over 8
+        print(f"Plotting band {band_i}")
+        raw_band = X[:, band_i, :]
+        cloud_mask = raw_band > 0
+        raw_clear_band = raw_band[cloud_mask]
+        # Want to adjust this for clouds (exclude 0s from min)
+        lower_bound = np.quantile(raw_clear_band, 0.1)
+        upper_bound = np.quantile(raw_clear_band, 0.9)
+        band = (raw_band - lower_bound) / (upper_bound - lower_bound)
+        band = np.clip(band, 0, 1)
+        colors = cmap(band)
+        colors[~cloud_mask] = 0
+        print(band.min(), band.max())
+        # want points to be alpha 0 (transparent) where there are clouds (0 value)
+        fig, axes = plt.subplots(3, 1)
+        for ax_i, time_i in enumerate([0, 4, 7]):
+            ax = axes[ax_i]
+            ax.set(aspect='equal')
+            ax.set_axis_off()
+            sc = ax.scatter(pix[:, 1], pix[:, 0], c=colors[:, ax_i], s=1)
+            if not ax_i:
+                band_id = f"{band_i+1 if band_i<7 else band_i+3}"
+                ax.set_title(f"Band {band_id}: {landsat_band_to_name[band_id]}\nTimepoint: {time_i}")
+            else:
+                ax.set_title(f"Timepoint: {time_i}")
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=0, vmax=1))
+        # plt.subplots_adjust(right=0.75)
+        cbar_ax = fig.add_axes([0.7, 0.1, 0.05, 0.8])
+        cbar = fig.colorbar(sm, ticks=[0, 0.5, 1], cax=cbar_ax)
+        cbar_labels = ["Lowest", "Mean", "Highest"]
+        cbar.ax.set_yticklabels(cbar_labels)
+        """
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=0, vmax=1))
+        cbar = plt.colorbar(sm, ticks=[0, 0.5, 1])
+        cbar_labels = [raw_clear_band.min(), (raw_clear_band.min() + raw_clear_band.max()) / 2, raw_clear_band.max()]
+        cbar.ax.set_yticklabels(cbar_labels)
+        plt.tight_layout()
+        """
+        plt.savefig(f"{save_dir}/X_band_{band_i+1}.png")
+        plt.close('all')
 
 def load_data_from_pickle(path_dir):
     with open(os.path.join(path_dir, 'values.pkl'), 'rb') as f:
@@ -465,10 +579,11 @@ if __name__ == "__main__":
 
 
     ###### IN PROGRESS ####
-    # plot_labels(coords, Y)
+    # plot_labels(coords, Y, n_classes=20, save_dir=args.save_dir)
     ###### BELOW THIS LINE IS COMPLETED ####
     # plot_timeseries_X_bands(coords, X)
     # plot_all_climate_bands(coords, climates)
+    # plot_chosen_climate_bands(coords, climates, save_dir=args.save_dir)
     # plot_nearest_x(coords, target_inds, source_inds, X, target_region_i, save_dir=args.save_dir)
     # plot_nearest_x(coords, target_inds, source_inds, X, target_region_i,
     #                normalize=False, save_dir=args.save_dir)

@@ -40,6 +40,7 @@ parser.add_argument("--mlp-width", type=int, default=256)
 parser.add_argument("--dimension", type=int, default=32)
 parser.add_argument("--thresh", type=float, default=0.5, help="generic threshold")
 parser.add_argument("--weight", type=float, default=0.0, help="generic weight")
+parser.add_argument("--weight-decay", type=float, default=0.0, help="weight decay value")
 parser.add_argument("--greedy-similarity", action='store_true', help='NTK sim vs linear combo')
 parser.add_argument("--norm-indivs", action='store_true', help='Normalize individual grads')
 parser.add_argument("--checkpoint", type=str, default=None, help='Use checkpoint for scoring only')
@@ -332,12 +333,12 @@ class TorchNN():
 
 class TransformerNN(TorchNN):
     def __init__(self, num_classes=len(interest_classes), in_channels=9, t_len=8,
-                 n_conv=2, **kwargs):
+                 n_conv=2, wd=0, **kwargs):
         super().__init__(num_classes=num_classes)
         mlp = Transformer(num_classes=num_classes, in_channels=in_channels, n_conv=n_conv, **kwargs)
 
         self.mlp = mlp.cuda()
-        self.opt = torch.optim.Adam(self.mlp.parameters())
+        self.opt = torch.optim.Adam(self.mlp.parameters(), lr=1e-2, weight_decay=wd)
 
 
 class TransformerCorrelation(TransformerNN):
@@ -370,10 +371,12 @@ class TransformerCorrelation(TransformerNN):
         best_val_loss = np.inf
         best_val_acc = - np.inf
         min_loss_epoch = None
+        report_interval = 1
         while lr_steps <= 2:
             num_seen = 0
             num_correct = 0
             loss_sum = 0
+            self.mlp.train()
             for bi, (bx, by, batch_weights) in enumerate(train_loader):
                 bx = bx.cuda()
                 N, num_channels = bx.shape
@@ -411,7 +414,7 @@ class TransformerCorrelation(TransformerNN):
                 num_correct += (preds.argmax(dim=1) == by).sum().item()
                 loss_sum += curr_bs * loss.item()
             ave_loss = loss_sum / num_seen
-            if not epoch_i % 20:
+            if not epoch_i % report_interval:
                 print_call(f"Train Acc @ Epoch {epoch_i}: {num_correct / num_seen}")
                 print_call(f"Train Loss @ Epoch {epoch_i}: {ave_loss}")
 
@@ -419,6 +422,7 @@ class TransformerCorrelation(TransformerNN):
                 num_seen = 0
                 num_correct = 0
                 loss_sum = 0
+                self.mlp.eval()
                 for bi, (bx, by, batch_weights) in enumerate(val_loader):
                     bx = bx.cuda()
                     N, num_channels = bx.shape
@@ -453,10 +457,13 @@ class TransformerCorrelation(TransformerNN):
                 ave_loss = loss_sum / num_seen
                 val_acc = num_correct / num_seen
                 if val_acc > best_val_acc: best_val_acc = val_acc
-                if not epoch_i % 20:
+                if not epoch_i % report_interval:
                     print_call(f"Val Acc @ Epoch {epoch_i}: {val_acc}")
                     print_call(f"Val Loss @ Epoch {epoch_i}: {ave_loss}")
                     print_call(f"Best Val Loss was {best_val_loss} @ Epoch {min_loss_epoch}")
+                    
+                    print_call(self.score(test_x, test_y))
+                    sys.stdout.flush()
 
                 curr_lr = self.opt.state_dict()['param_groups'][0]['lr']
                 scheduler.step(ave_loss)
@@ -555,9 +562,39 @@ for clf_str in clf_strs:
     for data_prep in data_prep_strs:
         print(clf_str, data_prep)
         data_prep_list = data_prep.split('+')
+        if 'climate' in data_prep_list:
+            x_climate_train = np.tile(climate_train, (1, t))  # (N, t*19)
+            x_climate_train = x_climate_train.reshape((train_x.shape[0], t, -1))  # (N, t, 19)
+            train_x = np.concatenate((train_x, x_climate_train), axis=-1)  # (N, t, c+19)
+
+            x_climate_test = np.tile(climate_test, (1, t))  # (Nte, t*19)
+            x_climate_test = x_climate_test.reshape((test_x.shape[0], t, -1))  # (Nte, t, 2)
+            test_x = np.concatenate((test_x, x_climate_test), axis=-1)  # (Nte, t, c+19)
+        if 'coords' in data_prep_list:
+            x_coords_train = np.tile(coords_train, (1, t))  # (N, t*2)
+            x_coords_train = x_coords_train.reshape((train_x.shape[0], t, -1))  # (N, t, 2)
+            train_x = np.concatenate((train_x, x_coords_train), axis=-1)  # (N, t, c+2)
+
+            x_coords_test = np.tile(coords_test, (1, t))  # (Nte, t*2)
+            x_coords_test = x_coords_test.reshape((test_x.shape[0], t, -1))  # (Nte, t, 2)
+            test_x = np.concatenate((test_x, x_coords_test), axis=-1)  # (Nte, t, c+2)
         if 'normalize' in data_prep_list:
-            train_x = (train_x - train_x.mean(axis=(0, 1))) / train_x.std(axis=(0, 1))
-            test_x = (test_x - test_x.mean(axis=(0, 1))) / train_x.std(axis=(0, 1))
+            print(train_x.mean(axis=(0,1)), train_x.std(axis=(0,1)))
+            print(train_x.min())
+            # from collections import Counter
+            # print(Counter(train_x.reshape(-1)))
+            train_clouds = train_x==0
+            test_clouds = test_x==0
+            train_x[train_clouds] = np.nan
+            test_x[test_clouds] = np.nan
+            train_mean = np.nanmean(train_x, axis=(0,1))
+            train_std = np.nanstd(train_x, axis=(0,1))
+
+            train_x = (train_x - train_mean) / train_std
+            test_x =  (test_x  - train_mean) / train_std
+
+            train_x[train_clouds] = 0
+            test_x[test_clouds] = 0
         if 'clean_drop' in data_prep_list:
             train_x = np.delete(train_x, clean_drop_channels, axis=2)
             test_x = np.delete(test_x, clean_drop_channels, axis=2)
@@ -573,22 +610,6 @@ for clf_str in clf_strs:
 
             train_x = ndvi(train_x)
             test_x = ndvi(test_x)
-        if 'coords' in data_prep_list:
-            x_coords_train = np.tile(coords_train, (1, t))  # (N, t*2)
-            x_coords_train = x_coords_train.reshape((train_x.shape[0], t, -1))  # (N, t, 2)
-            train_x = np.concatenate((train_x, x_coords_train), axis=-1)  # (N, t, c+2)
-
-            x_coords_test = np.tile(coords_test, (1, t))  # (Nte, t*2)
-            x_coords_test = x_coords_test.reshape((test_x.shape[0], t, -1))  # (Nte, t, 2)
-            test_x = np.concatenate((test_x, x_coords_test), axis=-1)  # (Nte, t, c+2)
-        if 'climate' in data_prep_list:
-            x_climate_train = np.tile(climate_train, (1, t))  # (N, t*19)
-            x_climate_train = x_climate_train.reshape((train_x.shape[0], t, -1))  # (N, t, 19)
-            train_x = np.concatenate((train_x, x_climate_train), axis=-1)  # (N, t, c+19)
-
-            x_climate_test = np.tile(climate_test, (1, t))  # (Nte, t*19)
-            x_climate_test = x_climate_test.reshape((test_x.shape[0], t, -1))  # (Nte, t, 2)
-            test_x = np.concatenate((test_x, x_climate_test), axis=-1)  # (Nte, t, c+19)
 
         _, t, in_c = train_x.shape
         train_x = train_x.reshape(train_x.shape[0], -1)
@@ -643,7 +664,7 @@ for clf_str in clf_strs:
             assert 'coords' in data_prep_list or 'climate' in data_prep_list
             print("ATTENTION: Right now coords/climate is used as input and target")
             reg_c = in_c - c  # (9 + x - 9)
-            clf = TransformerCorrelation(args.weight, reg_c, True, in_channels=in_c)
+            clf = TransformerCorrelation(args.weight, reg_c, True, in_channels=in_c, wd=args.weight_decay)
         elif clf_str == 'retrain_transformer':
             clf = RetrainTransformerNN()
         elif clf_str == 'transformer_target_classes_only':

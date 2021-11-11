@@ -670,11 +670,13 @@ for clf_str in clf_strs:
             reg_c = in_c - c  # (9 + x - 9)
             print(f"Regression channels: {reg_c}")
             clf = TransformerCorrelation(args.weight, reg_c, False, in_channels=in_c-reg_c, wd=args.weight_decay)
+            print(f"Weight decay: {clf.wd}")
         elif clf_str == 'transformer_correlation_input':
             assert 'coords' in data_prep_list or 'climate' in data_prep_list
             print("ATTENTION: Right now coords/climate is used as input and target")
             reg_c = in_c - c  # (9 + x - 9)
             clf = TransformerCorrelation(args.weight, reg_c, True, in_channels=in_c, wd=args.weight_decay)
+            print(f"Weight decay: {clf.wd}")
         elif clf_str == 'retrain_transformer':
             clf = RetrainTransformerNN()
         elif clf_str == 'transformer_target_classes_only':

@@ -180,7 +180,7 @@ class TorchNN():
         # print("Cudaing NN")
         self.wd = wd
         self.mlp = mlp.cuda()
-        self.opt = torch.optim.Adam(self.mlp.parameters(), lr=1e-2, weight_decay=wd)
+        self.opt = torch.optim.Adam(self.mlp.parameters(), lr=1e-3, weight_decay=wd)
 
     def cast_targets(self, y):
         if self.orig_class_to_index is None:

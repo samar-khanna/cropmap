@@ -353,6 +353,7 @@ class TransformerCorrelation(TransformerNN):
         self.reg_c = reg_c
         self.keep_reg = keep_reg
         self.in_c = self.mlp.in_c if keep_reg else self.mlp.in_c + reg_c
+        print(self.wd)
 
     def fit(self, train_x, train_y, bs=4096, return_best_val_acc=False,
             silent=False, sample_weights=None):
@@ -404,9 +405,10 @@ class TransformerCorrelation(TransformerNN):
 
                 self.opt.zero_grad()
                 preds, feat = self.mlp(bx, return_final_feature=True)
-                feat_m = (feat.T @ feat) + self.wd * torch.eye(feat.shape[-1]).cuda()  # (cxn @ nxc) + cxc = cxc
-                inv_feat_m = torch.cholesky_inverse(torch.cholesky(feat_m))  # (cxc)
-                coeffs = inv_feat_m @ feat.T @ centered_reg_t  # cxc @ cxn @ nxclim = cxclim
+                # feat_m = (feat.T @ feat) + self.wd * torch.eye(feat.shape[-1]).cuda()  # (cxn @ nxc) + cxc = cxc
+                # inv_feat_m = torch.cholesky_inverse(torch.cholesky(feat_m))  # (cxc)
+                # coeffs = inv_feat_m @ feat.T @ centered_reg_t  # cxc @ cxn @ nxclim = cxclim
+                coeffs = feat.pinverse() @ centered_reg_t
                 recon = feat @ coeffs  # nxc X cxclim = nxclim
                 res = (centered_reg_t - recon).pow(2).mean()
                 corr_loss = self.weight * res / (centered_reg_t.pow(2).mean())
@@ -451,9 +453,10 @@ class TransformerCorrelation(TransformerNN):
                     num_seen += curr_bs
                     # if not bi%500: print_call(f"{num_seen} / {n_train}")
                     preds, feat = self.mlp(bx, return_final_feature=True)
-                    feat_m = (feat.T @ feat) + self.wd * torch.eye(feat.shape[-1]).cuda()  # (cxn @ nxc) + cxc = cxc
-                    inv_feat_m = torch.cholesky_inverse(torch.cholesky(feat_m))  # (cxc)
-                    coeffs = inv_feat_m @ feat.T @ centered_reg_t  # cxc @ cxn @ nxclim = cxclim
+                    # feat_m = (feat.T @ feat) + self.wd * torch.eye(feat.shape[-1]).cuda()  # (cxn @ nxc) + cxc = cxc
+                    # inv_feat_m = torch.cholesky_inverse(torch.cholesky(feat_m))  # (cxc)
+                    # coeffs = inv_feat_m @ feat.T @ centered_reg_t  # cxc @ cxn @ nxclim = cxclim
+                    coeffs = feat.pinverse() @ centered_reg_t
                     recon = feat @ coeffs  # nxc X cxclim = nxclim
                     res = (recon - centered_reg_t).pow(2).mean()
                     corr_loss = self.weight * res / (centered_reg_t.pow(2).mean())

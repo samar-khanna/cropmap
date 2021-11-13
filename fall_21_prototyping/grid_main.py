@@ -355,7 +355,7 @@ class TransformerCorrelation(TransformerNN):
         self.keep_reg = keep_reg
         self.in_c = self.mlp.in_c if keep_reg else self.mlp.in_c + reg_c
         self.feat_lambda = 1e-2
-        self.reg_weight = nn.Linear(self.mlp.dim_feature, 1)
+        self.reg_weight = nn.Linear(self.mlp.dim_feature, 1).cuda()
 
     def fit(self, train_x, train_y, bs=4096, return_best_val_acc=False,
             silent=False, sample_weights=None):

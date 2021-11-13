@@ -407,7 +407,8 @@ class TransformerCorrelation(TransformerNN):
                 self.opt.zero_grad()
                 preds, feat = self.mlp(bx, return_final_feature=True)
                 feat_m = (feat.T @ feat) + self.feat_lambda * torch.eye(feat.shape[-1]).cuda()  # (cxn @ nxc) + cxc = cxc
-                inv_feat_m = torch.cholesky_inverse(torch.cholesky(feat_m))  # (cxc)
+                # inv_feat_m = torch.cholesky_inverse(torch.cholesky(feat_m))  # (cxc)
+                inv_feat_m = torch.linalg.inv(feat_m)
                 coeffs = inv_feat_m @ feat.T @ centered_reg_t  # cxc @ cxn @ nxclim = cxclim
                 # coeffs = feat.pinverse() @ centered_reg_t
                 recon = feat @ coeffs  # nxc X cxclim = nxclim
@@ -455,7 +456,8 @@ class TransformerCorrelation(TransformerNN):
                     # if not bi%500: print_call(f"{num_seen} / {n_train}")
                     preds, feat = self.mlp(bx, return_final_feature=True)
                     feat_m = (feat.T @ feat) + self.feat_lambda * torch.eye(feat.shape[-1]).cuda()  # (cxn @ nxc) + cxc = cxc
-                    inv_feat_m = torch.cholesky_inverse(torch.cholesky(feat_m))  # (cxc)
+                    # inv_feat_m = torch.cholesky_inverse(torch.cholesky(feat_m))  # (cxc)
+                    inv_feat_m = torch.linalg.inv(feat_m)
                     coeffs = inv_feat_m @ feat.T @ centered_reg_t  # cxc @ cxn @ nxclim = cxclim
                     # coeffs = feat.pinverse() @ centered_reg_t
                     recon = feat @ coeffs  # nxc X cxclim = nxclim

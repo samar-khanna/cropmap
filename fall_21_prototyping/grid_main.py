@@ -18,6 +18,7 @@ matplotlib.use('agg')
 import matplotlib.pyplot as plt
 import sys
 import torch
+import torch.nn as nn
 from copy import copy
 import argparse
 from transformer import Transformer
@@ -354,7 +355,7 @@ class TransformerCorrelation(TransformerNN):
         self.keep_reg = keep_reg
         self.in_c = self.mlp.in_c if keep_reg else self.mlp.in_c + reg_c
         self.feat_lambda = 1e-2
-        print(self.wd)
+        self.reg_weight = nn.Linear(self.mlp.dim_feature, 1)
 
     def fit(self, train_x, train_y, bs=4096, return_best_val_acc=False,
             silent=False, sample_weights=None):
@@ -413,8 +414,12 @@ class TransformerCorrelation(TransformerNN):
                 # coeffs = feat.pinverse() @ centered_reg_t
                 recon = feat @ coeffs  # nxc X cxclim = nxclim
                 res = (centered_reg_t - recon).pow(2).mean()
-                corr_loss = self.weight * res / (centered_reg_t.pow(2).mean())
-                # print(res)
+                # corr_loss = self.weight * res / (centered_reg_t.pow(2).mean())
+
+                corr_weight = self.reg_weight(feat)
+                corr_weight = self.weight * corr_weight / corr_weight.sum()
+                corr_loss = corr_weight * res / (centered_reg_t.pow(2).mean())
+
                 # res = torch.linalg.lstsq(feat, coords).residuals.mean()
                 batch_weights = curr_bs * batch_weights / batch_weights.sum()
                 clf_loss = (criterion(preds, by) * batch_weights).mean()
@@ -462,7 +467,11 @@ class TransformerCorrelation(TransformerNN):
                     # coeffs = feat.pinverse() @ centered_reg_t
                     recon = feat @ coeffs  # nxc X cxclim = nxclim
                     res = (recon - centered_reg_t).pow(2).mean()
-                    corr_loss = self.weight * res / (centered_reg_t.pow(2).mean())
+                    # corr_loss = self.weight * res / (centered_reg_t.pow(2).mean())
+                    corr_weight = self.reg_weight(feat)
+                    corr_weight = self.weight * corr_weight / corr_weight.sum()
+                    corr_loss = corr_weight * res / (centered_reg_t.pow(2).mean())
+
                     # get total weight equal to curr_bs
                     batch_weights = curr_bs * batch_weights / batch_weights.sum()
                     clf_loss = (criterion(preds, by) * batch_weights).mean()

@@ -416,7 +416,7 @@ class TransformerCorrelation(TransformerNN):
                 res = (centered_reg_t - recon).pow(2)#.mean()
                 # corr_loss = self.weight * res / (centered_reg_t.pow(2).mean())
 
-                corr_weight = self.reg_weight(feat).view(-1)
+                corr_weight = self.reg_weight(feat)
                 corr_weight = self.weight * corr_weight / corr_weight.sum()
                 corr_loss = (corr_weight * res / (centered_reg_t.pow(2))).mean()
 
@@ -469,7 +469,7 @@ class TransformerCorrelation(TransformerNN):
                     res = (centered_reg_t - recon).pow(2)#.mean()
                     # corr_loss = self.weight * res / (centered_reg_t.pow(2).mean())
 
-                    corr_weight = self.reg_weight(feat).view(-1)
+                    corr_weight = self.reg_weight(feat)
                     corr_weight = self.weight * corr_weight / corr_weight.sum()
                     corr_loss = (corr_weight * res / (centered_reg_t.pow(2))).mean()
 

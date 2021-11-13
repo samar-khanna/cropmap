@@ -413,12 +413,12 @@ class TransformerCorrelation(TransformerNN):
                 coeffs = inv_feat_m @ feat.T @ centered_reg_t  # cxc @ cxn @ nxclim = cxclim
                 # coeffs = feat.pinverse() @ centered_reg_t
                 recon = feat @ coeffs  # nxc X cxclim = nxclim
-                res = (centered_reg_t - recon).pow(2).mean()
+                res = (centered_reg_t - recon).pow(2)#.mean()
                 # corr_loss = self.weight * res / (centered_reg_t.pow(2).mean())
 
-                corr_weight = self.reg_weight(feat)
+                corr_weight = self.reg_weight(feat).view(-1)
                 corr_weight = self.weight * corr_weight / corr_weight.sum()
-                corr_loss = corr_weight * res / (centered_reg_t.pow(2).mean())
+                corr_loss = (corr_weight * res / (centered_reg_t.pow(2))).mean()
 
                 # res = torch.linalg.lstsq(feat, coords).residuals.mean()
                 batch_weights = curr_bs * batch_weights / batch_weights.sum()
@@ -466,11 +466,12 @@ class TransformerCorrelation(TransformerNN):
                     coeffs = inv_feat_m @ feat.T @ centered_reg_t  # cxc @ cxn @ nxclim = cxclim
                     # coeffs = feat.pinverse() @ centered_reg_t
                     recon = feat @ coeffs  # nxc X cxclim = nxclim
-                    res = (recon - centered_reg_t).pow(2).mean()
+                    res = (centered_reg_t - recon).pow(2)#.mean()
                     # corr_loss = self.weight * res / (centered_reg_t.pow(2).mean())
-                    corr_weight = self.reg_weight(feat)
+
+                    corr_weight = self.reg_weight(feat).view(-1)
                     corr_weight = self.weight * corr_weight / corr_weight.sum()
-                    corr_loss = corr_weight * res / (centered_reg_t.pow(2).mean())
+                    corr_loss = (corr_weight * res / (centered_reg_t.pow(2))).mean()
 
                     # get total weight equal to curr_bs
                     batch_weights = curr_bs * batch_weights / batch_weights.sum()

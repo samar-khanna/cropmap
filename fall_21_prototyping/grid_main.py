@@ -343,7 +343,7 @@ class TransformerNN(TorchNN):
         mlp = Transformer(num_classes=num_classes, in_channels=in_channels, n_conv=n_conv, **kwargs)
 
         self.mlp = mlp.cuda()
-        self.opt = torch.optim.Adam(self.mlp.parameters(), lr=1e-2, weight_decay=wd)
+        self.opt = torch.optim.Adam(self.mlp.parameters(), lr=1e-3, weight_decay=wd)
 
 
 class TransformerCorrelation(TransformerNN):

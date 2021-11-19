@@ -356,9 +356,9 @@ class TransformerCorrelation(TransformerNN):
         self.keep_reg = keep_reg
         self.in_c = self.mlp.in_c if keep_reg else self.mlp.in_c + reg_c
         self.feat_lambda = 1e-3
-        self.reg_weight = nn.Linear(self.mlp.dim_feature, 1).cuda()
-        self.opt = torch.optim.Adam(list(self.mlp.parameters()) + list(self.reg_weight.parameters()),
-                                    lr=1e-3, weight_decay=kwargs['wd'])
+        # self.reg_weight = nn.Linear(self.mlp.dim_feature, 1).cuda()
+        # self.opt = torch.optim.Adam(list(self.mlp.parameters()) + list(self.reg_weight.parameters()),
+        #                             lr=1e-3, weight_decay=kwargs['wd'])
 
     def fit(self, train_x, train_y, bs=4096, return_best_val_acc=False,
             silent=False, sample_weights=None):
@@ -417,11 +417,11 @@ class TransformerCorrelation(TransformerNN):
                 # coeffs = feat.pinverse() @ centered_reg_t
                 recon = feat @ coeffs  # nxc X cxclim = nxclim
                 res = (centered_reg_t - recon).pow(2)  # n x clim
-                # corr_loss = self.weight * res.mean() / (centered_reg_t.pow(2).mean())
+                corr_loss = self.weight * res.mean() / (centered_reg_t.pow(2).mean())
 
-                corr_weight = self.reg_weight(feat)
-                corr_weight = self.weight * F.normalize(corr_weight, dim=0)
-                corr_loss = (corr_weight * res).mean() / centered_reg_t.pow(2).mean()
+                # corr_weight = self.reg_weight(feat)
+                # corr_weight = self.weight * F.normalize(corr_weight, dim=0)
+                # corr_loss = (corr_weight * res).mean() / centered_reg_t.pow(2).mean()
 
                 # res = torch.linalg.lstsq(feat, coords).residuals.mean()
                 batch_weights = curr_bs * batch_weights / batch_weights.sum()
@@ -470,11 +470,11 @@ class TransformerCorrelation(TransformerNN):
                     # coeffs = feat.pinverse() @ centered_reg_t
                     recon = feat @ coeffs  # nxc X cxclim = nxclim
                     res = (centered_reg_t - recon).pow(2)
-                    # corr_loss = self.weight * res.mean() / (centered_reg_t.pow(2).mean())
+                    corr_loss = self.weight * res.mean() / (centered_reg_t.pow(2).mean())
 
-                    corr_weight = self.reg_weight(feat)
-                    corr_weight = self.weight * F.normalize(corr_weight, dim=0)
-                    corr_loss = (corr_weight * res).mean() / centered_reg_t.pow(2).mean()
+                    # corr_weight = self.reg_weight(feat)
+                    # corr_weight = self.weight * F.normalize(corr_weight, dim=0)
+                    # corr_loss = (corr_weight * res).mean() / centered_reg_t.pow(2).mean()
 
                     # get total weight equal to curr_bs
                     batch_weights = curr_bs * batch_weights / batch_weights.sum()

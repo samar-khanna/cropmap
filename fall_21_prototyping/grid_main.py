@@ -19,6 +19,7 @@ import matplotlib.pyplot as plt
 import sys
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from copy import copy
 import argparse
 from transformer import Transformer
@@ -419,7 +420,7 @@ class TransformerCorrelation(TransformerNN):
                 # corr_loss = self.weight * res.mean() / (centered_reg_t.pow(2).mean())
 
                 corr_weight = self.reg_weight(feat)
-                corr_weight = self.weight * corr_weight
+                corr_weight = self.weight * F.normalize(corr_weight, dim=0)
                 corr_loss = (corr_weight * res).mean() / centered_reg_t.pow(2).mean()
 
                 # res = torch.linalg.lstsq(feat, coords).residuals.mean()
@@ -472,7 +473,7 @@ class TransformerCorrelation(TransformerNN):
                     # corr_loss = self.weight * res.mean() / (centered_reg_t.pow(2).mean())
 
                     corr_weight = self.reg_weight(feat)
-                    corr_weight = self.weight * corr_weight
+                    corr_weight = self.weight * F.normalize(corr_weight, dim=0)
                     corr_loss = (corr_weight * res).mean() / centered_reg_t.pow(2).mean()
 
                     # get total weight equal to curr_bs

@@ -624,6 +624,12 @@ for clf_str in clf_strs:
 
             train_x[train_clouds] = 0
             test_x[test_clouds] = 0
+        if 'climate' in data_prep_list and 'temp_drop' in data_prep_list:
+            train_x = np.delete(train_x, [i for i in range(9, 20)], axis=2)
+            test_x = np.delete(test_x, [i for i in range(9, 20)], axis=2)
+        if 'climate' in data_prep_list and 'prec_drop' in data_prep_list:
+            train_x = np.delete(train_x, [i for i in range(20, 28)], axis=2)
+            test_x = np.delete(test_x, [i for i in range(20, 28)], axis=2)
         if 'clean_drop' in data_prep_list:
             train_x = np.delete(train_x, clean_drop_channels, axis=2)
             test_x = np.delete(test_x, clean_drop_channels, axis=2)

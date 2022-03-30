@@ -74,6 +74,28 @@ def plot_shot_curves(experiment_dict, savefig=None):
     pass
 
 
+def plot_growth_curves(band_results, interest_classes, title="NIR band results"):
+    fig, ax = plt.subplots()
+    for c in interest_classes:
+        class_results = band_results[c]
+
+        xticks = class_results.keys()
+        x = list(range(len(class_results)))
+        y = class_results.values()
+
+        ax.set_xticks(x)
+        ax.set_xticklabels(xticks, fontsize=8)
+        ax.plot(x, y, 'x-', label=c)
+
+    ax.legend(fontsize=8, framealpha=0.4)
+    ax.set_ylabel("Band raw value")
+    ax.set_xlabel("Time in year")
+    ax.set_title(title)
+
+    plt.show()
+    return
+
+
 def plot_hist(metrics, thresh=0.01, topk=5,
               ylabel="Metric Scores", title="Metric scores by class", savefig=None):
     """

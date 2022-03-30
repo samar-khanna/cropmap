@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from tslearn.metrics import dtw
 
+
 class kNN(nn.Module):
     def __init__(self, num_classes, k=5, metric="L2", use_ndvi=False):
         super().__init__()
@@ -18,18 +19,18 @@ class kNN(nn.Module):
         return cls(num_classes, **config["classifier_kwargs"])
 
     def forward(self, x, y):
-        ndvi = [ ((im[:, 4] - im[:, 3])/(im[:, 4] + im[:, 3]+1e-4)).unsqueeze(1) for im in x]
+        ndvi = [((im[:, 4] - im[:, 3]) / (im[:, 4] + im[:, 3] + 1e-4)).unsqueeze(1) for im in x]
         if self.use_ndvi: x = ndvi
         if isinstance(x, list):
             x = torch.cat(x, dim=1)  # dim is (b, block_length*c, h, w)
         b, c, h, w = x.shape
         y_hold = y.clone()
         summed_y = torch.sum(y, dim=1, keepdim=True)
-        y = y.argmax(dim=1, keepdim=True) # b, c, h, w
-        x = x.permute(0,2,3,1).view(b * h * w, c)
-        y = y.permute(0,2,3,1).view(b * h * w, 1)
+        y = y.argmax(dim=1, keepdim=True)  # b, c, h, w
+        x = x.permute(0, 2, 3, 1).view(b * h * w, c)
+        y = y.permute(0, 2, 3, 1).view(b * h * w, 1)
         # clouds aren't one-hot, just 0s
-        y_mask = summed_y.permute(0,2,3,1).view(b * h * w, 1)
+        y_mask = summed_y.permute(0, 2, 3, 1).view(b * h * w, 1)
         chosen_indices = torch.where(y_mask)[0]
         # print(x.shape, x.index_select(0, chosen_indices).shape); asdf
         if self.training:
@@ -40,7 +41,8 @@ class kNN(nn.Module):
             else:
                 self.memory_x = x.index_select(0, chosen_indices).clone()
                 self.memory_y = y.index_select(0, chosen_indices).clone()
-            one_hot_preds = self.eye.to(x.device).index_select(0, torch.zeros(y.shape[0], dtype=torch.long, device=x.device))
+            one_hot_preds = self.eye.to(x.device).index_select(0, torch.zeros(y.shape[0], dtype=torch.long,
+                                                                              device=x.device))
         else:
             memory_indices = torch.randint(x.shape[0], (min(self.memory_x.shape[0], 10000),))
             memory_x_sample = self.memory_x[memory_indices]
@@ -51,7 +53,7 @@ class kNN(nn.Module):
             elif self.metric == "dtw":
                 dist_mat = torch.zeros(x.shape[0], memory_x_sample.shape[0])
                 for i in range(x.shape[0]):
-                    if not i%1000: print(i)
+                    if not i % 1000: print(i)
                     for j in range(memory_x_sample.shape[0]):
                         dist_mat[i][j] = dtw(x[i].detach().cpu().numpy(), memory_x_sample[j].detach().cpu().numpy())
             else:
@@ -68,16 +70,16 @@ class kNN(nn.Module):
 
 
 def pairwise_distances(x, y=None):
-    '''
+    """
     Input: x is a Nxd matrix
            y is an optional Mxd matirx
     Output: dist is a NxM matrix where dist[i,j] is the square norm between x[i,:] and y[j,:]
             if y is not given then use 'y=x'.
     i.e. dist[i,j] = ||x[i,:]-y[j,:]||^2
-    '''
-    x_norm = (x**2).sum(1).view(-1, 1)
+    """
+    x_norm = (x ** 2).sum(1).view(-1, 1)
     if y is not None:
-        y_norm = (y**2).sum(1).view(1, -1)
+        y_norm = (y ** 2).sum(1).view(1, -1)
     else:
         y = x
         y_norm = x_norm.view(1, -1)

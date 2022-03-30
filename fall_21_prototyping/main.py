@@ -20,8 +20,6 @@ import argparse
 from transformer import Transformer
 from scipy import stats
 from mcr_loss import MaximalCodingRateReduction
-import autograd_hacks
-from opacus import PrivacyEngine
 
 print(sys.argv)
 parser = argparse.ArgumentParser()
@@ -630,6 +628,7 @@ class NTK():
     
 
     def score(self, test_x, test_y, bs=1024):
+        from opacus import PrivacyEngine
         criterion = MaximalCodingRateReduction()
         weightings = []
         for net_i in range(self.num_ntk_nets):

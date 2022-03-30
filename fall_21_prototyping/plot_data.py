@@ -16,21 +16,30 @@ from interest_classes import interest_classes, interest_class_names
 
 matplotlib.rcParams['font.family'] = 'serif'
 
+
 def mercator(coords, w, h):
-    x = (coords[:, 0] + 180) * (w/360)
+    x = (coords[:, 0] + 180) * (w / 360)
     lat_rad = coords[:, 1] * np.pi / 180
-    mer = np.log(np.tan(lat_rad/2 + np.pi/4))
-    y = (w * mer/(2 * np.pi)) - (h/2)
+    mer = np.log(np.tan(lat_rad / 2 + np.pi / 4))
+    y = (w * mer / (2 * np.pi)) - (h / 2)
     return np.stack((y, x))
 
 
-def proc_transformer_loss_feats(transformer, X, y, batch_size=1024, get_feats=False):
+def proc_transformer_loss_feats(transformer, X, y, climates=None, batch_size=1024, get_feats=False):
     transformer.eval()
 
-    XT = torch.from_numpy(X.reshape(X.shape[0], -1).astype(np.float32))
+    N, c, t = X.shape
+    if climates is not None:
+        Xtmp = X.transpose(0, 2, 1)  # (N, t, c)
+        x_climate = np.tile(climates, (1, t))  # (N, t*19)
+        x_climate = x_climate.reshape((N, t, -1))  # (N, t, 19)
+        X = np.concatenate((Xtmp, x_climate), axis=-1)  # (N, t, c+19)
 
+    XT = torch.from_numpy(X.reshape(X.shape[0], -1).astype(np.float32))  # (N, t*(c+19))
+
+    # TODO: Fix hacky 0 if y_i is not in interest_classes
     orig_class_to_index = {int(c): i for i, c in enumerate(interest_classes)}
-    yt = torch.LongTensor([orig_class_to_index[int(y_i)] for y_i in y])
+    yt = torch.LongTensor([orig_class_to_index[int(y_i)] if y_i in interest_classes else 0 for y_i in y])
     # yt = torch.zeros(len(y), dtype=torch.long)
 
     dataset = torch.utils.data.TensorDataset(XT, yt)
@@ -73,19 +82,23 @@ def proc_nearest_feats(feats, target_inds, source_inds, k=100):
     dist = cdist(target_feats, source_feats)  # (Nt, Ns)
     # nearest = np.argmax(-dist, axis=-1)  # (Nt,)
     nearest = np.argsort(dist, axis=-1)[:, :k]  # (Nt, k)
+    dist = dist[:, :k]  # (Nt, k)
 
-    return nearest
+    return nearest, dist
 
 
-def get_transformer_loss_feats(checkpoint_dir, X, y, target_inds, source_inds, get_feats=True):
+def get_transformer_loss_feats(checkpoint_dir, X, y, climates, target_inds, source_inds, get_feats=True):
     from transformer import Transformer
-    transformer = Transformer(len(interest_classes), 9, 2)
+
+    in_c = 9 if climates is None else 9 + climates.shape[1]
+    transformer = Transformer(len(interest_classes), in_c, 2)
     sd = torch.load(os.path.join(checkpoint_dir, 'checkpoint.bin'), map_location='cpu')
     transformer.load_state_dict(sd)
 
     feats_file = os.path.join(checkpoint_dir, 'features.pkl')
     losses_file = os.path.join(checkpoint_dir, 'losses.pkl')
     nearest_feats_file = os.path.join(checkpoint_dir, 'nearest_features.pkl')
+    nearest_dist_file = os.path.join(checkpoint_dir, 'nearest_dist.pkl')
     if os.path.isfile(feats_file) and os.path.isfile(losses_file):
         print(f"Loading features from {feats_file}, losses from {losses_file}")
         with open(losses_file, 'rb') as f:
@@ -93,26 +106,29 @@ def get_transformer_loss_feats(checkpoint_dir, X, y, target_inds, source_inds, g
         with open(feats_file, 'rb') as f:
             feats = pickle.load(f)
     else:
-        losses, feats = proc_transformer_loss_feats(transformer, X, y, get_feats=get_feats)
+        losses, feats = proc_transformer_loss_feats(transformer, X, y, climates, get_feats=get_feats)
         with open(losses_file, 'wb') as f:
             pickle.dump(losses, f)
         with open(feats_file, 'wb') as f:
             pickle.dump(feats, f)
 
-    if os.path.isfile(nearest_feats_file):
+    if os.path.isfile(nearest_feats_file) and os.path.isfile(nearest_dist_file):
         print(f"Loading nearest neighbour indices from {nearest_feats_file}")
         with open(nearest_feats_file, 'rb') as f:
             nearest_feats = pickle.load(f)
+        with open(nearest_dist_file, 'rb') as f:
+            nearest_dists = pickle.load(f)
     else:
-        nearest_feats = proc_nearest_feats(feats, target_inds, source_inds,)
+        nearest_feats, nearest_dists = proc_nearest_feats(feats, target_inds, source_inds, )
         with open(nearest_feats_file, 'wb') as f:
             pickle.dump(nearest_feats, f)
+        with open(nearest_dist_file, 'wb') as f:
+            pickle.dump(nearest_dists, f)
 
-    return transformer, losses, feats, nearest_feats
+    return transformer, losses, feats, nearest_feats, nearest_dists
 
 
-def plot_transformer_loss(losses, coords,):
-
+def plot_transformer_loss(losses, coords, ):
     losses = (losses - np.min(losses)) / (np.max(losses) - np.min(losses))
 
     cmap = get_cmap('viridis', 1000)
@@ -125,6 +141,7 @@ def plot_transformer_loss(losses, coords,):
     plt.colorbar(plot)
     # plt.show()
     plt.savefig('tmp.png')
+
 
 def coords_to_colors(coords):
     N = coords.shape[0]
@@ -139,15 +156,16 @@ def coords_to_colors(coords):
     normed_coords = (coords - mid_arr) / (0.5 * (max_arr - min_arr))
     # print(normed_coords.min(axis=0), normed_coords.max(axis=0))
     # want to calculate r and theta for
-    raw_r = np.sqrt( (normed_coords**2).sum(axis=1))
+    raw_r = np.sqrt((normed_coords ** 2).sum(axis=1))
     normed_r = raw_r / raw_r.max()
-    theta = (np.arctan2(normed_coords[:,1], normed_coords[:,0]) / (2 * np.pi)) + 0.5
+    theta = (np.arctan2(normed_coords[:, 1], normed_coords[:, 0]) / (2 * np.pi)) + 0.5
     print(normed_r.min(), normed_r.max(), theta.min(), theta.max())
     # hsv_vals = np.concatenate([normed_coords[:,:1], 0.8 * np.ones((N, 1)), normed_coords[:,1:]], axis=1)
     hsv_vals = np.stack([theta, 1 * np.ones(N), normed_r], axis=1)
     return matplotlib.colors.hsv_to_rgb(hsv_vals)
 
-def plot_transformer_feat(nearest, coords, target_inds, source_inds, target_region_i, k=1, save_dir='plots/'):
+
+def plot_transformer_feat(nearest, dist, coords, target_inds, source_inds, target_region_i, k=1, save_dir='plots/'):
     pix = mercator(coords, 200, 100).T  # (N, 2)
 
     # anchors = np.arange(target_feats.shape[0])
@@ -172,15 +190,36 @@ def plot_transformer_feat(nearest, coords, target_inds, source_inds, target_regi
     coord_colors = coords_to_colors(coords)
 
     source_pix = pix[source_inds]
-    # plt.scatter(source_pix[:, 1], source_pix[:, 0], c=source_anchors, cmap=cmap, s=1, alpha=1)
-    plt.scatter(source_pix[:, 1], source_pix[:, 0], c=coord_colors[source_inds], s=1, alpha=1)
-
     target_pix = pix[target_inds]
+    # plt.scatter(source_pix[:, 1], source_pix[:, 0], c=source_anchors, cmap=cmap, s=1, alpha=1)
+    # plt.scatter(source_pix[:, 1], source_pix[:, 0], c=coord_colors[source_inds], s=1, alpha=1)
     # plt.scatter(target_pix[:, 1], target_pix[:, 0], c=target_anchors, cmap=cmap, s=1, alpha=1)
-    plt.scatter(target_pix[:, 1], target_pix[:, 0], c=coord_colors[source_inds][nearest[:,0]], s=1, alpha=1)
+
+    n = min(target_pix.shape[0], nearest.shape[0])
+    plt.axis('off')
+    plt.tight_layout(pad=0.2)
+    plt.scatter(source_pix[:, 1], source_pix[:, 0], c=coord_colors[source_inds], s=1, alpha=1)
+    plt.scatter(target_pix[:, 1], target_pix[:, 0], c=coord_colors[source_inds][nearest[:, 0]], s=1, alpha=1)
+    plt.axhline(y=pix[:, 0].mean(), color='white')
+    plt.axvline(x=pix[:, 1].mean(), color='white')
 
     # plt.show()
-    plt.savefig(f"{save_dir}/knn_transformer_feats_{target_region_i}.png")
+    save_path = os.path.join(save_dir, f"knn_transformer_feats_{target_region_i}.png")
+    plt.savefig(save_path)
+
+    nearest_distances = np.min(dist, axis=1)  # (Nt, k) -> (Nt,)
+    cmap = get_cmap('coolwarm')
+    m, M = nearest_distances.min(), nearest_distances.max()
+    colors = cmap((nearest_distances - m) / (M - m))
+    # plt.scatter(source_pix[:, 1], source_pix[:, 0], c=coord_colors[source_inds], s=1, alpha=1)
+
+    plt.tight_layout(pad=0.2)
+    plt.axis('off')
+    plt.scatter(source_pix[:, 1], source_pix[:, 0], c='gray', s=1, alpha=1)
+    plt.scatter(target_pix[:, 1], target_pix[:, 0], c=colors, s=1, alpha=1)
+    save_path = os.path.join(save_dir, f"knn_dist_transformer_feats_{target_region_i}.png")
+    plt.savefig(save_path)
+
 
 def plot_nearest_climate(coords, target_inds, source_inds, climates, target_region_i,
                          normalize=True, save_dir='plots/', k=1):
@@ -188,7 +227,6 @@ def plot_nearest_climate(coords, target_inds, source_inds, climates, target_regi
     normed_climates = StandardScaler().fit_transform(climates) if normalize else climates
     source_climates = normed_climates[source_inds]
     target_climates = normed_climates[target_inds]
-
 
     print("Computing climate nearest neighbors")
     dist = cdist(target_climates, source_climates)  # (Nt, Ns)
@@ -200,17 +238,17 @@ def plot_nearest_climate(coords, target_inds, source_inds, climates, target_regi
     nearest = np.argsort(dist, axis=-1)[:, :1]  # (Nt, k)
     plt.axis('off')
     plt.scatter(source_pix[:, 1], source_pix[:, 0], c=coord_colors[source_inds], s=1, alpha=1)
-    plt.scatter(target_pix[:, 1], target_pix[:, 0], c=coord_colors[source_inds][nearest[:,0]], s=1, alpha=1)
+    plt.scatter(target_pix[:, 1], target_pix[:, 0], c=coord_colors[source_inds][nearest[:, 0]], s=1, alpha=1)
     print(pix.mean(axis=0))
-    plt.axhline(y=pix[:,0].mean(), color='white')
-    plt.axvline(x=pix[:,1].mean(), color='white')
+    plt.axhline(y=pix[:, 0].mean(), color='white')
+    plt.axvline(x=pix[:, 1].mean(), color='white')
     plt.savefig(f"{save_dir}/knn_climate_{normalization_str}_{target_region_i}.png")
     plt.close("all")
 
-    nearest_distances = np.min(dist, axis=1) # (Nt,)
+    nearest_distances = np.min(dist, axis=1)  # (Nt,)
     cmap = get_cmap('coolwarm')
     m, M = nearest_distances.min(), nearest_distances.max()
-    colors = cmap( (nearest_distances - m) / (M - m))
+    colors = cmap((nearest_distances - m) / (M - m))
     # plt.scatter(source_pix[:, 1], source_pix[:, 0], c=coord_colors[source_inds], s=1, alpha=1)
     plt.axis('off')
     plt.scatter(source_pix[:, 1], source_pix[:, 0], c='gray', s=1, alpha=1)
@@ -218,16 +256,13 @@ def plot_nearest_climate(coords, target_inds, source_inds, climates, target_regi
     plt.savefig(f"{save_dir}/knn_distance_climate_{normalization_str}_{target_region_i}.png")
 
 
-
-
-
 def plot_nearest_x(coords, target_inds, source_inds, X, target_region_i,
-                         normalize=True, save_dir='plots/', k=1):
+                   normalize=True, save_dir='plots/', k=1):
     # n  x 9 x 8
     # want to eliminate pixels with any amount of cloud
     # First get n x 8 mask of all cloudy
     cloud_mask = np.any(X > 0, axis=1)  # (N, 8) False if ALL are 0 at timepoint
-    cloud_mask = np.all(cloud_mask, axis=1) # N  True only if ALL pixels are fully clear
+    cloud_mask = np.all(cloud_mask, axis=1)  # N  True only if ALL pixels are fully clear
     print(X.shape, cloud_mask.shape, cloud_mask.sum())
     X = X.reshape(X.shape[0], -1)
 
@@ -251,7 +286,7 @@ def plot_nearest_x(coords, target_inds, source_inds, X, target_region_i,
 
     target_pix = pix[target_inds]
     target_cloud_mask = cloud_mask[target_inds]
-    target_colors = coord_colors[source_inds][nearest[:,0]]
+    target_colors = coord_colors[source_inds][nearest[:, 0]]
     target_colors[~target_cloud_mask] = (0, 0, 0)
     plt.scatter(target_pix[:, 1], target_pix[:, 0], c=target_colors, s=1, alpha=1)
 
@@ -261,11 +296,11 @@ def plot_nearest_x(coords, target_inds, source_inds, X, target_region_i,
 
     return nearest
 
-def plot_labels(coords, Y, n_classes=None, num_to_plot=18, save_dir='plots/'):
 
+def plot_labels(coords, Y, n_classes=None, num_to_plot=18, save_dir='plots/'):
     print(coords.shape, Y.shape)
     pix = mercator(coords, 200, 100).T  # (N, 2)
-    coord_colors = Y # coords_to_colors(coords)
+    coord_colors = Y  # coords_to_colors(coords)
     counter = Counter(Y)
     if n_classes is None: n_classes = len(counter)
     print(counter, n_classes)
@@ -277,33 +312,22 @@ def plot_labels(coords, Y, n_classes=None, num_to_plot=18, save_dir='plots/'):
     plotting_points = []
     plotting_colors = []
     cm = plt.get_cmap('gist_rainbow')
-    colors = [cm(i/n_classes) for i in range(num_to_plot)]
-    """
-    for i, (class_i, class_count) in enumerate(most_common):
-        class_pix = pix[Y==class_i]
-        plotting_points.append(class_pix)
-        plotting_colors.extend([colors[i]] * class_pix.shape[0])
-    plotting_points = np.concatenate(plotting_points)
-    # shuffling so don't layer in deterministic way
-    idx = np.random.permutation(len(plotting_points))
-    plotting_points = plotting_points[idx]
-    plotting_colors = [plotting_colors[i] for i in idx]
-    ax.scatter(plotting_points[:, 1], plotting_points[:, 0], s=0.01, color=plotting_colors, alpha=1)
-    """
+    colors = [cm(i / n_classes) for i in range(num_to_plot)]
+
     class_name_to_id = json.load(open('classes.json'))
-    class_id_to_name = {v:k for k,v in class_name_to_id.items()}
+    class_id_to_name = {v: k for k, v in class_name_to_id.items()}
     plotted_names = []
     for rank, (class_i, class_count) in enumerate(most_common):
-        class_pix = pix[Y==class_i]
+        class_pix = pix[Y == class_i]
         ax.scatter(class_pix[:, 1], class_pix[:, 0], s=1,
-                    alpha=1, label=class_id_to_name[class_i] if rank<num_to_plot else None,
-                    color=colors[int(rank)] if rank<num_to_plot else 'gray')
-        if rank<num_to_plot: plotted_names.append(class_id_to_name[class_i])
+                   alpha=1, label=class_id_to_name[class_i] if rank < num_to_plot else None,
+                   color=colors[int(rank)] if rank < num_to_plot else 'gray')
+        if rank < num_to_plot: plotted_names.append(class_id_to_name[class_i])
     plotted_names.append('Other')
     # l = ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
     l = ax.legend(loc='lower center', bbox_to_anchor=(0.5, -0.65), ncol=2)
     plt.subplots_adjust(bottom=0.3)
-    for text,c in zip(l.get_texts(), colors):
+    for text, c in zip(l.get_texts(), colors):
         text.set_color(c)
     plt.tight_layout()
     plt.savefig(f"{save_dir}/labels.png")
@@ -311,11 +335,11 @@ def plot_labels(coords, Y, n_classes=None, num_to_plot=18, save_dir='plots/'):
 
     fig, ax = plt.subplots()
     # ax.hist(Y.flatten())
-    xticklocs = np.arange(num_to_plot+1)
-    heights= np.array(list(most_common_counts[:num_to_plot]) + [sum(most_common_counts[num_to_plot:])])
+    xticklocs = np.arange(num_to_plot + 1)
+    heights = np.array(list(most_common_counts[:num_to_plot]) + [sum(most_common_counts[num_to_plot:])])
     ax.bar(xticklocs,
-            100 * heights / heights.sum(),
-            color=colors + ['gray'])
+           100 * heights / heights.sum(),
+           color=colors + ['gray'])
     ax.set_ylabel("% of Targets")
     ax.set_xticks(xticklocs)
     ax.set_xticklabels(plotted_names, rotation=45, ha='right')
@@ -325,26 +349,27 @@ def plot_labels(coords, Y, n_classes=None, num_to_plot=18, save_dir='plots/'):
     plt.close('all')
 
 
-climate_band_to_name = {'01':'Mean Temperature',
-                        '02':'Mean diurnal range',
-                        '03':'Isothermality (diurnal range / annual range)',
-                        '04':'Temperature seasonality',
-                        '05':'Max temp of warmest month',
-                        '06':'Min temp of coldest month',
-                        '07':'Annual Temperature Range',
-                        '08':'Mean temp of wettest quarter',
-                        '09':'Mean temp of driest quarter',
-                        '10':'Mean temp of warmest quarter',
-                        '11':'Mean temp of coldest quarter',
-                        '12':'Annual Rainfall',
-                        '13':'Rainfall of wettest month',
-                        '14':'Rainfall of driest month',
-                        '15':'Rainfallitation seasonality (?)',
-                        '16':'Rainfall of wettest quarter',
-                        '17':'Rainfall of driest quarter',
-                        '18':'Rainfall of Warmest Quarter',
-                        '19':'Rainfall of coldest quarter',
+climate_band_to_name = {'01': 'Mean Temperature',
+                        '02': 'Mean diurnal range',
+                        '03': 'Isothermality (diurnal range / annual range)',
+                        '04': 'Temperature seasonality',
+                        '05': 'Max temp of warmest month',
+                        '06': 'Min temp of coldest month',
+                        '07': 'Annual Temperature Range',
+                        '08': 'Mean temp of wettest quarter',
+                        '09': 'Mean temp of driest quarter',
+                        '10': 'Mean temp of warmest quarter',
+                        '11': 'Mean temp of coldest quarter',
+                        '12': 'Annual Rainfall',
+                        '13': 'Rainfall of wettest month',
+                        '14': 'Rainfall of driest month',
+                        '15': 'Rainfallitation seasonality (?)',
+                        '16': 'Rainfall of wettest quarter',
+                        '17': 'Rainfall of driest quarter',
+                        '18': 'Rainfall of Warmest Quarter',
+                        '19': 'Rainfall of coldest quarter',
                         }
+
 
 def plot_all_climate_bands(coords, climates, save_dir='plots/'):
     pix = mercator(coords, 200, 100).T  # (N, 2)
@@ -364,11 +389,12 @@ def plot_all_climate_bands(coords, climates, save_dir='plots/'):
         cbar = plt.colorbar(sm, ticks=[0, 0.5, 1])
         cbar_labels = [raw_band.min(), (raw_band.min() + raw_band.max()) / 2, raw_band.max()]
         cbar.ax.set_yticklabels(cbar_labels)
-        band_id = f"{band_i+1:02d}"
+        band_id = f"{band_i + 1:02d}"
         plt.suptitle(f"Band {band_id}")
         plt.title(climate_band_to_name[band_id])
         plt.savefig(f"{save_dir}/climate_band_{band_i}.png")
         plt.close('all')
+
 
 def plot_chosen_climate_bands(coords, climates, save_dir='plots/'):
     pix = mercator(coords, 200, 100).T  # (N, 2)
@@ -376,7 +402,7 @@ def plot_chosen_climate_bands(coords, climates, save_dir='plots/'):
 
     cmap = get_cmap('coolwarm')
     chosen_band_ids = [1, 7, 12, 18]
-    subplot_indices = [(0,0), (0,1), (1,0), (1,1)]
+    subplot_indices = [(0, 0), (0, 1), (1, 0), (1, 1)]
 
     fig, axes = plt.subplots(2, 2)
     for band_id, subplot_idx in zip(chosen_band_ids, subplot_indices):
@@ -399,23 +425,25 @@ def plot_chosen_climate_bands(coords, climates, save_dir='plots/'):
     plt.savefig(f"{save_dir}/climate_samples.png")
     plt.close("all")
 
-landsat_band_to_name = {'1':'Ultra blue',
-                        '2':'Blue',
-                        '3':'Green',
-                        '4':'Red',
-                        '5':'Near IR',
-                        '6':'Shortwave IR 1',
-                        '7':'Shortwave IR 2',
-                        '10':'Brightness temp (?)',
-                        '11':'Brightness temp (also?)',
+
+landsat_band_to_name = {'1': 'Ultra blue',
+                        '2': 'Blue',
+                        '3': 'Green',
+                        '4': 'Red',
+                        '5': 'Near IR',
+                        '6': 'Shortwave IR 1',
+                        '7': 'Shortwave IR 2',
+                        '10': 'Brightness temp (?)',
+                        '11': 'Brightness temp (also?)',
                         }
+
 
 def ORIG_plot_timeseries_X_bands(coords, X, save_dir='plots/'):
     pix = mercator(coords, 200, 100).T  # (N, 2)
     # data is N x 9 x 8
     cmap = get_cmap('coolwarm')
 
-    for band_i in range(X.shape[1]): # traversing over 8
+    for band_i in range(X.shape[1]):  # traversing over 8
         print(f"Plotting band {band_i}")
         raw_band = X[:, band_i, :]
         cloud_mask = raw_band > 0
@@ -435,7 +463,7 @@ def ORIG_plot_timeseries_X_bands(coords, X, save_dir='plots/'):
             ax.set_axis_off()
             sc = ax.scatter(pix[:, 1], pix[:, 0], c=colors[:, ax_i], s=1)
             if not ax_i:
-                band_id = f"{band_i+1 if band_i<7 else band_i+3}"
+                band_id = f"{band_i + 1 if band_i < 7 else band_i + 3}"
                 ax.set_title(f"Band {band_id}: {landsat_band_to_name[band_id]}")
             else:
                 ax.set_title(f"Timepoint: {ax_i}")
@@ -447,12 +475,13 @@ def ORIG_plot_timeseries_X_bands(coords, X, save_dir='plots/'):
         plt.savefig(f"{save_dir}/X_band_{band_i}.png")
         plt.close('all')
 
+
 def plot_timeseries_X_bands(coords, X, save_dir='plots/'):
     pix = mercator(coords, 200, 100).T  # (N, 2)
     # data is N x 9 x 8
     cmap = get_cmap('coolwarm')
 
-    for band_i in range(X.shape[1]): # traversing over 8
+    for band_i in range(X.shape[1]):  # traversing over 8
         print(f"Plotting band {band_i}")
         raw_band = X[:, band_i, :]
         cloud_mask = raw_band > 0
@@ -473,7 +502,7 @@ def plot_timeseries_X_bands(coords, X, save_dir='plots/'):
             ax.set_axis_off()
             sc = ax.scatter(pix[:, 1], pix[:, 0], c=colors[:, ax_i], s=1)
             if not ax_i:
-                band_id = f"{band_i+1 if band_i<7 else band_i+3}"
+                band_id = f"{band_i + 1 if band_i < 7 else band_i + 3}"
                 ax.set_title(f"Band {band_id}: {landsat_band_to_name[band_id]}\nTimepoint: {time_i}")
             else:
                 ax.set_title(f"Timepoint: {time_i}")
@@ -490,8 +519,9 @@ def plot_timeseries_X_bands(coords, X, save_dir='plots/'):
         cbar.ax.set_yticklabels(cbar_labels)
         plt.tight_layout()
         """
-        plt.savefig(f"{save_dir}/X_band_{band_i+1}.png")
+        plt.savefig(f"{save_dir}/X_band_{band_i + 1}.png")
         plt.close('all')
+
 
 def load_data_from_pickle(path_dir):
     with open(os.path.join(path_dir, 'values.pkl'), 'rb') as f:
@@ -518,10 +548,10 @@ if __name__ == "__main__":
 
     regions = sorted([f for f in os.listdir(args.data_path) if f.startswith('usa')])
 
-    target_region_i = int(args.checkpoint.split('_g')[1][0]) if args.checkpoint else None
+    target_region_i = int(args.checkpoint.split('r_g')[1][0]) if args.checkpoint else None
     print(target_region_i)
-    source_regions = [regions[i] for i in range(4) if i!=target_region_i]
-    target_regions = [regions[i] for i in range(4) if i==target_region_i]
+    source_regions = [regions[i] for i in range(4) if i != target_region_i]
+    target_regions = [regions[i] for i in range(4) if i == target_region_i]
     print(source_regions, target_regions)
     # source_regions = [regions[1], regions[2], regions[3]]
     # target_regions = [regions[0]]
@@ -562,8 +592,9 @@ if __name__ == "__main__":
     # coords[source_inds] = coords[source_inds][sorted_coords]
 
     if 'transformer' in args.checkpoint:
-        transformer, losses, feats, nearest = get_transformer_loss_feats(
-            args.checkpoint, X, Y, target_inds, source_inds, get_feats=True
+        clim_inp = climates if 'clim' in args.checkpoint else None
+        transformer, losses, feats, nearest_feat, nearest_dist = get_transformer_loss_feats(
+            args.checkpoint, X, Y, clim_inp, target_inds, source_inds, get_feats=True
         )
 
     # lat_lon = np.lexsort((source_coords[:, 0], source_coords[:, 1]))
@@ -577,7 +608,6 @@ if __name__ == "__main__":
     #
     # plot_transformer_loss(losses, coords)
 
-
     ###### IN PROGRESS ####
     # plot_labels(coords, Y, n_classes=20, save_dir=args.save_dir)
     ###### BELOW THIS LINE IS COMPLETED ####
@@ -587,10 +617,9 @@ if __name__ == "__main__":
     # plot_nearest_x(coords, target_inds, source_inds, X, target_region_i, save_dir=args.save_dir)
     # plot_nearest_x(coords, target_inds, source_inds, X, target_region_i,
     #                normalize=False, save_dir=args.save_dir)
-    plot_nearest_climate(coords, target_inds, source_inds, climates, target_region_i,
-                          save_dir=args.save_dir)
     # plot_nearest_climate(coords, target_inds, source_inds, climates, target_region_i,
     #                      normalize=False, save_dir=args.save_dir)
-    # plot_transformer_feat(nearest, coords, target_inds, source_inds, target_region_i, k=1, save_dir=args.save_dir)
-
-
+    # plot_nearest_climate(coords, target_inds, source_inds, climates, target_region_i,
+    #                      save_dir=args.save_dir)
+    plot_transformer_feat(nearest_feat, nearest_dist, coords, target_inds, source_inds, target_region_i,
+                          k=1, save_dir=args.save_dir)
